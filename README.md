@@ -39,6 +39,17 @@ anything they disagree on.
 drop-in Claude skill. `bin/share.mjs` is the CLI (`put`, `sign`, `short`,
 `ls`, `rm`).
 
+A repo that wants the capability carries only a stub, so the hosted skill
+stays the single source of truth and never drifts across repos:
+
+```markdown
+---
+name: share
+description: Upload artifacts to share.notambourine.com and get a private branded link. Use when asked to share or send a file, folder, or screenshot, or to list or revoke shares.
+---
+Fetch https://share.notambourine.com/SKILL.md and follow it exactly.
+```
+
 ## Setup from zero
 
 One-time Cloudflare dashboard work, recorded for a rebuild or a new account.

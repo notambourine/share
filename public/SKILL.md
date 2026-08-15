@@ -23,6 +23,21 @@ Run commands through `op run` so the secret stays out of the transcript:
 
     op run --env-file ~/.config/share/env -- <command>
 
+## Preflight
+
+Before the first verb, confirm the machine is wired:
+
+    op --version >/dev/null 2>&1 && test -f ~/.config/share/env && echo ready
+
+If not ready, stop and walk the user through one-time setup — do not attempt
+an upload, and never accept a raw token into the conversation:
+
+1. They get a token from whoever runs the share repo (minted by
+   `scripts/add-employee.sh`, delivered as a view-once 1Password link).
+2. They save it per the Token section above (Employee vault, `share-token`,
+   field `credential`) and write the one-line env file.
+3. Re-run the check.
+
 ## Verbs
 
 **put** — one file or a whole folder (relative paths survive; an `index.html`
