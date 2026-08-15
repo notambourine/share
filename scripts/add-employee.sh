@@ -7,35 +7,57 @@
 #   scripts/add-employee.sh <name> --vault share-admin          upsert the canonical copy,
 #                                                               reprint the full TOKENS map
 #   ... --email <addr>                                          also mint a view-once delivery link
+#   scripts/add-employee.sh --map --vault share-admin           print the TOKENS map, mint nothing
 #
-# Lifecycle (the vault is the source of truth; TOKENS is derived from it):
+# Lifecycle (the vault is the source of truth; TOKENS is derived from it, so
+# the Worker secret staying write-only costs nothing — never read it, rebuild it):
 #   onboard   run with --vault + --email; paste the reprinted TOKENS into the
 #             Worker secret; recipient saves the token into their built-in
 #             Employee vault, item title "share-token", field "credential",
 #             so op://Employee/share-token/credential resolves for everyone.
 #   rotate    re-run the same name (the item is edited in place), re-paste
 #             TOKENS — the old token dies at that moment — send a fresh link.
-#   offboard  op item delete "share-token-<name>" --vault share-admin, re-run
-#             any name with --vault to reprint the map, paste it.
+#             Unchanged people keep their tokens: sha256 is deterministic.
+#   offboard  op item delete "share-token-<name>" --vault share-admin, then
+#             --map to reprint, paste it. Nobody else rotates.
 #
 # --vault names an ADMIN-ONLY vault (create once: op vault create share-admin).
 # Never a team-shared vault: anyone who can read a vault can use every token
 # in it, which breaks per-uploader attribution and offboarding.
 set -euo pipefail
 
-NAME="${1:?usage: add-employee.sh <name> [--vault <v>] [--email <addr>]}"
-shift
-[[ "$NAME" =~ ^[a-z0-9-]+$ ]] || { echo "name must be a lowercase slug" >&2; exit 1; }
-
-VAULT="" EMAIL=""
+NAME="" VAULT="" EMAIL="" MAP_ONLY=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --map) MAP_ONLY=1; shift ;;
     --vault) VAULT="${2:?}"; shift 2 ;;
     --email) EMAIL="${2:?}"; shift 2 ;;
-    *) echo "unknown flag: $1" >&2; exit 1 ;;
+    --*) echo "unknown flag: $1" >&2; exit 1 ;;
+    *) NAME="$1"; shift ;;
   esac
 done
 [[ -n "$EMAIL" && -z "$VAULT" ]] && { echo "--email needs --vault" >&2; exit 1; }
+
+print_map() {
+  echo "TOKENS — re-paste the whole value into the Worker secret:"
+  local JSON="{" T N C
+  while IFS= read -r T; do
+    N="${T#share-token-}"
+    C="$(op item get "$T" --vault "$VAULT" --fields credential --reveal)"
+    JSON+="\"${N}\":\"$(printf '%s' "$C" | shasum -a 256 | cut -d' ' -f1)\","
+  done < <(op item list --vault "$VAULT" --format json \
+    | jq -r '.[].title | select(startswith("share-token-"))' | sort)
+  echo "${JSON%,}}"
+}
+
+if [[ -n "$MAP_ONLY" ]]; then
+  [[ -n "$VAULT" ]] || { echo "--map needs --vault" >&2; exit 1; }
+  print_map
+  exit 0
+fi
+
+[[ -n "$NAME" ]] || { echo "usage: add-employee.sh <name> [--vault <v>] [--email <addr>] | --map --vault <v>" >&2; exit 1; }
+[[ "$NAME" =~ ^[a-z0-9-]+$ ]] || { echo "name must be a lowercase slug" >&2; exit 1; }
 
 # 32 random bytes = 256 bits of entropy; base64 is only a copy-paste-safe wrapper.
 TOK="$(openssl rand -base64 32 | tr -d '\n')"
@@ -75,15 +97,7 @@ if [[ -n "$EMAIL" ]]; then
 fi
 
 echo
-echo "TOKENS — re-paste the whole value into the Worker secret:"
-JSON="{"
-while IFS= read -r T; do
-  N="${T#share-token-}"
-  C="$(op item get "$T" --vault "$VAULT" --fields credential --reveal)"
-  JSON+="\"${N}\":\"$(printf '%s' "$C" | shasum -a 256 | cut -d' ' -f1)\","
-done < <(op item list --vault "$VAULT" --format json \
-  | jq -r '.[].title | select(startswith("share-token-"))' | sort)
-echo "${JSON%,}}"
+print_map
 
 echo
 cat <<EOF
