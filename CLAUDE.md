@@ -13,5 +13,7 @@
   for bearer tokens; the `TOKENS` secret is derived from it, never hand-edited.
 - `public/tokens.css` is a vendored copy. Upstream is `notambourine/notambourine.com`
   `src/styles/theme.css`; change there first, then mirror.
+- `public/SKILL.md` mirrors `skills/share/SKILL.md`. Edit the skill, then run
+  `npm run mirror`; CI fails the PR when the two drift.
 - Never generate or echo a raw bearer token in a session; that is terminal-only
   work via `scripts/add-employee.sh`.
