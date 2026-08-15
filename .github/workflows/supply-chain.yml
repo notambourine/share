@@ -9,7 +9,9 @@ permissions:
 # which checks every dep-touching PR — no vet/guarddog/socket-tree jobs here.
 jobs:
   betterleaks:
-    runs-on: ubuntu-slim
+    # ubuntu-slim is a bare ubuntu:24.04 container, missing gettext-base --
+    # the cosign-installer step shells out to envsubst.
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
