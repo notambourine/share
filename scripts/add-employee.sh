@@ -100,9 +100,10 @@ echo
 print_map
 
 echo
-cat <<EOF
+if [[ -n "$EMAIL" ]]; then
+  cat <<EOF
 ──────────────────────────────────────────────────────────────
-Send ${NAME} the link above plus this block:
+Send ${NAME} the view-once link above plus this block:
 
   # 1. Save the token from the one-time link into your Employee vault
   #    (replace PASTE-TOKEN-HERE; the link shows it exactly once):
@@ -116,3 +117,20 @@ Send ${NAME} the link above plus this block:
     'curl -sS -H "Authorization: Bearer \$SHARE_TOKEN" -F f=@<file> https://share.notambourine.com/up/<space>'
 ──────────────────────────────────────────────────────────────
 EOF
+else
+  cat <<EOF
+──────────────────────────────────────────────────────────────
+No --email given, so no delivery link was minted. If this token is yours,
+copy it vault-to-vault without ever displaying it (upsert: delete any old
+share-token item in Employee first, or edit it instead of create):
+
+  op item create --vault Employee --category "API Credential" \\
+    --title share-token \\
+    "credential=\$(op item get share-token-${NAME} --vault "${VAULT}" --fields credential --reveal)"
+
+Verify: op read op://Employee/share-token/credential >/dev/null && echo ready
+To deliver to someone else instead, re-run with --email <addr>
+(note: re-running rotates ${NAME}'s token again).
+──────────────────────────────────────────────────────────────
+EOF
+fi
