@@ -14,6 +14,10 @@ document (`?slides` makes it a deck), code gets syntax highlighting, and a
 folder upload with an `index.html` serves as a real page with its relative
 assets intact.
 
+A markdown URL also takes a format suffix: `deck.md.pdf` for a branded PDF,
+`deck.md.html` for a self-contained page that opens from a mail attachment,
+`deck.md.slides.pdf` and `deck.md.doc.pdf` to name the shape yourself.
+
 ## How it holds together
 
 - **Cloudflare Worker + R2 + KV**, free tier. The Worker routes, verifies one
@@ -81,6 +85,14 @@ Deploys themselves are hands-off after step 3.
      because client names never enter this public repo.
 5. **Custom domain** — Worker → Settings → Domains & Routes → add
    `share.notambourine.com`.
+6. **Browser Rendering.** Enable it on the account (Compute → Browser
+   Rendering), which is what makes the `browser` binding in `wrangler.jsonc`
+   resolve. The free plan gives 10 browser-minutes per day account-wide, 3
+   concurrent browsers, one new browser every 20 seconds, and a 60-second
+   browser timeout. Browser minutes are the binding constraint on PDF exports,
+   not CPU: a few seconds per render puts the ceiling near a hundred renders a
+   day for the whole account. Until this is on, export URLs serve the
+   browser-rendered shell instead of a PDF.
 
 Team tokens (add, rotate, offboard, deliver): `scripts/add-employee.sh` — its
 header is the runbook.

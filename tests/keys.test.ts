@@ -59,6 +59,10 @@ describe('normalizeUploadPath', () => {
     expect(normalizeUploadPath('meta.json')).toBeNull();
     expect(normalizeUploadPath('f/anything.txt')).toBeNull();
     expect(normalizeUploadPath('k/anything.txt')).toBeNull();
+    // d/ holds the derived exports; an upload landing there could pose as one.
+    expect(normalizeUploadPath('d/deck.md.pdf')).toBeNull();
+    expect(normalizeUploadPath('d')).toBeNull();
+    expect(normalizeUploadPath('deck/d/notes.md')).toBe('deck/d/notes.md');
     expect(normalizeUploadPath('meta.json2')).toBe('meta.json2');
     expect(normalizeUploadPath('sub/meta.json')).toBe('sub/meta.json');
   });

@@ -1,10 +1,12 @@
-import type { Env, Meta } from '../lib/types';
+import type { Env, Meta, MetaFile } from '../lib/types';
 import { readMeta, isExpired } from '../lib/r2';
 import { verifyToken } from '../lib/sign';
 import { viewModeFor } from '../lib/negotiate';
-import { contentTypeFor } from '../lib/keys';
+import { resolveExport } from '../lib/exportPath';
+import { exportArtifact } from './export';
+import { rawBytes } from '../lib/bytes';
 import { fileShell, dirShell, errorShell } from '../render/shell';
-import { htmlResponse, now, ROBOTS, CACHE } from '../lib/http';
+import { htmlResponse, now } from '../lib/http';
 
 const DAY = 86400;
 
@@ -55,7 +57,16 @@ export async function serve(
   }
 
   const file = meta.files.find((f) => f.path === filePath);
-  if (!file) return htmlResponse(errorShell(404), 404);
+  if (!file) {
+    /* Exact match first, then the format suffixes, so a file uploaded as
+       `notes.pdf` serves its own bytes instead of re-rendering `notes`. */
+    const wanted = resolveExport(meta.files.map((f) => f.path), filePath);
+    if (!wanted) return htmlResponse(errorShell(404), 404);
+    const src = meta.files.find((f) => f.path === wanted.source) as MetaFile;
+    return exportArtifact(request, env, {
+      space, hash, url, source: wanted.source, format: wanted.format, size: src.size,
+    });
+  }
 
   const mode = viewModeFor(filePath, request.headers.get('accept'), url.searchParams);
   const rawHref = `${url.origin}${url.pathname}${url.pathname.endsWith('/') ? 'index.html' : ''}?raw`;
@@ -71,64 +82,4 @@ export async function serve(
     default:
       return rawBytes(request, env, `${space}/${hash}/f/${filePath}`, filePath, mode === 'attachment');
   }
-}
-
-/** Single-range support so <video> seeking works; anything malformed falls back to a full 200. */
-function parseRange(header: string | null, size: number): { offset: number; length: number } | null {
-  const m = header && /^bytes=(\d*)-(\d*)$/.exec(header.trim());
-  if (!m || (m[1] === '' && m[2] === '')) return null;
-  let start: number;
-  let end: number;
-  if (m[1] === '') {
-    const suffix = Number(m[2]);
-    if (suffix === 0) return null;
-    start = Math.max(0, size - suffix);
-    end = size - 1;
-  } else {
-    start = Number(m[1]);
-    end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
-  }
-  if (start > end || start >= size) return null;
-  return { offset: start, length: end - start + 1 };
-}
-
-async function rawBytes(
-  request: Request, env: Env, key: string, filePath: string, attachment: boolean,
-): Promise<Response> {
-  const name = filePath.slice(filePath.lastIndexOf('/') + 1);
-  const headers = new Headers({
-    'content-type': contentTypeFor(filePath),
-    'x-robots-tag': ROBOTS,
-    'cache-control': CACHE,
-    'vary': 'Accept',
-    'cross-origin-resource-policy': 'cross-origin',
-    'accept-ranges': 'bytes',
-  });
-  if (attachment) {
-    headers.set('content-disposition', `attachment; filename="${name.replace(/"/g, '')}"`);
-  }
-
-  if (request.method === 'HEAD') {
-    const head = await env.BUCKET.head(key);
-    if (!head) return htmlResponse(errorShell(404), 404);
-    headers.set('content-length', String(head.size));
-    headers.set('etag', head.httpEtag);
-    return new Response(null, { status: 200, headers });
-  }
-
-  const head = await env.BUCKET.head(key);
-  if (!head) return htmlResponse(errorShell(404), 404);
-  const range = parseRange(request.headers.get('range'), head.size);
-
-  const obj = await env.BUCKET.get(key, range ? { range } : undefined);
-  if (!obj) return htmlResponse(errorShell(404), 404);
-  headers.set('etag', obj.httpEtag);
-
-  if (range) {
-    headers.set('content-range', `bytes ${range.offset}-${range.offset + range.length - 1}/${head.size}`);
-    headers.set('content-length', String(range.length));
-    return new Response(obj.body, { status: 206, headers });
-  }
-  headers.set('content-length', String(head.size));
-  return new Response(obj.body, { status: 200, headers });
 }
