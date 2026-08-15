@@ -92,7 +92,7 @@ One rule: `Accept` decides, query string overrides. A browser address bar sends
 | --- | --- | --- |
 | png, jpg, webp, gif, mp4 | centered on brand background, filename, copy-URL, og:image | raw bytes |
 | ts, js, css, json, py, sh | syntax highlighted, line anchors | raw, correct content type |
-| md | rendered doc; `?slides` runs reveal.js | raw text |
+| md | rendered doc; `?slides` runs Marpit | raw text |
 | html | the page itself; `?view=source` highlights it | the page itself |
 | svg | rendered inside an `<img>` in the shell | attachment, never inline |
 | other | download card | attachment |
@@ -103,10 +103,31 @@ fetches `?raw` and highlights or renders it client side. This stays inside the
 to every artifact ever uploaded without re-rendering anything. The cost is no-JS
 support and weaker link previews on code pages, accepted.
 
-The renderer libraries (highlight.js, marked, reveal.js) are vendored into
+The renderer libraries (highlight.js, marked, Marpit) are vendored into
 `public/vendor/` at pinned versions, never loaded from a CDN. Third-party runtime
 script has no place on a host serving client material, and vendoring lets shell
 pages carry a self-only CSP.
+
+**The brand faces are vendored for the same reason.** A Google Fonts `@import`
+sent every artifact URL to Google as a `Referer`, on the exact pages serving
+client material, and it forced an off-origin allowance into `SHELL_CSP`. Nunito,
+Hanken Grotesk, and JetBrains Mono are self-hosted from `public/fonts` as latin
+subset variable woff2, so `font-src` is `'self'` and no directive names an
+external origin. `share.notambourine.com` is its own origin, so these are its own
+copies rather than a path on the marketing site.
+
+**Slides render through Marpit, not reveal.js.** Reveal split markdown on `---`
+and nothing else, so every deck came out with the same layout. Marpit reads the
+markdown-native directives (`_class`, `backgroundImage`, `paginate`) that let one
+deck differ from another, and it is the engine under the `marp` CLI the team
+already writes `.marp.md` against. Two costs, both accepted: Marpit ships CommonJS
+for Node only, so `scripts/vendor.mjs` bundles it with esbuild instead of copying
+a file, and the slides shell grew from 41 KB gzipped to 124 KB. Marpit renders to
+static HTML with no navigation, so `public/render.js` owns the one-slide-at-a-time
+view, the arrow keys, and the `#n` hash. The branded theme is
+`public/vendor/marp/nt-marp.css`, written against the `tokens.css` custom
+properties rather than mirrored from the kb deck theme, so there is one brand
+source and no mirror step.
 
 ## Storage layout
 
@@ -240,8 +261,8 @@ src/sweep.ts           scheduled handler: expiry sweep into _trash/
 src/render/shell.ts    branded shells: image, code, md, dir, 401, 404
 src/lib/sign.ts        HMAC mint and verify
 src/lib/keys.ts        slug generation, key parsing, path normalization
-public/render.js       client-side highlight, markdown, reveal loader
-public/vendor/         highlight.js, marked, reveal.js, pinned copies
+public/render.js       client-side highlight, markdown, deck render and nav
+public/vendor/         highlight.js, marked, Marpit, pinned copies
 public/                llms.txt, SKILL.md, tokens.css
 bin/share.mjs           CLI
 tests/                 vitest, pure units for sign, keys, negotiation, path safety
