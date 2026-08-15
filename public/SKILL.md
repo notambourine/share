@@ -74,4 +74,7 @@ Revocation lands within 10 minutes.
   visible in the URL, so pick the name you'd show the recipient.
 - Client-facing material defaults to `?tier=signed`; internal scratch stays open.
 - Markdown renders as a document; add `?slides` to the share URL for a deck.
+  Decks run through Marp, so `---` splits slides and Marp directives work:
+  `<!-- _class: lead -->` for a title slide, `<!-- paginate: true -->` for
+  slide numbers.
 - Full API: https://share.notambourine.com/llms.txt

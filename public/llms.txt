@@ -63,6 +63,10 @@ The same URL renders for browsers and serves raw bytes to everything else
 the branded shell, ?slides renders markdown as a deck, ?view=source shows
 uploaded HTML highlighted instead of executed.
 
+Decks render with Marp. --- splits slides, and Marp directives apply:
+<!-- _class: lead --> centers a title slide, <!-- paginate: true --> numbers
+them. Arrow keys move between slides and the #n fragment links to one.
+
 ## Skill
 
 GET /SKILL.md is a drop-in Claude skill covering all five verbs.

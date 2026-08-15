@@ -56,9 +56,10 @@ ${body}
 const HLJS_CSS = '<link rel="stylesheet" href="/vendor/highlight/nt-code.css">';
 const HLJS_JS = '<script src="/vendor/highlight/highlight.min.js" defer></script>';
 const MARKED_JS = '<script src="/vendor/marked/marked.min.js" defer></script>';
-const REVEAL = `<link rel="stylesheet" href="/vendor/reveal/reveal.css">
-<link rel="stylesheet" href="/vendor/reveal/nt-reveal.css">
-<script src="/vendor/reveal/reveal.js" defer></script>`;
+/* No stylesheet link for nt-marp.css: render.js fetches it and hands it to
+   Marpit, which scopes it to the slide sections. Linking it too would leak
+   bare `section` rules onto the rest of the page. */
+const MARP_JS = '<script src="/vendor/marp/marpit.js" defer></script>';
 
 function fileName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1) || path;
@@ -110,9 +111,14 @@ export function fileShell(kind: string, path: string, rawHref: string, size?: nu
     case 'slides':
       return layout({
         title: name,
-        head: MARKED_JS + REVEAL,
+        head: HLJS_CSS + HLJS_JS + MARP_JS,
         bodyAttrs: attrs,
-        body: `<div class="reveal"><div class="slides" id="content"></div></div>`,
+        body: `<div class="deck" id="content"></div>
+<nav class="deck-nav" hidden>
+<button type="button" data-prev aria-label="previous slide">prev</button>
+<span class="caption" data-count></span>
+<button type="button" data-next aria-label="next slide">next</button>
+</nav>`,
       });
     default:
       return layout({
