@@ -23,8 +23,7 @@
 	"kv_namespaces": [
 		{
 			"binding": "LINKS",
-			// Dashboard: Storage & Databases → KV → create "share-links", paste its ID here.
-			"id": "TODO_PASTE_KV_NAMESPACE_ID"
+			"id": "12a7b1b8e090483583267b88ddba827b"
 		}
 	],
 	"triggers": {

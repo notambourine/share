@@ -3,7 +3,7 @@ import { authenticate } from '../lib/auth';
 import { moveToTrash } from '../lib/r2';
 import { textResponse } from '../lib/http';
 
-/** DELETE /<space>/<hash>/ — soft delete into _trash/ (30-day lifecycle rule purges). */
+/** DELETE /<space>/<hash>/ — soft delete into _trash/ (90-day lifecycle rule purges). */
 export async function del(request: Request, env: Env, space: string, hash: string): Promise<Response> {
   const who = await authenticate(request, env.TOKENS);
   if (!who) return textResponse('unauthorized\n', 401);

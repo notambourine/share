@@ -113,7 +113,7 @@ switch (cmd) {
     const [path] = rest;
     if (!path?.includes('/')) die('usage: share rm <space>/<hash>');
     await api(`/${path.replace(/\/$/, '')}/`, { method: 'DELETE' });
-    console.log('moved to trash (purges in 30 days)');
+    console.log('moved to trash (purges in 90 days)');
     break;
   }
   default:

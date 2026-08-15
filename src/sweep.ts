@@ -6,7 +6,7 @@ import { now } from './lib/http';
 /**
  * Nightly cron: an R2 lifecycle rule cannot read a date out of meta.json, so
  * this walks every meta record and moves expired uploads to _trash/, where the
- * one lifecycle rule purges them after 30 days.
+ * one lifecycle rule purges them after 90 days.
  */
 export async function sweep(env: Env): Promise<{ scanned: number; trashed: number }> {
   const t = now();

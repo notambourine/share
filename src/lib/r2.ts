@@ -30,7 +30,7 @@ export async function listAllKeys(env: Env, prefix: string): Promise<string[]> {
 
 /**
  * Soft delete: copy under _trash/ then delete originals. The upload token can
- * hide material for 30 days (the _trash/ lifecycle rule) but never destroy it.
+ * hide material for 90 days (the _trash/ lifecycle rule) but never destroy it.
  */
 export async function moveToTrash(env: Env, space: string, hash: string): Promise<number> {
   const prefix = `${space}/${hash}/`;

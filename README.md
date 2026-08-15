@@ -24,7 +24,7 @@ assets intact.
   need an HMAC token carried as a `/k/<token>/` path segment, so relative
   assets inside a signed folder keep working.
 - **Everything expires.** Artifacts default to 90 days, links to 30, deletes
-  are soft into `_trash/` with a 30-day lifecycle purge. A nightly cron sweeps
+  are soft into `_trash/` with a 90-day lifecycle purge. A nightly cron sweeps
   expired uploads.
 - **No secrets in this repo.** Bearer tokens live as sha256 hashes in a Worker
   secret; signing keys rotate by key id; the per-space retention map is a
