@@ -1,0 +1,8 @@
+# Config dirs and dependency manifests require review. Slashless patterns
+# match at any depth, so a nested config dir is owned from its first commit.
+.claude/ @tomfuertes
+.agents/ @tomfuertes
+.vscode/ @tomfuertes
+.github/ @tomfuertes
+package.json @tomfuertes
+package-lock.json @tomfuertes
