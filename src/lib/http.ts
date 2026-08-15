@@ -3,12 +3,12 @@ export const ROBOTS = 'noindex, nofollow, noarchive, noimageindex';
 /** 10 minutes, so a revoke lands (R3). Private: client material skips shared caches. */
 export const CACHE = 'private, max-age=600';
 
-/** Shells never load third-party script; fonts are the one off-origin allowance. */
+/** Self-only. Fonts and renderers are all vendored, so no origin is allowed out. */
 export const SHELL_CSP = [
   "default-src 'none'",
   "script-src 'self'",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  'font-src https://fonts.gstatic.com',
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self'",
   "img-src 'self' data:",
   "media-src 'self'",
   "connect-src 'self'",

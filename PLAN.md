@@ -108,6 +108,14 @@ The renderer libraries (highlight.js, marked, Marpit) are vendored into
 script has no place on a host serving client material, and vendoring lets shell
 pages carry a self-only CSP.
 
+**The brand faces are vendored for the same reason.** A Google Fonts `@import`
+sent every artifact URL to Google as a `Referer`, on the exact pages serving
+client material, and it forced an off-origin allowance into `SHELL_CSP`. Nunito,
+Hanken Grotesk, and JetBrains Mono are self-hosted from `public/fonts` as latin
+subset variable woff2, so `font-src` is `'self'` and no directive names an
+external origin. `share.notambourine.com` is its own origin, so these are its own
+copies rather than a path on the marketing site.
+
 **Slides render through Marpit, not reveal.js.** Reveal split markdown on `---`
 and nothing else, so every deck came out with the same layout. Marpit reads the
 markdown-native directives (`_class`, `backgroundImage`, `paginate`) that let one
