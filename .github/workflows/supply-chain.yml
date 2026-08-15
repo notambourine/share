@@ -8,6 +8,18 @@ permissions:
 # Dependency gates (CVE, malware, tree scan) ride the org-level Socket app,
 # which checks every dep-touching PR — no vet/guarddog/socket-tree jobs here.
 jobs:
+  wormhook:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: notambourine/wormhook@bb24d57e2118dd44c62d8fff68bfeacca3198943 # v0.25.0
+        with:
+          # No `npm ci` step above: the Socket app owns the dep tree, so this gate
+          # is here for Tier 0+1: lifecycle scripts, loaders, CI-config poisoning.
+          mode: fast
   betterleaks:
     # ubuntu-slim is a bare ubuntu:24.04 container, missing gettext-base --
     # the cosign-installer step shells out to envsubst.
