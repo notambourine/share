@@ -39,8 +39,12 @@ anything they disagree on.
 drop-in Claude skill. `bin/share.mjs` is the CLI (`put`, `sign`, `short`,
 `ls`, `rm`).
 
-A repo that wants the capability carries only a stub, so the hosted skill
-stays the single source of truth and never drifts across repos:
+A consumer carries only a stub, so the hosted skill stays the single source
+of truth and never drifts. The canonical stub lives at `skills/share/SKILL.md`,
+which with `.claude-plugin/plugin.json` makes this repo an installable Claude
+Code plugin — the org marketplace (`notambourine/claude-plugin`) lists it by
+reference, so one user-scope install works in every repo. A repo that wants
+the capability without the plugin copies the same stub:
 
 ```markdown
 ---
