@@ -11,7 +11,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.0.0",
     "@highlightjs/cdn-assets": "11.11.1",
-    "marked": "16.1.1",
+    "marked": "18.0.9",
     "reveal.js": "5.2.1",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4",
