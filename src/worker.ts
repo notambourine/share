@@ -15,7 +15,15 @@ const STATIC = new Set([
   '/tokens.css', '/shell.css', '/render.js', '/favicon.svg', '/favicon.ico',
 ]);
 
-async function staticAsset(request: Request, env: Env): Promise<Response> {
+/* A space slug can never collide with these: isValidSpace rejects a leading
+   slash, so a prefix match here cannot shadow a real upload path. */
+const STATIC_PREFIXES = ['/vendor/', '/fonts/'];
+
+export function isStatic(path: string): boolean {
+  return STATIC.has(path) || STATIC_PREFIXES.some((p) => path.startsWith(p));
+}
+
+export async function staticAsset(request: Request, env: Env): Promise<Response> {
   const res = await env.ASSETS.fetch(request);
   const out = new Response(res.body, res);
   out.headers.set('x-robots-tag', ROBOTS);
@@ -32,7 +40,7 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (STATIC.has(path) || path.startsWith('/vendor/')) {
+    if (isStatic(path)) {
       return staticAsset(request, env);
     }
 

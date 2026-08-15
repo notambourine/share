@@ -5,18 +5,76 @@
    `src/styles/theme.css`. Change a value there first, then
    mirror it here — never edit this copy independently (R17).
 
-   The name says it all: no extra noise. Editorial serif headlines
-   over a monospace body, generous whitespace, one decisive pink,
-   and a mint that hums quietly in the back.
+   The name says it all: no extra noise. Grotesk headlines over a
+   monospace body, generous whitespace, one decisive pink, and a
+   mint that hums quietly in the back.
    ========================================================= */
 
 /* --- Fonts ----------------------------------------------- */
-/* Literata for headlines (display), Source Code Pro for
-   everything else — body, accent text, and code. Monospace body is
-   the technical-practitioner signal and it outranks type-system
-   uniformity. Literata carries a real italic (loaded at 400) for
-   the one pink emphasis word. */
-@import url('https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,300;0,7..72,400;0,7..72,500;0,7..72,600;0,7..72,700;1,7..72,400&family=Source+Code+Pro:wght@400;500;600&display=swap');
+/* Self-hosted so no page fetches a third party. A Google Fonts link leaks the
+   visited URL to Google as a Referer and blocks a self-only CSP. Latin subset,
+   variable, pinned copies in public/fonts - see public/fonts/OFL.txt.
+   share.notambourine.com is its own origin, so these are its own copies. */
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 200 1000;
+  font-display: swap;
+  src: url('/fonts/nunito-latin-var.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: italic;
+  font-weight: 200 1000;
+  font-display: swap;
+  src: url('/fonts/nunito-latin-var-italic.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk-latin-var.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk-latin-var-italic.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-var.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: italic;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-var-italic.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 :root {
   /* ---------- Brand palette ---------- */
@@ -84,12 +142,15 @@
   --line-strong:   var(--nt-fg1-dark);
 
   /* ---------- Typography ---------- */
-  /* Literata headlines over a Source Code Pro body. One serif, one
-     mono — there is no third face, and no separate accent family. */
-  --font-display:  'Literata', Georgia, serif;                        /* headlines */
-  --font-accent:   'Source Code Pro', 'SF Mono', Monaco, monospace;   /* eyebrows, labels, buttons */
-  --font-body:     'Source Code Pro', 'SF Mono', Monaco, monospace;   /* body */
-  --font-mono:     'Source Code Pro', 'SF Mono', Monaco, monospace;   /* code — same face */
+  /* Three faces, three jobs. Nunito is the wordmark only, so the lockup
+     matches the rounded geometric sans in the original logo. Hanken Grotesk
+     carries headings. JetBrains Mono carries body, code, and accent text, so
+     there is no separate accent face. */
+  --font-wordmark: 'Nunito', system-ui, sans-serif;                          /* lockup only */
+  --font-display:  'Hanken Grotesk', system-ui, sans-serif;                  /* headlines */
+  --font-accent:   'JetBrains Mono', ui-monospace, 'SF Mono', Monaco, monospace;  /* eyebrows, labels, buttons */
+  --font-body:     'JetBrains Mono', ui-monospace, 'SF Mono', Monaco, monospace;  /* body */
+  --font-mono:     'JetBrains Mono', ui-monospace, 'SF Mono', Monaco, monospace;  /* code — same face */
 
   /* Sizes — a 1.25 modular scale rounded to friendly numbers */
   --fs-display:    64px;   /* hero */
@@ -115,8 +176,8 @@
   --ls-body:       0.01em;
   --ls-allcaps:    0.08em;
 
-  /* Weight — 700 is Literata only. Source Code Pro is loaded to 600, so
-     any accent/body text above that gets a synthesized bold. */
+  /* All three faces are variable and cover this range, so no weight here
+     resolves to a synthesized bold. */
   --fw-regular:    400;
   --fw-medium:     500;
   --fw-semibold:   600;
@@ -175,13 +236,13 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-/* 400, not a black weight. Literata at regular is what makes the serif
-   read as restrained — the decks use the same weight. 500-700 are loaded
-   if a heading ever needs to carry more, but 400 is the default. */
+/* 700, not 400. A serif holds a headline at regular weight; a sans goes limp,
+   so Hanken Grotesk needs the weight to read as deliberate. 800 is reserved
+   for the hero, which keeps it distinct from an ordinary h1. */
 h1, h2, h3, h4, .display {
   font-family: var(--font-display);
   color: var(--fg1);
-  font-weight: 400;
+  font-weight: 700;
   letter-spacing: var(--ls-tight);
   line-height: var(--lh-h);
   text-wrap: balance;
@@ -203,14 +264,12 @@ small        { font-size: var(--fs-caption); color: var(--fg3); }
    The sentence-case counterpart to .eyebrow; never ALL CAPS. */
 .caption     { font-size: var(--fs-caption); color: var(--fg3);
                font-family: var(--font-accent); font-weight: var(--fw-medium); }
-/* 600 is the heaviest Source Code Pro weight the font URL requests —
-   asking for 700 here gets a synthesized bold. */
 .eyebrow     { font-size: var(--fs-caption); letter-spacing: var(--ls-allcaps);
                text-transform: uppercase; color: var(--nt-pink);
                font-weight: var(--fw-semibold); font-family: var(--font-accent); }
 
-/* One pink word per headline. Literata has a real italic (loaded at
-   400), so the emphasis gets both the accent and the slant. */
+/* One pink word per headline. Hanken Grotesk ships a drawn italic, so
+   emphasis gets both the accent and the slant, never a browser-faked skew. */
 h1 em, h2 em, .display em { color: var(--nt-pink); font-style: italic; }
 
 /* Pink links are for prose. Links in chrome — nav, footer, buttons,
