@@ -1,0 +1,16 @@
+/* highlight.js theme on NoTambourine tokens. Ours, not vendored — the
+   highlight.min.js next to it is the pinned third-party artifact. */
+.hljs { color: var(--fg2, #C9C9CE); background: transparent; }
+.hljs-comment, .hljs-quote { color: var(--fg3, #8A8A92); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section,
+.hljs-doctag, .hljs-meta { color: #E75A7C; }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute { color: #58C9B9; }
+.hljs-number, .hljs-symbol, .hljs-bullet, .hljs-link { color: #F5A6BB; }
+.hljs-title, .hljs-name, .hljs-type, .hljs-class .hljs-title,
+.hljs-function .hljs-title { color: var(--fg1, #F5F5F7); }
+.hljs-attr, .hljs-variable, .hljs-template-variable,
+.hljs-selector-attr, .hljs-selector-pseudo { color: #C9C9CE; }
+.hljs-built_in, .hljs-builtin-name { color: #58C9B9; }
+.hljs-deletion { color: #E75A7C; text-decoration: line-through; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }

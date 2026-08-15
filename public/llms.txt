@@ -1,0 +1,64 @@
+# share.notambourine.com
+
+Private artifact sharing. Upload a file or folder, get an unguessable branded
+URL, hand it to one person. This file is the whole API.
+
+## Auth
+
+Writes need `Authorization: Bearer $SHARE_TOKEN`. Load the token from
+1Password by reference; never paste it into a transcript or a shell history:
+
+    op run --env-file <file-with-op-ref> -- <command>
+
+Reads need nothing: the unguessable hash in the URL is the credential.
+Signed-tier artifacts additionally need a `/k/<token>/` path segment.
+
+## Upload
+
+    curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
+      -F f=@out/report.html https://share.notambourine.com/up/<space>
+
+Returns the share URL as plain text (`Accept: application/json` for JSON).
+Multiple `-F f=@...` fields keep their relative paths, so a folder with an
+`index.html` serves as a real page with its own CSS, JS, and images.
+
+Query parameters:
+  tier=open|signed   default open; signed requires a minted /k/ token to view
+  ttl=<dur>|forever  fixed artifact expiry, default 90d (e.g. 7d, 12h, 4w)
+  idle=<dur>         expire this long after last access instead of a fixed date
+
+## Mint a signed link
+
+    curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"path":"<space>/<hash>","ttl":"30d","short":true}' \
+      https://share.notambourine.com/sign
+
+Returns {url, exp, short?}. ttl defaults to 30d; "forever" never expires.
+short:true also mints a /z/<id> shortlink that 302s to the signed URL.
+
+## List a space
+
+    curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
+      https://share.notambourine.com/<space>/
+
+JSON, newest first. Without the Bearer header this path returns 404.
+
+## Revoke
+
+    curl -sS -X DELETE -H "Authorization: Bearer $SHARE_TOKEN" \
+      https://share.notambourine.com/<space>/<hash>/
+
+Soft delete: the upload moves to trash and purges 30 days later. The live
+link dies within 10 minutes (cache lifetime).
+
+## Viewing
+
+The same URL renders for browsers and serves raw bytes to everything else
+(curl, <img src>, Slack unfurls). Overrides: ?raw forces bytes, ?view forces
+the branded shell, ?slides renders markdown as a deck, ?view=source shows
+uploaded HTML highlighted instead of executed.
+
+## Skill
+
+GET /SKILL.md is a drop-in Claude skill covering all five verbs.
