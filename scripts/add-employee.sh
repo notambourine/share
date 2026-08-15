@@ -80,7 +80,7 @@ EOF
   exit 0
 fi
 
-NOTES="Bearer for share.notambourine.com uploads. Recipient saves this into their Employee vault as item 'share-token', field 'credential', then loads it via op run --env-file with SHARE_TOKEN=op://Employee/share-token/credential. Never paste into chat or a query string."
+NOTES="Bearer for share.notambourine.com uploads. Recipient saves this into their Employee vault as item 'share-token', field 'credential', then runs commands as: SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c '<command>'. Never paste into chat or a query string."
 TITLE="share-token-${NAME}"
 if op item get "$TITLE" --vault "$VAULT" >/dev/null 2>&1; then
   op item edit "$TITLE" --vault "$VAULT" "credential=${TOK}" >/dev/null
@@ -101,9 +101,18 @@ print_map
 
 echo
 cat <<EOF
-Tell ${NAME}: save the token from the link into your Employee vault as an
-item titled "share-token" with the value in a field named "credential", then
-create ~/.config/share/env containing exactly:
-  SHARE_TOKEN=op://Employee/share-token/credential
-and run commands as: op run --env-file ~/.config/share/env -- <command>
+──────────────────────────────────────────────────────────────
+Send ${NAME} the link above plus this block:
+
+  # 1. Save the token from the one-time link into your Employee vault
+  #    (replace PASTE-TOKEN-HERE; the link shows it exactly once):
+  op item create --vault Employee --category "API Credential" \\
+    --title share-token 'credential=PASTE-TOKEN-HERE'
+
+  # 2. Verify, then use — no env file; op run resolves the reference from
+  #    the environment and the secret exists only inside the wrapped command:
+  op read op://Employee/share-token/credential >/dev/null && echo ready
+  SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c \\
+    'curl -sS -H "Authorization: Bearer \$SHARE_TOKEN" -F f=@<file> https://share.notambourine.com/up/<space>'
+──────────────────────────────────────────────────────────────
 EOF

@@ -8,13 +8,11 @@ URL, hand it to one person. This file is the whole API.
 Writes need `Authorization: Bearer $SHARE_TOKEN`. Load the token from
 1Password by reference; never paste it into a transcript or a shell history.
 Convention: the token lives in your Employee vault as item `share-token`,
-field `credential`, and `~/.config/share/env` holds one line:
+field `credential`. Run any command below under this prefix (op run resolves
+the reference from the environment; single-quote the inner command so your
+shell does not expand $SHARE_TOKEN early):
 
-    SHARE_TOKEN=op://Employee/share-token/credential
-
-Then run any command below as:
-
-    op run --env-file ~/.config/share/env -- <command>
+    SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c '<command>'
 
 Reads need nothing: the unguessable hash in the URL is the credential.
 Signed-tier artifacts additionally need a `/k/<token>/` path segment.

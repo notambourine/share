@@ -13,29 +13,29 @@ render; curl, `<img src>`, and Slack unfurls get raw bytes from the same URL.
 `SHARE_TOKEN` resolves from 1Password by `op://` reference. Never echo it,
 never put it in a query string, never commit it. The convention: every team
 member keeps their token in their built-in Employee vault as an item titled
-`share-token` with the value in a field named `credential`, so the same
-reference works for everyone. Their env file (`~/.config/share/env`) holds
-one line:
+`share-token` with the value in a field named `credential`, so one reference
+works for everyone and nothing lives on disk. Run every verb below under
+this prefix — `op run` resolves the reference from the environment and the
+secret exists only inside the wrapped command:
 
-    SHARE_TOKEN=op://Employee/share-token/credential
+    SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c '<verb>'
 
-Run commands through `op run` so the secret stays out of the transcript:
-
-    op run --env-file ~/.config/share/env -- <command>
+Single quotes on the inner command matter: they keep your shell from
+expanding `$SHARE_TOKEN` to nothing before `op run` injects it.
 
 ## Preflight
 
 Before the first verb, confirm the machine is wired:
 
-    op --version >/dev/null 2>&1 && test -f ~/.config/share/env && echo ready
+    op read op://Employee/share-token/credential >/dev/null 2>&1 && echo ready
 
 If not ready, stop and walk the user through one-time setup — do not attempt
 an upload, and never accept a raw token into the conversation:
 
 1. They get a token from whoever runs the share repo (minted by
    `scripts/add-employee.sh`, delivered as a view-once 1Password link).
-2. They save it per the Token section above (Employee vault, `share-token`,
-   field `credential`) and write the one-line env file.
+2. They save it per the Token section above (Employee vault, item
+   `share-token`, field `credential`).
 3. Re-run the check.
 
 ## Verbs

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /* share — CLI for share.notambourine.com (R15).
-   Token comes from $SHARE_TOKEN; load it via `op run --env-file <file>` so the
-   secret never lands in a transcript. $SHARE_URL overrides the host for dev.
+   Token comes from $SHARE_TOKEN; run under the op prefix so the secret never
+   lands in a transcript ($SHARE_URL overrides the host for dev):
+     SHARE_TOKEN=op://Employee/share-token/credential op run -- share ...
 
    share put <space> <file|dir ...> [--ttl 90d|forever] [--ttl-idle 7d] [--tier signed]
    share sign <space>/<hash> [--ttl 30d] [--short]
@@ -49,7 +50,7 @@ async function walk(root) {
 }
 
 async function api(path, init = {}) {
-  if (!TOKEN) die('SHARE_TOKEN is not set. Run through: op run --env-file <file> -- share ...');
+  if (!TOKEN) die('SHARE_TOKEN is not set. Run as: SHARE_TOKEN=op://Employee/share-token/credential op run -- share ...');
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
