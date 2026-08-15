@@ -11,8 +11,17 @@ render; curl, `<img src>`, and Slack unfurls get raw bytes from the same URL.
 ## Token
 
 `SHARE_TOKEN` resolves from 1Password by `op://` reference. Never echo it,
-never put it in a query string, never commit it. Run commands through
-`op run --env-file <file>` so the secret stays out of the transcript.
+never put it in a query string, never commit it. The convention: every team
+member keeps their token in their built-in Employee vault as an item titled
+`share-token` with the value in a field named `credential`, so the same
+reference works for everyone. Their env file (`~/.config/share/env`) holds
+one line:
+
+    SHARE_TOKEN=op://Employee/share-token/credential
+
+Run commands through `op run` so the secret stays out of the transcript:
+
+    op run --env-file ~/.config/share/env -- <command>
 
 ## Verbs
 

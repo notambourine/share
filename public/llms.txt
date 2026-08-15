@@ -6,9 +6,15 @@ URL, hand it to one person. This file is the whole API.
 ## Auth
 
 Writes need `Authorization: Bearer $SHARE_TOKEN`. Load the token from
-1Password by reference; never paste it into a transcript or a shell history:
+1Password by reference; never paste it into a transcript or a shell history.
+Convention: the token lives in your Employee vault as item `share-token`,
+field `credential`, and `~/.config/share/env` holds one line:
 
-    op run --env-file <file-with-op-ref> -- <command>
+    SHARE_TOKEN=op://Employee/share-token/credential
+
+Then run any command below as:
+
+    op run --env-file ~/.config/share/env -- <command>
 
 Reads need nothing: the unguessable hash in the URL is the credential.
 Signed-tier artifacts additionally need a `/k/<token>/` path segment.
