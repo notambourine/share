@@ -129,15 +129,91 @@ view, the arrow keys, and the `#n` hash. The branded theme is
 properties rather than mirrored from the kb deck theme, so there is one brand
 source and no mirror step.
 
+## Export formats
+
+A markdown path takes a format suffix, resolved only after an exact filename
+lookup misses, so a real uploaded file always wins its own name. `?slides` keeps
+its name as a documented alias for `.slides.html`.
+
+| URL | Output | Cached |
+| --- | --- | --- |
+| `deck.md` | branded shell, client-side | no |
+| `deck.md.slides.html`, `?slides` | branded deck, client-side | no |
+| `deck.md.html` | self-contained snapshot | yes |
+| `deck.md.pdf` | deck or document, decided from the content | yes |
+| `deck.md.slides.pdf` | deck PDF | yes |
+| `deck.md.doc.pdf` | document PDF | yes |
+
+Bare `.pdf` and `.html` sniff the content: `marp: true` front matter or `---`
+slide separators mean deck. The explicit spellings beat the sniff, and both
+`llms.txt` and `SKILL.md` name them, because an agent cannot guess a sniff.
+
+**Cloudflare Browser Rendering, not WASM and not a CLI.** A PDF needs HTML and
+CSS, which rules out pdf-lib. Typst as WASM is 3 MB against the script cap, and
+it would be a second layout engine to keep on brand. A CLI is something every
+person on the team has to install, and nothing that has to run on a laptop can
+serve a URL. The Worker builds an HTML string with the markdown inlined and the
+vendor URLs absolute, then calls `page.setContent()`. The headless browser runs
+the same Marpit, marked, and highlight.js a viewer runs, so there is one render
+path and the Worker still spends no CPU on markdown.
+
+**Browser minutes are the binding constraint**, not CPU and not the script cap.
+The free plan gives 10 browser-minutes per day account-wide, 3 concurrent
+browsers, and one new browser every 20 seconds. At a few seconds per render that
+is on the order of a hundred renders a day for the whole account. Three things
+follow. Sessions are reused across invocations with `puppeteer.sessions()` and
+`connect()`, because an upload arriving 10 seconds after another cannot open a
+browser of its own. Uploads pre-render in `ctx.waitUntil`, capped per upload,
+and log what they defer. An on-demand render that cannot get a browser serves
+the live client-side shell and logs it, never a 500: a missing PDF is a worse
+day than a broken one.
+
+**A deck PDF is a different document from the live deck shell.** `render.js`
+shows one slide at a time behind a `.current` class, so printing the live shell
+would yield a one-page PDF. The print HTML renders every slide visible, one per
+page, at a 1152x648 page box matching Marpit's 16:9 slide. The document shape
+uses `public/print.css`: A4, real margins, `.theme-light` surfaces because a PDF
+gets printed and forwarded, and a page number from Chrome's `footerTemplate`
+rather than `@page`, because headless Chrome implements no CSS Paged Media
+margin box.
+
+**`.html` is a snapshot, not the live shell.** It has to open from a mail
+attachment with no network, so the Worker inlines the CSS and the fonts as
+`data:` URIs and the page removes its own script tags once they have run. One
+page load yields both artifacts, `page.content()` and `page.pdf()`, which halves
+the only budget that binds. Two consequences. `font-src 'self'` blocks `data:`
+fonts, so the snapshot carries its own `SNAPSHOT_CSP` rather than loosening
+`SHELL_CSP` for every shell page. All six woff2 would be 313 KB base64, so the
+snapshot inlines four faces plus a ten-glyph Nunito subset: Nunito sets one
+fixed string, the wordmark, while both italics earn their place because a
+missing face is synthesized as a slanted upright rather than falling back
+cleanly. That lands at 155 KB raw, roughly 207 KB base64.
+
+**Cached artifacts can drift from the brand, and the cache version is the
+answer.** Everything above this section renders client-side, which is why a
+brand change ships to every artifact ever uploaded without re-rendering
+anything. A cached PDF is the first thing in this system that breaks that:
+hashes are immutable, so nothing ever invalidates one. Derived artifacts
+therefore live under `d/v<N>/`, with `N` a constant in `src/lib/exportPath.ts`,
+bumped whenever `tokens.css`, `nt-marp.css`, `print.css`, or the print HTML
+changes. Old versions age out with their upload. This is a real weakening of the
+client-side-rendering property, recorded here as one rather than discovered
+later.
+
 ## Storage layout
 
 ```
 <space>/<hash>/meta.json      access tier, expiry fields, lastAccess, uploader, file list
 <space>/<hash>/f/<path...>    the bytes
+<space>/<hash>/d/v<N>/...     derived exports, keyed by resolved shape
 _trash/<space>/<hash>/...     soft-deleted uploads, purged by a lifecycle rule
 ```
 
 Payload lives under `f/` so an upload named `meta.json` cannot shadow the record.
+`d/` is reserved the same way, so an upload cannot pose as a derived artifact.
+Derived artifacts never appear in `meta.json` `files[]` or the directory listing.
+Delete and the nightly sweep both list the whole `<space>/<hash>/` prefix, so an
+export trashes and purges with its upload and needs no bookkeeping of its own.
 Metadata derives from R2 alone, so there is no second datastore to drift.
 
 KV holds shortlinks only: `z/<id>` -> `{target, exp}` with `expirationTtl` set, so
@@ -346,3 +422,7 @@ Workers free gives 100k requests/day and 10 ms CPU per request, and cron trigger
 are included. KV free gives 100k reads and 1k writes/day, and only shortlinks touch
 KV. The nightly sweep and the once-a-day `lastAccess` writes sit well inside the
 Class A budget.
+
+Browser Rendering is the one line item with a tight ceiling: 10 browser-minutes
+a day across the account. Exports are built to spend fewer of them rather than
+to buy more, and they degrade to the client-side shell when the budget is gone.

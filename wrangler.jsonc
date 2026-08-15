@@ -7,6 +7,8 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "share",
 	"compatibility_date": "2026-08-01",
+	// @cloudflare/puppeteer imports node:buffer; the flag is what resolves it.
+	"compatibility_flags": ["nodejs_compat"],
 	"main": "./src/worker.ts",
 	"assets": {
 		"directory": "./public",
@@ -20,6 +22,11 @@
 			"bucket_name": "notambourine-share"
 		}
 	],
+	// Browser Rendering, for the PDF and snapshot exports. This declaration is
+	// the whole setup: the deploy applies it, and no account toggle exists.
+	"browser": {
+		"binding": "BROWSER"
+	},
 	"kv_namespaces": [
 		{
 			"binding": "LINKS",

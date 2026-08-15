@@ -67,6 +67,27 @@ Decks render with Marp. --- splits slides, and Marp directives apply:
 <!-- _class: lead --> centers a title slide, <!-- paginate: true --> numbers
 them. Arrow keys move between slides and the #n fragment links to one.
 
+## Formats
+
+Append a suffix to a markdown share URL for a branded export. A suffix decides
+the output on its own, so Accept gets no vote, and a file uploaded under the
+suffixed name always wins over the export.
+
+    deck.md                 branded document, rendered in the browser
+    deck.md.slides.html     branded deck, rendered in the browser (same as ?slides)
+    deck.md.html            self-contained page: fonts inlined, opens offline
+    deck.md.pdf             PDF, deck or document decided from the content
+    deck.md.slides.pdf      PDF, always a deck
+    deck.md.doc.pdf         PDF, always a document
+
+Bare .pdf and .html read the content to choose: `marp: true` front matter or
+`---` slide separators mean deck, anything else means document. Name
+.slides.pdf or .doc.pdf when you want to decide instead of guessing.
+
+PDFs render in a headless browser and then cache, so the first request after an
+upload can take a few seconds. When the daily browser budget is spent the URL
+serves the browser-rendered shell rather than an error.
+
 ## Skill
 
 GET /SKILL.md is a drop-in Claude skill covering all five verbs.

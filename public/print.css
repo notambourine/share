@@ -1,0 +1,131 @@
+/* Print stylesheet for exported artifacts. Brand values come from tokens.css,
+   which the export inlines ahead of this file. Two shapes share it:
+   `.print-doc` is A4 prose, `.print-deck` is one Marpit slide per page.
+   The page box itself is emitted per shape by src/render/export.ts, because
+   an `@page` rule cannot be scoped to a class. */
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* ---------- Document ---------- */
+/* Light surfaces, not the dark canvas the screen shells use. A PDF gets
+   printed and forwarded; `.theme-light` is the token system's answer for that.
+   It rides on `html`, so the page canvas takes it too. */
+.print-doc body {
+  font-size: 10.5pt;
+  line-height: 1.55;
+}
+
+/* The PDF takes its gutter from the page box. The `.html` snapshot is the same
+   document read on screen, where it needs a measure and a margin of its own. */
+@media screen {
+  .print-doc body {
+    max-width: 46em;
+    margin: 0 auto;
+    padding: var(--sp-12) var(--sp-6);
+  }
+}
+
+.print-doc h1 { font-size: 20pt; }
+.print-doc h2 { font-size: 15pt; }
+.print-doc h3 { font-size: 12.5pt; }
+.print-doc h4 { font-size: 11pt; }
+
+.print-doc :is(h1, h2, h3, h4) {
+  margin: 1.4em 0 0.5em;
+  break-after: avoid;
+  break-inside: avoid;
+}
+.print-doc :is(h1, h2, h3, h4):first-child { margin-top: 0; }
+
+.print-doc p,
+.print-doc li {
+  orphans: 2;
+  widows: 2;
+  margin: 0 0 0.7em;
+}
+
+.print-doc ul, .print-doc ol { margin: 0 0 0.9em; padding-left: 1.4em; }
+.print-doc li::marker { color: var(--nt-pink); }
+
+.print-doc a { color: var(--nt-pink); border-bottom: none; }
+
+.print-doc code {
+  background: var(--nt-pink-tint);
+  color: var(--nt-pink-press);
+  font-size: 0.85em;
+}
+
+.print-doc pre {
+  background: var(--nt-paper);
+  border: 1px solid var(--nt-line);
+  border-radius: var(--r-sm);
+  padding: 0.8em 1em;
+  font-size: 8.5pt;
+  line-height: 1.5;
+  margin: 0 0 1em;
+  break-inside: avoid;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.print-doc pre code { background: none; color: var(--nt-ink-85); padding: 0; font-size: 1em; }
+
+/* nt-code.css is the screen theme, so its non-token colors are picked for a
+   near-black surface and go faint on paper. Only the hard-coded ones need
+   restating; the rest already ride --fg1/--fg2/--fg3, which .theme-light moves. */
+.print-doc :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section,
+  .hljs-doctag, .hljs-meta, .hljs-number, .hljs-symbol, .hljs-bullet,
+  .hljs-link, .hljs-deletion) { color: var(--nt-pink-press); }
+.print-doc :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute,
+  .hljs-built_in, .hljs-builtin-name) { color: var(--nt-mint-press); }
+.print-doc :is(.hljs-attr, .hljs-variable, .hljs-template-variable,
+  .hljs-selector-attr, .hljs-selector-pseudo) { color: var(--nt-ink-70); }
+
+.print-doc blockquote {
+  margin: 0 0 1em;
+  padding-left: 1em;
+  border-left: 2px solid var(--nt-mint);
+  color: var(--nt-ink-70);
+}
+
+.print-doc table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 9pt;
+  margin: 0 0 1em;
+  break-inside: avoid;
+}
+.print-doc th, .print-doc td {
+  text-align: left;
+  padding: 0.4em 0.6em;
+  border-bottom: 1px solid var(--nt-line);
+}
+.print-doc th { color: var(--nt-ink); font-weight: 600; }
+
+.print-doc img { max-width: 100%; break-inside: avoid; }
+.print-doc hr { border: 0; border-top: 1px solid var(--nt-line); margin: 1.6em 0; }
+
+/* The lockup rides the first page only; Chrome's own footer carries the page
+   number, because headless Chrome implements no `@bottom-center` margin box. */
+.print-mark {
+  font-family: var(--font-wordmark);
+  font-weight: 800;
+  font-size: 13pt;
+  color: var(--nt-ink);
+  margin-bottom: 1.6em;
+  padding-bottom: 0.6em;
+  border-bottom: 1px solid var(--nt-line);
+}
+
+/* ---------- Deck ---------- */
+/* Marpit emits one `svg[data-marpit-svg]` per slide at 1280x720. An svg scales
+   to its box, so a 1152px page gives back the same 16:9 with no transform. */
+.print-deck .marpit > svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  break-after: page;
+}
+.print-deck .marpit > svg:last-child { break-after: auto; }

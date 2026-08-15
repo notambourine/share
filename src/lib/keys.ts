@@ -4,9 +4,9 @@ const BASE62 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
 /** Top-level path segments the router owns; a space may not take these names. */
 export const RESERVED = new Set([
-  'up', 'sign', 'z', 'k', 'f', '_trash',
+  'up', 'sign', 'z', 'k', 'f', 'd', '_trash',
   'llms.txt', 'SKILL.md', 'robots.txt', 'favicon.ico', 'favicon.svg',
-  'tokens.css', 'shell.css', 'render.js', 'vendor', 'index.html',
+  'tokens.css', 'shell.css', 'print.css', 'render.js', 'vendor', 'index.html',
 ]);
 
 /** 12 base62 chars ≈ 71 bits. Rejection sampling keeps the distribution uniform. */
@@ -47,8 +47,9 @@ export function normalizeUploadPath(raw: string): string | null {
     parts.push(seg);
   }
   if (parts.length === 0) return null;
-  if (parts[0] === 'meta.json' || parts[0] === 'f' || parts[0] === 'k') {
-    // f/ holds the payload, k/ is the signed-token segment, meta.json is the record.
+  if (parts[0] === 'meta.json' || parts[0] === 'f' || parts[0] === 'k' || parts[0] === 'd') {
+    // f/ holds the payload, d/ the derived exports, k/ is the signed-token
+    // segment, meta.json is the record.
     return null;
   }
   return parts.join('/');

@@ -12,7 +12,7 @@ import { sweep } from './sweep';
 
 const STATIC = new Set([
   '/', '/index.html', '/robots.txt', '/llms.txt', '/SKILL.md',
-  '/tokens.css', '/shell.css', '/render.js', '/favicon.svg', '/favicon.ico',
+  '/tokens.css', '/shell.css', '/print.css', '/render.js', '/favicon.svg', '/favicon.ico',
 ]);
 
 /* A space slug can never collide with these: isValidSpace rejects a leading
@@ -54,7 +54,7 @@ export default {
     if (segs[0] === 'up') {
       if (request.method !== 'POST') return textResponse('POST only\n', 405);
       if (segs.length !== 2) return textResponse('POST /up/<space>\n', 404);
-      return upload(request, env, segs[1]);
+      return upload(request, env, ctx, segs[1]);
     }
 
     if (segs[0] === 'sign' && segs.length === 1) {

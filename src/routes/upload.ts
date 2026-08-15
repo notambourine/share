@@ -2,6 +2,7 @@ import type { Env, Meta, MetaFile, Tier } from '../lib/types';
 import { DEFAULT_ARTIFACT_DAYS } from '../lib/types';
 import { genSlug, normalizeUploadPath, contentTypeFor, isValidSpace, parseDuration } from '../lib/keys';
 import { authenticate } from '../lib/auth';
+import { prerender } from './export';
 import { jsonResponse, textResponse, wantsJson, now } from '../lib/http';
 
 const MAX_FILES = 200;
@@ -23,7 +24,9 @@ function artifactDays(env: Env, space: string): number {
   return DEFAULT_ARTIFACT_DAYS;
 }
 
-export async function upload(request: Request, env: Env, space: string): Promise<Response> {
+export async function upload(
+  request: Request, env: Env, ctx: ExecutionContext, space: string,
+): Promise<Response> {
   const uploader = await authenticate(request, env.TOKENS);
   if (!uploader) return textResponse('unauthorized\n', 401);
   if (!isValidSpace(space)) return textResponse('invalid space name\n', 400);
@@ -90,6 +93,12 @@ export async function upload(request: Request, env: Env, space: string): Promise
   await env.BUCKET.put(`${space}/${hash}/meta.json`, JSON.stringify(meta), {
     httpMetadata: { contentType: 'application/json' },
   });
+
+  /* Warm the export cache off the response path. The browser budget is the
+     scarce resource, so this runs after meta.json lands and never blocks. */
+  ctx.waitUntil(prerender(env, url, meta).catch((err) => {
+    console.log(`prerender: ${space}/${hash} failed: ${err}`);
+  }));
 
   const link = publicUrl(url.origin, meta);
   if (wantsJson(request)) {

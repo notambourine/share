@@ -2,6 +2,9 @@ export interface Env {
   BUCKET: R2Bucket;
   LINKS: KVNamespace;
   ASSETS: Fetcher;
+  /** Browser Rendering. Optional so a deploy that predates the binding, or an
+      account past its daily browser minutes, degrades to the live shell. */
+  BROWSER?: Fetcher;
   /** Secret. JSON map of uploader name -> sha256 hex of their Bearer token. */
   TOKENS: string;
   /** Secret. JSON map of key id ("v1") -> base64url signing secret. Highest id mints. */
