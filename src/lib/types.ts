@@ -2,8 +2,8 @@ export interface Env {
   BUCKET: R2Bucket;
   LINKS: KVNamespace;
   ASSETS: Fetcher;
-  /** Browser Rendering. Optional: until the dashboard grants it, exports
-      degrade to the live client-side shell rather than failing. */
+  /** Browser Rendering. Optional so a deploy that predates the binding, or an
+      account past its daily browser minutes, degrades to the live shell. */
   BROWSER?: Fetcher;
   /** Secret. JSON map of uploader name -> sha256 hex of their Bearer token. */
   TOKENS: string;

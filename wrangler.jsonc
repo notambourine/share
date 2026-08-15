@@ -22,8 +22,8 @@
 			"bucket_name": "notambourine-share"
 		}
 	],
-	// Browser Rendering, for the PDF and snapshot exports. Needs a one-time
-	// dashboard grant on the account before a deploy carrying this will bind.
+	// Browser Rendering, for the PDF and snapshot exports. This declaration is
+	// the whole setup: the deploy applies it, and no account toggle exists.
 	"browser": {
 		"binding": "BROWSER"
 	},
