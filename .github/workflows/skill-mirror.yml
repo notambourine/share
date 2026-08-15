@@ -1,0 +1,32 @@
+name: Skill mirror
+
+# `skills/share/SKILL.md` is what the published plugin installs; `public/SKILL.md`
+# is what the Worker serves at /SKILL.md. Drift means an agent running the plugin
+# and a user who curled the URL follow different instructions for the same API.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: public/SKILL.md matches the skill
+        # sha256sum, not diff or cmp: ubuntu-slim is a bare ubuntu:24.04 container
+        # and diffutils is not guaranteed there, while coreutils always is.
+        run: |
+          if [ "$(sha256sum < skills/share/SKILL.md)" != "$(sha256sum < public/SKILL.md)" ]; then
+            echo "::error::public/SKILL.md is stale - run 'npm run mirror' and commit the result"
+            exit 1
+          fi
+          echo "SKILL.md mirror is current"
