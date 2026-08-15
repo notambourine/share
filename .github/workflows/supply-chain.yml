@@ -1,0 +1,77 @@
+name: supply-chain
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+# Dependency gates (CVE, malware, tree scan) ride the org-level Socket app,
+# which checks every dep-touching PR — no vet/guarddog/socket-tree jobs here.
+jobs:
+  betterleaks:
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # LOAD-BEARING: `betterleaks git` walks commits, so the default
+          # shallow clone hides a key committed last month.
+          fetch-depth: 0
+          persist-credentials: false
+      # Stays PINNED while betterleaks below does not: cosign is a build tool,
+      # betterleaks is a signature scanner.
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: betterleaks secret scan
+        # betterleaks is resolved fresh EVERY RUN, deliberately unpinned: its
+        # value is the current ruleset, and a version pin scans with whatever
+        # shipped the day this file was scaffolded. Safe only because the
+        # release is VERIFIED, not trusted: cosign binds checksums.txt to
+        # betterleaks' own release.yml at the resolved tag, then sha256sum
+        # binds the tarball to that verified checksums.txt. Drop the cosign
+        # step and this becomes "run whatever the release page serves today".
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # gh release view/download
+        run: |
+          # Unpack OUTSIDE the workspace: a 20 MB Go binary of compressed
+          # entropy is exactly what a secret scanner is built to flag.
+          cd "${RUNNER_TEMP}"
+          TAG=$(gh release view -R betterleaks/betterleaks --json tagName -q .tagName)
+          gh release download "$TAG" -R betterleaks/betterleaks \
+            -p 'betterleaks_*_linux_x64.tar.gz' -p checksums.txt -p checksums.txt.sigstore.json
+          # NEVER pipe cosign: `run:` is `bash -e` WITHOUT pipefail, so a pipe
+          # swallows the verify failure and the job proceeds unverified.
+          cosign verify-blob --bundle checksums.txt.sigstore.json \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "https://github.com/betterleaks/betterleaks/.github/workflows/release.yml@refs/tags/${TAG}" \
+            checksums.txt
+          grep linux_x64 checksums.txt | sha256sum -c -
+          tar -xzf betterleaks_*_linux_x64.tar.gz betterleaks
+          # --redact so a finding never prints the credential into a CI log.
+          ./betterleaks git "${GITHUB_WORKSPACE}" --no-banner --redact=100
+  zizmor:
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    # No job-scoped perms: write here would self-trip excessive-permissions.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: zizmor workflow audit
+        # `|| true`: zizmor exits 14 on findings, which would abort before the
+        # filter runs. Then fail CLOSED on non-JSON — a gate must not wave a PR
+        # through on a scan error. Filter copied from status-zizmor.sh, the
+        # canonical source.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OUT=$(uvx zizmor --format json --min-severity=medium .github/workflows || true)
+          if ! jq -e 'type == "array"' <<<"$OUT" >/dev/null 2>&1; then
+            echo "::error::zizmor returned no valid JSON (scan errored) — failing closed"; exit 1
+          fi
+          HITS=$(jq '[.[] | select(.ident != "unpinned-uses")]' <<<"$OUT")
+          N=$(jq 'length' <<<"$HITS")
+          if [ "$N" -gt 0 ]; then
+            jq -r 'group_by(.ident) | map("\(.[0].ident)×\(length)") | join(", ")' <<<"$HITS"
+            echo "::error::zizmor found $N medium+ workflow finding(s)"; exit 1
+          fi

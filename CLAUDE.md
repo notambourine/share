@@ -1,5 +1,8 @@
 # share/ — operating context
 
+- Dependency gates (CVE, malware, tree scan) ride the org-level Socket app.
+  Do not add vet/guarddog/socket-tree jobs to CI; their lights are silenced
+  in `.claude/settings.json`.
 - Deploys ride Cloudflare Workers Builds on push to `main`. Never run
   `wrangler deploy` or `wrangler dev`; verify with `npm test` and `npm run types`.
 - One-time dashboard setup: README.md "Setup from zero". Token add, rotate,
