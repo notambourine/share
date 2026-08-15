@@ -1,0 +1,28 @@
+name: Dash ratchet
+
+# Unicode dashes may only ever decrease. The engine, the runner tier, and the
+# timeout live in notambourine/dash-ratchet; this file owns the trigger.
+# Contract and inputs: https://github.com/notambourine/dash-ratchet
+#
+# PR-only on purpose: the check compares a head against its base, and on a push
+# to a trunk branch there is nothing left to block - the code has already landed.
+
+concurrency:
+  group: dashes-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dashes:
+    uses: notambourine/dash-ratchet/.github/workflows/ratchet.yml@29c4bb09a6041cc859b436f2388e8b862dd13171 # v0.2.0
+    with:
+      # Upstream bundles mirrored byte-for-byte. Rewriting a dash here forks the
+      # copy from upstream, and the next re-vendor would raise the total again.
+      exclude: |
+        public/vendor
