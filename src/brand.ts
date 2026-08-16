@@ -11,9 +11,16 @@
  * decisions, a static server is the right thing to serve them, and tokens.css
  * asks for them at `./fonts/*.woff2`, which resolves to `/fonts/` either way.
  */
-import TOKENS from '../upstream/brand-kit/tokens.css';
+/* The kit's tokens.css is three @import lines, for a page that links it off a
+   disk. Serving that would cost three more routes and three more requests, so
+   the parts are joined here and /tokens.css stays one file on the wire. */
+import FONTS from '../upstream/brand-kit/fonts.css';
+import VARS from '../upstream/brand-kit/vars.css';
+import ELEMENTS from '../upstream/brand-kit/elements.css';
 import DECK from '../upstream/brand-kit/deck.css';
 import { ROBOTS } from './lib/http';
+
+const TOKENS = [FONTS, VARS, ELEMENTS].join('\n');
 
 /** Marpit takes a theme as a string, so the export and the browser both read this. */
 export { DECK as DECK_THEME };

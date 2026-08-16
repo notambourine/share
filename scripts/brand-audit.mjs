@@ -27,7 +27,9 @@ import { readFile, glob } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { root, BRAND, fontPairs } from './brand.mjs';
 
-const TOKENS = `${BRAND}/tokens.css`;
+/* vars.css, not tokens.css: tokens.css is three @import lines, and every value
+   the audit compares against is declared in vars.css. */
+const TOKENS = `${BRAND}/vars.css`;
 const SCAN = ['public/*.css', 'public/vendor/**/*.css', 'public/*.svg', 'src/**/*.ts'];
 
 const HEX = /#([0-9a-fA-F]{3,8})\b/g;
