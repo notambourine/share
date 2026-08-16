@@ -11,7 +11,7 @@
  * else invalidates a stored PDF. Bump on any change to tokens.css, nt-marp.css,
  * print.css, or the print HTML; old versions age out with their upload.
  */
-export const CACHE_VERSION = 1;
+export const CACHE_VERSION = 2;
 
 export type ExportFormat = 'slides-html' | 'html' | 'pdf' | 'slides-pdf' | 'doc-pdf';
 
