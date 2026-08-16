@@ -45,10 +45,10 @@ jobs:
       # script gets a runner. vitest, tsc, and oxlint need none; the esbuild and
       # workerd binaries are only used by `npm run vendor` and deploys.
       #
-      # Deliberately NOT wrapped in `sfw`, which is why the sfw light sits
-      # yellow. Nothing in this job is worth exfiltrating: no step passes `env:`,
-      # the workflow grant is `contents: read`, the checkout drops the token, and
-      # the repo is public. Wrap it if a step here ever gains a secret.
+      # Deliberately NOT wrapped in `sfw`. Nothing in this job is worth
+      # exfiltrating: no step passes `env:`, the workflow grant is
+      # `contents: read`, the checkout drops the token, and the repo is public.
+      # Wrap it if a step here ever gains a secret.
       - run: npm ci --ignore-scripts
 
       # The brand contract, and the gate on a submodule bump PR: public/fonts/
@@ -71,7 +71,9 @@ jobs:
   # the only thing standing between an edit here and that silent staleness.
   plugin-version:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    # ubuntu-slim: this gate only shells out to git, jq, and sed, all on slim's
+    # image, and finishes inside the first billed minute at a third the rate.
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -18,6 +18,21 @@ upload-only, and cached to a mode-0600 file - the same pattern as the AWS
 CLI's STS cache - so it stays out of the conversation too. Worst case for
 an exfiltrated copy: a few minutes of uploads, nothing else.
 
+## CLI
+
+Plugin installs carry `$CLAUDE_PLUGIN_ROOT/bin/share.mjs`. Prefer it for every
+verb: the cache modes, the mint guard, the dotfile filter, and the Windows path
+handling are tested code there, and re-deriving them in curl can only lose.
+
+    SHARE=$CLAUDE_PLUGIN_ROOT/bin/share.mjs   # test -f before relying on it
+    SHARE_TOKEN=op://Employee/share-token/credential op run -- node "$SHARE" session
+    node "$SHARE" put <space> <file|dir ...> [--tier signed] [--ttl 90d|forever]
+    SHARE_TOKEN=... op run -- node "$SHARE" sign|short <space>/<hash> [--ttl 30d]
+    SHARE_TOKEN=... op run -- node "$SHARE" ls|rm <space>[/<hash>]
+
+The curl forms below are the fallback for a consumer that fetched this doc
+without the plugin, so no `bin/` is on disk. Same API, same rules.
+
 ## Session (your first tool call)
 
 Run the mint before anything else - before reading the file you are about to
@@ -60,8 +75,13 @@ vault token into the conversation:
   Re-run the mint.
 - the mint returns `401 unauthorized` -> the Worker's `TOKENS` secret has
   drifted from the vault (a rotation that was never pasted). The share-repo
-  admin re-runs `scripts/add-employee.sh --map` and re-pastes the printed map
-  into the Worker secret.
+  admin re-runs `scripts/add-employee.sh --map --vault <admin-vault>` and
+  re-pastes the printed map into the Worker secret. `--map` rebuilds `TOKENS`
+  from the admin vault only, so if the re-paste does not clear the 401 the
+  stale copy is the holder's own `Employee` item: rotate that name and
+  redeliver.
+- a `put` returns `401 only authorizes /up` -> a session token reached `sign`,
+  `ls`, or `rm`. Those take the vault token under `op run`, never the cache.
 - anything else -> stop and report it; do not attempt an upload.
 
 ## Verbs
