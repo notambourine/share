@@ -1,6 +1,6 @@
 import type { Env } from '../lib/types';
 import { DEFAULT_LINK_DAYS } from '../lib/types';
-import { authenticate } from '../lib/auth';
+import { authenticate, SESSION_SCOPE_MSG } from '../lib/auth';
 import { readMeta, isExpired } from '../lib/r2';
 import { mintToken } from '../lib/sign';
 import { genSlug, isValidSpace, isValidHash, parseDuration } from '../lib/keys';
@@ -33,8 +33,11 @@ export function parseArtifactPath(raw: string): [string, string] | null {
  * holding an expired link issue themselves a fresh one.
  */
 export async function mint(request: Request, env: Env): Promise<Response> {
-  const who = await authenticate(request, env);
-  if (!who) return jsonResponse({ error: 'unauthorized' }, 401);
+  const auth = await authenticate(request, env);
+  // A live-or-expired session proved itself with a valid signature, so the
+  // scope refusal leaks nothing; sign stays raw-only to cap an exfil at /up.
+  if (auth.session || auth.expired) return jsonResponse({ error: SESSION_SCOPE_MSG.trim() }, 401);
+  if (!auth.name) return jsonResponse({ error: 'unauthorized' }, 401);
 
   let body: SignBody;
   try {

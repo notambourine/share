@@ -18,24 +18,26 @@ async function env(tokens: Record<string, string>) {
 }
 
 describe('authenticate', () => {
-  it('maps a valid raw token to its uploader name', async () => {
+  it('maps a valid raw token to its uploader name, not marked as a session', async () => {
     const e = await env({ tom: 'secret-token' });
-    expect(await authenticate(req('Bearer secret-token'), e)).toBe('tom');
+    const a = await authenticate(req('Bearer secret-token'), e);
+    expect(a.name).toBe('tom');
+    expect(a.session).toBeUndefined();
   });
 
   it('rejects wrong, missing, and malformed credentials', async () => {
     const e = await env({ tom: 'secret-token' });
-    expect(await authenticate(req('Bearer wrong'), e)).toBeNull();
-    expect(await authenticate(req(), e)).toBeNull();
-    expect(await authenticate(req('Basic secret-token'), e)).toBeNull();
-    expect(await authenticate(req('Bearer secret-token'), { TOKENS: 'not json', SIGNING_KEYS: '{}' })).toBeNull();
+    expect((await authenticate(req('Bearer wrong'), e)).name).toBeNull();
+    expect((await authenticate(req(), e)).name).toBeNull();
+    expect((await authenticate(req('Basic secret-token'), e)).name).toBeNull();
+    expect((await authenticate(req('Bearer secret-token'), { TOKENS: 'not json', SIGNING_KEYS: '{}' })).name).toBeNull();
   });
 
   it('revoking one person is a map edit', async () => {
     const both = await env({ tom: 'tok-a', sam: 'tok-b' });
     const onlyTom = await env({ tom: 'tok-a' });
-    expect(await authenticate(req('Bearer tok-b'), both)).toBe('sam');
-    expect(await authenticate(req('Bearer tok-b'), onlyTom)).toBeNull();
+    expect((await authenticate(req('Bearer tok-b'), both)).name).toBe('sam');
+    expect((await authenticate(req('Bearer tok-b'), onlyTom)).name).toBeNull();
   });
 });
 
@@ -43,18 +45,28 @@ describe('session tokens', () => {
   const future = Math.floor(Date.now() / 1000) + 600;
   const past = Math.floor(Date.now() / 1000) - 600;
 
-  it('a live session authenticates as its owner', async () => {
+  it('a live session authenticates as its owner and is marked session', async () => {
     const e = await env({});
     const tok = await mintSession(KEYS, 'tom', future);
-    expect(await authenticate(req(`Bearer ${tok}`), e)).toBe('tom');
+    const a = await authenticate(req(`Bearer ${tok}`), e);
+    expect(a.name).toBe('tom');
+    expect(a.session).toBe(true);
   });
 
-  it('rejects expired, renamed, and never-expiring sessions', async () => {
+  it('an expired session is rejected but named as expired', async () => {
     const e = await env({});
-    expect(await authenticate(req(`Bearer ${await mintSession(KEYS, 'tom', past)}`), e)).toBeNull();
+    const a = await authenticate(req(`Bearer ${await mintSession(KEYS, 'tom', past)}`), e);
+    expect(a.name).toBeNull();
+    expect(a.expired).toBe(true);
+  });
+
+  it('rejects renamed and never-expiring sessions without the expired flag', async () => {
+    const e = await env({});
     const renamed = (await mintSession(KEYS, 'tom', future)).replace(/^tom\./, 'sam.');
-    expect(await authenticate(req(`Bearer ${renamed}`), e)).toBeNull();
-    expect(await authenticate(req(`Bearer ${await mintSession(KEYS, 'tom', 0)}`), e)).toBeNull();
+    const a = await authenticate(req(`Bearer ${renamed}`), e);
+    expect(a.name).toBeNull();
+    expect(a.expired).toBeFalsy();
+    expect((await authenticate(req(`Bearer ${await mintSession(KEYS, 'tom', 0)}`), e)).name).toBeNull();
   });
 
   it('a session token never passes the raw map', async () => {
@@ -66,7 +78,7 @@ describe('session tokens', () => {
   it('a raw token shaped like a session still reaches the map', async () => {
     const shaped = 'tom.v1.99.aaaaaaaaaaaaaaaaaaaaaa';
     const e = await env({ tom: shaped });
-    expect(await authenticate(req(`Bearer ${shaped}`), e)).toBe('tom');
+    expect((await authenticate(req(`Bearer ${shaped}`), e)).name).toBe('tom');
   });
 });
 

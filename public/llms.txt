@@ -20,15 +20,18 @@ Signed-tier artifacts additionally need a `/k/<token>/` path segment.
 
 ## Session
 
-Trade the vault token for a session token once, then run every other verb
-with the session token and no 1Password unlock:
+Trade the vault token for a session token once, then run every upload with
+the session token and no 1Password unlock:
 
     curl -sS -X POST -H "Authorization: Bearer $SHARE_TOKEN" \
       https://share.notambourine.com/session
 
-Returns 201 {token, name, expiresAt}. ttl defaults to 15m (?ttl=, cap 1h).
-The session token acts as you everywhere a Bearer works, except it cannot
-mint another session. A 401 here means the server rejects your vault token.
+Returns 201 {token, name, expiresAt}. ttl defaults to 5m (?ttl=, cap 1h).
+The session token authorizes /up only: sign, list, and delete still need the
+vault token, and a session cannot mint another session, so an exfiltrated
+session token caps at a few minutes of uploads. A 401 here means the server
+rejects your vault token itself. An expired session 401s with "session
+expired" on upload; mint a new one and retry.
 
 ## Upload
 

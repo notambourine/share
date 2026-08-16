@@ -12,9 +12,10 @@ render; curl, `<img src>`, and Slack unfurls get raw bytes from the same URL.
 
 Two tokens exist. The **vault token** lives in 1Password (Employee vault,
 item `share-token`, field `credential`) and never enters a transcript, a
-query string, or a commit. The **session token** is what you actually use:
-short-lived (15 minutes by default, 1 hour cap), minted from the vault token,
-and safe to hold in the conversation because it expires on its own.
+query string, or a commit. The **session token** is what uploads use:
+short-lived (5 minutes by default, 1 hour cap), minted from the vault token,
+upload-only, and safe to hold in the conversation because an exfiltrated
+copy can add files for a few minutes and nothing else.
 
 ## Session (do this first)
 
@@ -29,8 +30,10 @@ nothing before `op run` injects it.
 
 A `201` returns `{token, name, expiresAt}`. Each shell command runs fresh, so
 carry the `token` value forward yourself: substitute it for `$SHARE_SESSION`
-in every verb below. If a verb later returns 401 the session expired; mint a
-new one (`?ttl=1h` stretches it for long jobs).
+in each `put`. A 401 that says `session expired` means exactly that; mint a
+new one (`?ttl=1h` stretches one for long batches). The session token
+authorizes `put` only - `sign`, `ls`, and `rm` are rarer and sharper, so each
+runs under the `op run` prefix with the vault token and costs its own unlock.
 
 On failure, stop - do not attempt an upload, and never accept a raw vault
 token into the conversation:
@@ -46,8 +49,9 @@ token into the conversation:
 
 ## Verbs
 
-Every verb takes the session token; `$SHARE_SESSION` below stands for the
-literal `token` value from the mint. No `op run` prefix is needed again.
+`$SHARE_SESSION` stands for the literal `token` value from the mint and only
+works on `put`. The other verbs use `$SHARE_TOKEN` and run under the same
+`op run` prefix as the mint.
 
 **put**: one file or a whole folder (relative paths survive; an `index.html`
 makes the link serve as a real page):
@@ -65,16 +69,16 @@ Options: `?tier=signed` (viewing needs a minted key), `?ttl=7d|forever`
 (default 90d), `?idle=14d` (expire after inactivity instead).
 Add `-H "Accept: application/json"` for `{url, hash, files}`.
 
-**sign**: mint a time-boxed link for a signed-tier artifact:
+**sign**: mint a time-boxed link for a signed-tier artifact (vault token):
 
-    curl -sS -H "Authorization: Bearer $SHARE_SESSION" -H "Content-Type: application/json" \
+    curl -sS -H "Authorization: Bearer $SHARE_TOKEN" -H "Content-Type: application/json" \
       -d '{"path":"<space>/<hash>","ttl":"30d"}' https://share.notambourine.com/sign
 
 **short**: same call with `"short":true`; the response adds a `/z/<id>` URL.
 
-**ls**: `curl -sS -H "Authorization: Bearer $SHARE_SESSION" https://share.notambourine.com/<space>/`
+**ls**: `curl -sS -H "Authorization: Bearer $SHARE_TOKEN" https://share.notambourine.com/<space>/`
 
-**rm**: `curl -sS -X DELETE -H "Authorization: Bearer $SHARE_SESSION" https://share.notambourine.com/<space>/<hash>/`
+**rm**: `curl -sS -X DELETE -H "Authorization: Bearer $SHARE_TOKEN" https://share.notambourine.com/<space>/<hash>/`
 Revocation lands within 10 minutes.
 
 ## Conventions
