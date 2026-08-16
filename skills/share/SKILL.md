@@ -35,7 +35,9 @@ expanding `$SHARE_TOKEN` to nothing before `op run` injects it.
     jq '{name, expiresAt}' ~/.cache/notambourine-share/session.json
 
 A success prints `{name, expiresAt}`; the token stays in the file. Every
-`put` reads it fresh, so it works in any later shell with no carrying. A 401
+`put` reads it fresh, so it works in any later shell with no carrying.
+The commands assume a POSIX shell; on Windows run them in Git Bash (which
+Claude Code uses there), and the `~/.cache` path applies on every platform. A 401
 that says `session expired` means exactly that; re-run the mint (`?ttl=1h`
 stretches one for long batches). The session token authorizes `put` only -
 `sign`, `ls`, and `rm` are rarer and sharper, so each runs under the

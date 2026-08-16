@@ -19,12 +19,14 @@
    share rm <space>/<hash>
 */
 import { readFile, readdir, stat, writeFile, mkdir, chmod } from 'node:fs/promises';
-import { join, relative, basename } from 'node:path';
+import { join, relative, basename, sep } from 'node:path';
 import { homedir } from 'node:os';
 import process from 'node:process';
 
 const BASE = (process.env.SHARE_URL ?? 'https://share.notambourine.com').replace(/\/$/, '');
-const TOKEN = process.env.SHARE_TOKEN;
+const TOKEN = process.env.SHARE_TOKEN || undefined;
+/* ~/.cache on every platform, Windows included: one documented path beats the
+   LOCALAPPDATA convention, and NTFS ACLs on the profile dir match 0600-in-home. */
 const CACHE = join(
   process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'),
   'notambourine-share', 'session.json',
@@ -64,7 +66,9 @@ async function walk(root) {
   for (const e of entries) {
     if (!e.isFile()) continue;
     const abs = join(e.parentPath ?? e.path, e.name);
-    const rel = relative(root, abs);
+    // Forward slashes always: Windows relative() emits backslashes, which would
+    // dodge the dotfile filter here and desync the upload paths from the URL.
+    const rel = relative(root, abs).split(sep).join('/');
     if (rel.split('/').some((seg) => seg.startsWith('.'))) continue;
     out.push({ abs, rel });
   }
