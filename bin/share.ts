@@ -9,6 +9,7 @@
    nt-share install                                     (put nt-share on PATH)
    nt-share put <space> <file|dir ...> [--tier signed] [--ttl 90d|forever]
                                        [--ttl-idle 7d] [--sign-ttl 30d] [--short]
+   nt-share put <space> --clip [--name shot.png]        (the image on the clipboard)
    nt-share sign <space>/<hash> [--ttl 30d] [--short]   (re-sign an older artifact)
    nt-share short <space>/<hash> [--ttl 30d]
    nt-share ls <space>
@@ -24,6 +25,7 @@
 */
 import { readFile, readdir, stat, writeFile, mkdir, chmod } from 'node:fs/promises';
 import { join, relative, basename, sep, delimiter } from 'node:path';
+import { Buffer } from 'node:buffer';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -102,13 +104,16 @@ function decodeSession(body: string): Session | null {
   return { token, name, expiresAt };
 }
 
+/** A flag that takes no value; anything else here would eat the next argument. */
+const BARE = new Set(['short', 'print', 'clip']);
+
 /** Boolean flags land as "1", so every value is a string. */
 function parseArgs(argv: string[]) {
   const pos: string[] = [];
   const flags: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--short' || a === '--print') flags[a.slice(2)] = '1';
+    if (a.startsWith('--') && BARE.has(a.slice(2))) flags[a.slice(2)] = '1';
     else if (a.startsWith('--')) flags[a.slice(2)] = argv[++i] ?? '';
     else pos.push(a);
   }
@@ -181,6 +186,83 @@ async function walk(root: string): Promise<{ abs: string; rel: string }[]> {
   return out;
 }
 
+/* Clipboard, one shell-out per platform, bytes back over stdout rather than a
+   temp file: a pasted screenshot should not outlive the upload on disk. */
+const CLIP_MAX = 64 * 1024 * 1024;
+const NO_IMAGE = 'no image on the clipboard (copy one, then rerun)';
+
+/** An empty clipboard and a sandbox that blocks the pasteboard both come back
+    as a failed read, so the tool's own words are the only way to tell them
+    apart. Never fold one into the other. */
+function clipFail(detail: string): never {
+  return die(`cannot read the clipboard: ${detail.trim() || 'no output'}`);
+}
+
+function macClipboard(): Buffer<ArrayBuffer> {
+  const r = spawnSync('osascript', ['-e', 'the clipboard as «class PNGf»'], {
+    encoding: 'utf8', maxBuffer: CLIP_MAX,
+  });
+  /* Loose, not anchored on the «data ...» wrapper osascript prints around the
+     hex: those guillemets arrive in the system encoding. Whitespace comes out
+     of the capture, not the haystack, because the wrapper holds a space. */
+  const hex = /data PNGf([0-9a-fA-F\s]+)/.exec(r.stdout);
+  if (hex) return Buffer.from(hex[1].replace(/\s+/g, ''), 'hex');
+  const err = r.stderr ?? '';
+  // -1700 is AppleScript's coercion failure: nothing image-shaped is there.
+  return err.includes('-1700') ? die(NO_IMAGE) : clipFail(err || r.stdout);
+}
+
+/* -EncodedCommand takes a UTF-16 base64 script, so no Windows quoting rule can
+   mangle it, and the clipboard API only answers on an STA thread. */
+const WIN_CLIP = [
+  'Add-Type -AssemblyName System.Windows.Forms,System.Drawing',
+  '$img = [System.Windows.Forms.Clipboard]::GetImage()',
+  'if ($null -eq $img) { exit 3 }',
+  '$ms = New-Object System.IO.MemoryStream',
+  '$img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)',
+  '[Console]::Out.Write([Convert]::ToBase64String($ms.ToArray()))',
+].join('\n');
+
+function winClipboard(): Buffer<ArrayBuffer> {
+  const r = spawnSync(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-STA', '-EncodedCommand',
+      Buffer.from(WIN_CLIP, 'utf16le').toString('base64')],
+    { encoding: 'utf8', maxBuffer: CLIP_MAX },
+  );
+  if (r.status === 3) die(NO_IMAGE); // GetImage returned null
+  const b64 = r.status === 0 ? r.stdout.trim() : '';
+  return b64 ? Buffer.from(b64, 'base64') : clipFail(r.stderr ?? '');
+}
+
+/** Wayland first, then X11. Both write the PNG raw, so no encoding here. */
+const LINUX_CLIP: [string, string[]][] = [
+  ['wl-paste', ['--no-newline', '--type', 'image/png']],
+  ['xclip', ['-selection', 'clipboard', '-t', 'image/png', '-o']],
+];
+
+function linuxClipboard(): Buffer<ArrayBuffer> {
+  const notes: string[] = [];
+  for (const [cmd, args] of LINUX_CLIP) {
+    const r = spawnSync(cmd, args, { maxBuffer: CLIP_MAX });
+    if (r.error) continue; // not on PATH; try the other one
+    if (r.status === 0 && r.stdout.length > 0) return Buffer.from(r.stdout);
+    notes.push(`${cmd}: ${r.stderr.toString().trim() || `exit ${r.status}`}`);
+  }
+  if (notes.length === 0) {
+    die('no clipboard tool: install wl-clipboard (Wayland) or xclip (X11)');
+  }
+  // Both tools say "no image" and "no display" the same way, through an exit
+  // code, so print the guess and their words rather than pick one.
+  return die(`${NO_IMAGE}\n${notes.join('\n')}`);
+}
+
+function clipboardPng(): Buffer<ArrayBuffer> {
+  if (process.platform === 'darwin') return macClipboard();
+  if (process.platform === 'win32') return winClipboard();
+  return linuxClipboard();
+}
+
 const EXPIRED = Symbol('session expired');
 
 async function api(path: string, init: RequestInit, token: string): Promise<string> {
@@ -251,9 +333,16 @@ switch (cmd) {
   }
   case 'put': {
     const [space, ...paths] = rest;
-    if (!space || paths.length === 0) die('usage: nt-share put <space> <file|dir ...>');
+    if (!space || (paths.length === 0 && !flags.clip)) {
+      die('usage: nt-share put <space> <file|dir ...> | nt-share put <space> --clip');
+    }
     const form = new FormData();
     let count = 0;
+    // First, so a clipboard holding no image costs no 1Password unlock.
+    if (flags.clip) {
+      form.append('f', new Blob([clipboardPng()]), flags.name ?? 'clipboard.png');
+      count++;
+    }
     for (const p of paths) {
       for (const { abs, rel } of await walk(p)) {
         form.append('f', new Blob([await readFile(abs)]), rel);

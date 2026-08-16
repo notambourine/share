@@ -41,6 +41,11 @@ drop-in Claude skill. `bin/share.ts` is the CLI (`install`, `session`, `put`,
 `sign`, `short`, `ls`, `rm`); `install` writes a `nt-share` shim onto PATH that
 re-resolves the newest plugin copy, so the skill can call it by name.
 
+`nt-share put <space> --clip` uploads the image on the clipboard with no file
+on disk: `osascript` on macOS, `Clipboard::GetImage` through PowerShell on
+Windows, `wl-paste` or `xclip` on Linux. The bytes come back over stdout, so
+nothing lands in a temp dir on the way.
+
 A consumer carries only a stub, so the hosted skill stays the single source
 of truth and never drifts. `GET /SKILL.md` is served from the bundle rather
 than `public/`: `src/skill.ts` imports the skill file, so the served bytes and

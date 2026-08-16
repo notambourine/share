@@ -76,6 +76,28 @@ describe('credential resolution', () => {
   });
 });
 
+describe('clipboard', () => {
+  /* PATH stays intact here - the read is a shell-out per platform, and every CI
+     runner's clipboard is empty, so all three legs take the no-image path. The
+     `fetch failed` branch is the developer who does have an image copied.
+     A live session either way, so a run can never raise a 1Password prompt. */
+  it('--clip needs no path and fails clean with an empty clipboard', () => {
+    const { code, out } = run(['put', 'acme', '--clip'], {
+      XDG_CACHE_HOME: cacheDir(live()), SHARE_URL: DEAD,
+    });
+    expect(code).toBe(1);
+    expect(out).toMatch(/clipboard|fetch failed/);
+    expect(out).not.toContain('usage:');
+  });
+
+  it('--clip takes no value from the flag after it', () => {
+    const { out } = run(['put', 'acme', '--clip', '--ttl', '7d'], {
+      XDG_CACHE_HOME: cacheDir(live()), SHARE_URL: DEAD,
+    });
+    expect(out).not.toContain('usage:');
+  });
+});
+
 describe('install', () => {
   it('writes a runnable shim that re-resolves its CLI', () => {
     const dir = join(mkdtempSync(join(tmpdir(), 'share-bin-')), 'bin');
