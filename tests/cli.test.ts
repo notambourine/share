@@ -4,8 +4,8 @@ import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-/* Spawns the real CLI, so the Windows CI leg proves the cache path, the
-   fs modes, and the path handling work off-POSIX, not just that they parse.
+/* Spawns the real CLI, so the Windows CI leg proves the cache path and the
+   path handling work off-POSIX, not just that they parse.
    PATH='' is how a case proves a code path never shells out to `op`. */
 
 const BIN = join(process.cwd(), 'bin', 'share.ts');
@@ -88,6 +88,10 @@ describe('install', () => {
     // JSON.stringify, not the raw path: that is the quoting the shim embeds, and
     // on Windows a backslash path only matches once it is escaped.
     expect(shim).toContain(JSON.stringify(BIN)); // the fallback when no plugin copy is installed
-    expect(statSync(join(dir, 'nt-share')).mode & 0o111).toBeTruthy();
+    // NTFS carries no exec bit, so node reports mode 0o666 there whatever the
+    // chmod asked for. The bit is a POSIX claim; assert it where it exists.
+    if (process.platform !== 'win32') {
+      expect(statSync(join(dir, 'nt-share')).mode & 0o111).toBeTruthy();
+    }
   });
 });
