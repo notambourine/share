@@ -1,5 +1,5 @@
 /**
- * share.notambourine.com — artifact sharing Worker.
+ * share.notambourine.com: artifact sharing Worker.
  * Deployed by Cloudflare Workers Builds (git integration), never `wrangler deploy` by hand.
  * Secrets (dashboard only, never here): TOKENS, SIGNING_KEYS, SPACE_TTLS.
  */

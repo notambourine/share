@@ -1,6 +1,6 @@
 # share
 
-`share.notambourine.com` — private artifact sharing for [NoTambourine](https://notambourine.com)
+`share.notambourine.com`: private artifact sharing for [NoTambourine](https://notambourine.com)
 engagements. One curl line in, one branded unguessable URL out.
 
 ```
@@ -9,7 +9,7 @@ curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
 ```
 
 The same URL renders a branded page in a browser and serves raw bytes to
-everything else — `<img src>`, Slack unfurls, curl. Markdown renders as a
+everything else: `<img src>`, Slack unfurls, curl. Markdown renders as a
 document (`?slides` makes it a deck), code gets syntax highlighting, and a
 folder upload with an `index.html` serves as a real page with its relative
 assets intact.
@@ -32,7 +32,7 @@ A markdown URL also takes a format suffix: `deck.md.pdf` for a branded PDF,
   expired uploads.
 - **No secrets in this repo.** Bearer tokens live as sha256 hashes in a Worker
   secret; signing keys rotate by key id; the per-space retention map is a
-  secret too. The source being public costs nothing — the URLs are the locks.
+  secret too. The source being public costs nothing; the URLs are the locks.
 
 `PLAN.md` is the pre-code decision record. The code is the source of truth for
 anything they disagree on.
@@ -48,7 +48,7 @@ of truth and never drifts. `GET /SKILL.md` is served from the bundle rather
 than `public/`: `src/skill.ts` imports the skill file, so the served bytes and
 the installed skill cannot diverge. The canonical stub lives at `skills/share/SKILL.md`,
 which with `.claude-plugin/plugin.json` makes this repo an installable Claude
-Code plugin — the org marketplace (`notambourine/claude-plugin`) lists it by
+Code plugin: the org marketplace (`notambourine/claude-plugin`) lists it by
 reference, so one user-scope install works in every repo. A repo that wants
 the capability without the plugin copies the same stub:
 
@@ -65,27 +65,27 @@ Fetch https://share.notambourine.com/SKILL.md and follow it exactly.
 One-time Cloudflare dashboard work, recorded for a rebuild or a new account.
 Deploys themselves are hands-off after step 3.
 
-1. **R2 bucket** — create `notambourine-share` (name must match
+1. **R2 bucket**: create `notambourine-share` (name must match
    `wrangler.jsonc`). Add an object lifecycle rule: prefix `_trash/`, action
-   *Delete objects*, age 90 days. Leave public access off — the Worker binding
+   *Delete objects*, age 90 days. Leave public access off; the Worker binding
    is the only read path; the bucket stays private.
-2. **KV namespace** — create `share-links`, paste its namespace ID into
+2. **KV namespace**: create `share-links`, paste its namespace ID into
    `wrangler.jsonc` (`kv_namespaces[0].id`).
-3. **Connect the repo** — Workers & Pages → Create → Workers → import this
+3. **Connect the repo**: Workers & Pages → Create → Workers → import this
    repository. Defaults are correct (deploy command `npx wrangler deploy`).
    Every push to `main` deploys; the cron trigger ships with the config.
-4. **Secrets** — on the Worker: Settings → Variables and Secrets, each as type
+4. **Secrets**: on the Worker: Settings → Variables and Secrets, each as type
    *Secret* (values are JSON strings; the Worker parses them):
-   - `TOKENS` — map of name → sha256 of that person's bearer token. Built and
+   - `TOKENS`: map of name → sha256 of that person's bearer token. Built and
      reprinted by `scripts/add-employee.sh`; the 1Password vault is the source
      of truth and this secret is derived from it (Cloudflare secrets are
      write-only, so every change re-pastes the whole map).
-   - `SIGNING_KEYS` — `{"v1":"<openssl rand -base64 32>"}`. Rotate by adding
+   - `SIGNING_KEYS`: `{"v1":"<openssl rand -base64 32>"}`. Rotate by adding
      `v2` (new links mint with it, `v1` links still verify); delete an id to
      kill its outstanding links.
-   - `SPACE_TTLS` — `{}`, later `{"<space>":<days>}` overrides. A secret
+   - `SPACE_TTLS`: `{}`, later `{"<space>":<days>}` overrides. A secret
      because client names never enter this public repo.
-5. **Custom domain** — Worker → Settings → Domains & Routes → add
+5. **Custom domain**: Worker → Settings → Domains & Routes → add
    `share.notambourine.com`.
 
 Browser Rendering needs no step of its own. The `browser` binding in
@@ -98,7 +98,7 @@ the constraint on PDF exports, not CPU: a few seconds per render puts the
 ceiling near a hundred renders a day for the whole account, and past it export
 URLs serve the browser-rendered shell instead of a PDF.
 
-Team tokens (add, rotate, offboard, deliver): `scripts/add-employee.sh` — its
+Team tokens (add, rotate, offboard, deliver): `scripts/add-employee.sh`: its
 header is the runbook.
 
 ## Develop

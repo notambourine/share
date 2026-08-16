@@ -1,4 +1,4 @@
-# share/ — operating context
+# share/: operating context
 
 - Dependency gates (CVE, malware, tree scan) ride the org-level Socket app.
   Do not add vet/guarddog/socket-tree jobs to CI; their lights are silenced
@@ -8,7 +8,7 @@
   and `npm run types`. CI runs the same three.
 - One-time dashboard setup: README.md "Setup from zero". Token add, rotate,
   offboard, and delivery: `scripts/add-employee.sh` (its header is the runbook).
-- This repo is public. Client names never enter it — per-space retention lives
+- This repo is public. Client names never enter it; per-space retention lives
   in the `SPACE_TTLS` Worker secret; committed examples use `acme`.
 - Cloudflare secrets are write-only. The 1Password vault is the source of truth
   for bearer tokens; the `TOKENS` secret is derived from it, never hand-edited.

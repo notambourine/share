@@ -7,7 +7,7 @@ import { publicUrl } from './upload';
 import { isExpired } from '../lib/r2';
 
 /**
- * GET /<space>/ — Bearer only. Anonymous gets the same 404 as a missing page,
+ * GET /<space>/: Bearer only. Anonymous gets the same 404 as a missing page,
  * so a space never confirms its own existence (R6).
  */
 export async function listSpace(request: Request, env: Env, space: string): Promise<Response> {
