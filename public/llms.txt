@@ -5,17 +5,30 @@ URL, hand it to one person. This file is the whole API.
 
 ## Auth
 
-Writes need `Authorization: Bearer $SHARE_TOKEN`. Load the token from
-1Password by reference; never paste it into a transcript or a shell history.
-Convention: the token lives in your Employee vault as item `share-token`,
-field `credential`. Run any command below under this prefix (op run resolves
-the reference from the environment; single-quote the inner command so your
-shell does not expand $SHARE_TOKEN early):
+Writes need `Authorization: Bearer <token>`: either your raw vault token or a
+short-lived session token (see Session). Load the raw token from 1Password by
+reference; never paste it into a transcript or a shell history. Convention:
+it lives in your Employee vault as item `share-token`, field `credential`.
+Run a raw-token command under this prefix (op run resolves the reference from
+the environment; single-quote the inner command so your shell does not expand
+$SHARE_TOKEN early):
 
     SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c '<command>'
 
 Reads need nothing: the unguessable hash in the URL is the credential.
 Signed-tier artifacts additionally need a `/k/<token>/` path segment.
+
+## Session
+
+Trade the vault token for a session token once, then run every other verb
+with the session token and no 1Password unlock:
+
+    curl -sS -X POST -H "Authorization: Bearer $SHARE_TOKEN" \
+      https://share.notambourine.com/session
+
+Returns 201 {token, name, expiresAt}. ttl defaults to 15m (?ttl=, cap 1h).
+The session token acts as you everywhere a Bearer works, except it cannot
+mint another session. A 401 here means the server rejects your vault token.
 
 ## Upload
 

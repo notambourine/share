@@ -27,7 +27,7 @@ function artifactDays(env: Env, space: string): number {
 export async function upload(
   request: Request, env: Env, ctx: ExecutionContext, space: string,
 ): Promise<Response> {
-  const uploader = await authenticate(request, env.TOKENS);
+  const uploader = await authenticate(request, env);
   if (!uploader) return textResponse('unauthorized\n', 401);
   if (!isValidSpace(space)) return textResponse('invalid space name\n', 400);
 

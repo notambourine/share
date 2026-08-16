@@ -33,7 +33,7 @@ export function parseArtifactPath(raw: string): [string, string] | null {
  * holding an expired link issue themselves a fresh one.
  */
 export async function mint(request: Request, env: Env): Promise<Response> {
-  const who = await authenticate(request, env.TOKENS);
+  const who = await authenticate(request, env);
   if (!who) return jsonResponse({ error: 'unauthorized' }, 401);
 
   let body: SignBody;

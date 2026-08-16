@@ -1,4 +1,5 @@
-import { constantTimeEqual } from './sign';
+import { constantTimeEqual, mintToken, verifyToken } from './sign';
+import { now } from './http';
 
 const enc = new TextEncoder();
 
@@ -7,11 +8,25 @@ export async function sha256hex(s: string): Promise<string> {
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** Session tokens: `<name>.v<n>.<exp>.<sig>`, HMAC over `session:<name>|<exp>`.
+    Raw tokens are dot-free base64, so the shape alone routes verification. */
+const SESSION_RE = /^([a-z0-9-]{1,32})\.(v\d+\.\d+\.[A-Za-z0-9_-]{22})$/;
+
+export const SESSION_DEFAULT_SECS = 900;
+export const SESSION_MAX_SECS = 3600;
+
+export async function mintSession(
+  keys: Record<string, string>, name: string, exp: number,
+): Promise<string> {
+  return `${name}.${await mintToken(keys, `session:${name}`, exp)}`;
+}
+
 /**
  * `Authorization: Bearer <token>` against a JSON map of name -> sha256 hex.
+ * Raw vault tokens only; a session token cannot mint or extend a session.
  * Returns the uploader name, or null. Revoking one person is a secret edit.
  */
-export async function authenticate(
+export async function authenticateRaw(
   request: Request, tokensJson: string,
 ): Promise<string | null> {
   const h = request.headers.get('authorization');
@@ -28,4 +43,31 @@ export async function authenticate(
     if (typeof hash === 'string' && constantTimeEqual(hash.toLowerCase(), digest)) return name;
   }
   return null;
+}
+
+/**
+ * Bearer auth for every uploader verb: a raw vault token or a session token.
+ * A session that fails verification still falls through to the raw map, so a
+ * raw token that happens to match the session shape keeps working.
+ */
+export async function authenticate(
+  request: Request, env: { TOKENS: string; SIGNING_KEYS: string },
+): Promise<string | null> {
+  const h = request.headers.get('authorization');
+  const m = h && /^Bearer\s+(\S+)$/.exec(h);
+  if (!m) return null;
+  const sess = SESSION_RE.exec(m[1]);
+  if (sess) {
+    const [, name, token] = sess;
+    let keys: Record<string, string> | null = null;
+    try {
+      keys = JSON.parse(env.SIGNING_KEYS);
+    } catch { /* fall through to the raw map */ }
+    if (keys) {
+      const v = await verifyToken(keys, `session:${name}`, token, now());
+      // exp=0 means "forever" in the link grammar; a session must always expire.
+      if (v.ok && token.split('.')[1] !== '0') return name;
+    }
+  }
+  return authenticateRaw(request, env.TOKENS);
 }

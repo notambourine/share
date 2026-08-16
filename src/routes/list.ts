@@ -11,7 +11,7 @@ import { isExpired } from '../lib/r2';
  * so a space never confirms its own existence (R6).
  */
 export async function listSpace(request: Request, env: Env, space: string): Promise<Response> {
-  const who = await authenticate(request, env.TOKENS);
+  const who = await authenticate(request, env);
   if (!who) return htmlResponse(errorShell(404), 404);
 
   const origin = new URL(request.url).origin;
