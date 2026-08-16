@@ -1,5 +1,5 @@
 /* Copies pinned renderer builds out of node_modules into public/vendor/, and
-   the brand's font binaries out of the `upstream/nt-brand` submodule.
+   the brand's font binaries out of the `upstream/brand-kit` submodule.
 
    Run after bumping a pinned version in package.json or the submodule. The
    output is committed, because Workers Builds deploys the tree as it stands and

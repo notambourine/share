@@ -2,18 +2,25 @@
  * The brand's golden set, served from the bundle rather than from public/.
  *
  * These imports are load-bearing, the same way `src/skill.ts` imports SKILL.md:
- * they make drift between what this Worker serves and what nt-brand defines
+ * they make drift between what this Worker serves and what brand-kit defines
  * impossible, where a copy under public/ could only ever be detected after the
- * fact. Bumping `upstream/nt-brand` is the whole update - there is no second
+ * fact. Bumping `upstream/brand-kit` is the whole update - there is no second
  * step, so there is nothing to forget.
  *
  * The fonts stay on the ASSETS path. They are inert binaries rather than brand
  * decisions, a static server is the right thing to serve them, and tokens.css
  * asks for them at `./fonts/*.woff2`, which resolves to `/fonts/` either way.
  */
-import TOKENS from '../upstream/nt-brand/plugins/nt-brand/skills/system/tokens.css';
-import DECK from '../upstream/nt-brand/plugins/nt-brand/skills/system/deck.css';
+/* The kit's tokens.css is three @import lines, for a page that links it off a
+   disk. Serving that would cost three more routes and three more requests, so
+   the parts are joined here and /tokens.css stays one file on the wire. */
+import FONTS from '../upstream/brand-kit/fonts.css';
+import VARS from '../upstream/brand-kit/vars.css';
+import ELEMENTS from '../upstream/brand-kit/elements.css';
+import DECK from '../upstream/brand-kit/deck.css';
 import { ROBOTS } from './lib/http';
+
+const TOKENS = [FONTS, VARS, ELEMENTS].join('\n');
 
 /** Marpit takes a theme as a string, so the export and the browser both read this. */
 export { DECK as DECK_THEME };

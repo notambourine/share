@@ -27,7 +27,9 @@ import { readFile, glob } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { root, BRAND, fontPairs } from './brand.mjs';
 
-const TOKENS = `${BRAND}/tokens.css`;
+/* vars.css, not tokens.css: tokens.css is three @import lines, and every value
+   the audit compares against is declared in vars.css. */
+const TOKENS = `${BRAND}/vars.css`;
 const SCAN = ['public/*.css', 'public/vendor/**/*.css', 'public/*.svg', 'src/**/*.ts'];
 
 const HEX = /#([0-9a-fA-F]{3,8})\b/g;
@@ -84,7 +86,7 @@ if (fails.length) {
   console.error('brand: drift\n');
   for (const f of fails) console.error(`  - ${f}`);
   console.error('\nColors come from a var() off the golden set. If one is genuinely new,');
-  console.error('add it in notambourine/claude first, then bump the submodule.');
+  console.error('add it in notambourine/brand-kit first, then bump the submodule.');
   process.exit(1);
 }
 

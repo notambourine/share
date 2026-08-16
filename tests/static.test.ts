@@ -39,8 +39,13 @@ describe('brand', () => {
      assertions are what make that failure loud. */
   it('imports the golden set as text, not as an asset URL', () => {
     const tokens = BRAND_ROUTES['/tokens.css'];
+    /* One assertion per part, because /tokens.css is the three joined here and
+       a dropped import would still serve a plausible-looking stylesheet. */
+    expect(tokens).toContain("src: url('./fonts/nunito-latin-var.woff2')");
     expect(tokens).toContain('--nt-pink:        #E75A7C;');
     expect(tokens).toContain('--font-wordmark');
+    expect(tokens).toContain('h1, h2, h3, h4, .display {');
+    expect(tokens).not.toContain('@import');
     expect(tokens.length).toBeGreaterThan(5000);
 
     expect(DECK_THEME).toContain('/* @theme nt */');

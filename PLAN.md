@@ -127,8 +127,8 @@ static HTML with no navigation, so `public/render.js` owns the one-slide-at-a-ti
 view, the arrow keys, and the `#n` hash. The branded theme is
 `public/vendor/marp/nt-marp.css`, written against the `tokens.css` custom
 properties rather than mirrored, so a brand change reaches a deck with no second
-edit. That theme has since moved upstream into the nt-brand golden set, and this
-repo vendors it back; see "Brand coupling" below.
+edit. That theme has since moved upstream into the golden set, and this repo
+serves it from there; see "Brand coupling" below.
 
 ## Export formats
 
@@ -348,8 +348,8 @@ wrangler.jsonc         R2 + KV bindings, custom domain, cron trigger
 
 ## Brand coupling
 
-The brand's golden set is `notambourine/claude`, plugin `nt-brand`, skill
-`system`, pinned here as the `upstream/nt-brand` submodule.
+The brand's golden set is `notambourine/brand-kit`, pinned here as the
+`upstream/brand-kit` submodule.
 
 **The brand is not copied into this repo.** `src/brand.ts` imports `tokens.css`
 and `deck.css` out of the submodule through wrangler's `rules` Text loader, and
