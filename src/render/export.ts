@@ -11,10 +11,8 @@
 import type { PDFOptions } from '@cloudflare/puppeteer';
 import type { Env } from '../lib/types';
 import type { RenderMode } from '../lib/exportPath';
-import { DECK_THEME, BRAND_ROUTES, LOCKUP } from '../brand';
+import { DECK_THEME, TOKENS, LOCKUP } from '../brand';
 import { esc } from './shell';
-
-const TOKENS = BRAND_ROUTES['/tokens.css'];
 
 /** 1152x648 is 16:9 at the same aspect as Marpit's 1280x720 slide box. */
 const DECK_PAGE = { width: '1152px', height: '648px' };

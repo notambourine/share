@@ -3,40 +3,17 @@ import type { Env } from '../src/lib/types';
 import { upload } from '../src/routes/upload';
 import { serve } from '../src/routes/serve';
 import { mintSession, sha256hex } from '../src/lib/auth';
+import type { TestEnv } from './bindings';
+import { DEFERRED, testEnv } from './bindings';
 
 const KEYS = { v1: 'unit-test-signing-secret' };
 const SPACE = 'acme';
 
-const CTX = {
-  waitUntil: () => { /* prerender is fire-and-forget */ },
-  passThroughOnException: () => {},
-} as unknown as ExecutionContext;
-
-async function stubEnv(): Promise<Env & { objects: Record<string, string>; links: Record<string, string> }> {
-  const objects: Record<string, string> = {};
-  const links: Record<string, string> = {};
-  const env = {
-    objects,
-    links,
-    BUCKET: {
-      put: async (key: string, value: unknown) => {
-        objects[key] = value instanceof Blob ? await value.text() : String(value);
-      },
-      get: async (key: string) => (key in objects ? {
-        text: async () => objects[key],
-        json: async () => JSON.parse(objects[key]),
-        body: new Response(objects[key]).body,
-        httpEtag: '"x"',
-        size: objects[key].length,
-      } : null),
-      head: async (key: string) => (key in objects ? { httpEtag: '"x"', size: objects[key].length } : null),
-    },
-    LINKS: { put: async (key: string, value: string) => { links[key] = value; } },
-    ASSETS: { fetch: async () => new Response('') },
-    TOKENS: JSON.stringify({ tom: await sha256hex('raw-token') }),
-    SIGNING_KEYS: JSON.stringify(KEYS),
-  };
-  return env as unknown as Env & { objects: Record<string, string>; links: Record<string, string> };
+async function stubEnv(): Promise<TestEnv> {
+  return testEnv({
+    tokens: JSON.stringify({ tom: await sha256hex('raw-token') }),
+    signingKeys: JSON.stringify(KEYS),
+  });
 }
 
 async function put(env: Env, auth: string, query = '', accept = 'application/json') {
@@ -45,7 +22,7 @@ async function put(env: Env, auth: string, query = '', accept = 'application/jso
   const req = new Request(`https://share.test/up/${SPACE}${query}`, {
     method: 'POST', headers: { authorization: auth, accept }, body: form,
   });
-  return upload(req, env, CTX, SPACE);
+  return upload(req, env, DEFERRED, SPACE);
 }
 
 const sessionBearer = async () =>
@@ -66,7 +43,7 @@ describe('signed-tier upload mints its own link', () => {
     const file = rest.join('/');
     const view = await serve(
       new Request(body.signedUrl, { headers: { accept: '*/*' } }),
-      env, CTX, space, hash, token, file,
+      env, DEFERRED, space, hash, token, file,
     );
     expect(view.status).toBe(200);
     expect(await view.text()).toContain('hello');
@@ -81,7 +58,7 @@ describe('signed-tier upload mints its own link', () => {
     const [, space, hash, ...rest] = new URL(printed).pathname.split('/');
     const view = await serve(
       new Request(`https://share.test/${space}/${hash}/${rest.slice(2).join('/')}`),
-      env, CTX, space, hash, null, rest.slice(2).join('/'),
+      env, DEFERRED, space, hash, null, rest.slice(2).join('/'),
     );
     expect(view.status).toBe(401);
   });
@@ -92,7 +69,7 @@ describe('signed-tier upload mints its own link', () => {
     const body = await res.json<{ signedExp: number; short: string }>();
     expect(body.signedExp).toBe(0);
     expect(body.short).toMatch(/\/z\/[A-Za-z0-9]{8}$/);
-    expect(Object.keys(env.links)).toHaveLength(1);
+    expect(env.LINKS.records.size).toBe(1);
 
     expect((await put(await stubEnv(), 'Bearer raw-token', '?tier=signed&sign=nope')).status).toBe(400);
   });

@@ -1,4 +1,5 @@
 import type { Env, Meta } from './types';
+import type { SigningKeys } from './sign';
 import { mintToken } from './sign';
 import { genSlug } from './keys';
 
@@ -21,7 +22,7 @@ export interface ArtifactLink {
 
 /** `short` parks a `/z/<id>` redirect that expires with the link it wraps. */
 export async function mintArtifactLink(
-  env: Env, keys: Record<string, string>, origin: string, meta: Meta,
+  env: Env, keys: SigningKeys, origin: string, meta: Meta,
   exp: number, t: number, short = false,
 ): Promise<ArtifactLink> {
   const token = await mintToken(keys, `${meta.space}/${meta.hash}`, exp);

@@ -1,3 +1,5 @@
+import type { Serializable } from './json';
+
 export const ROBOTS = 'noindex, nofollow, noarchive, noimageindex';
 
 /** 10 minutes, so a revoke lands. Private: client material skips shared caches. */
@@ -50,8 +52,8 @@ export function htmlResponse(html: string, status = 200, extra?: Record<string, 
   });
 }
 
-export function jsonResponse(obj: unknown, status = 200): Response {
-  return new Response(`${JSON.stringify(obj, null, 2)}\n`, {
+export function jsonResponse(body: Serializable, status = 200): Response {
+  return new Response(`${JSON.stringify(body, null, 2)}\n`, {
     status,
     headers: {
       'content-type': 'application/json; charset=utf-8',

@@ -1,4 +1,4 @@
-import type { Env, Meta, MetaFile } from '../lib/types';
+import type { Deferrals, Env, Meta } from '../lib/types';
 import { readMeta, isExpired } from '../lib/r2';
 import { parseSigningKeys, verifyToken } from '../lib/sign';
 import { viewModeFor } from '../lib/negotiate';
@@ -13,7 +13,7 @@ const DAY = 86400;
 export async function serve(
   request: Request,
   env: Env,
-  ctx: ExecutionContext,
+  ctx: Deferrals,
   space: string,
   hash: string,
   token: string | null,
@@ -58,7 +58,8 @@ export async function serve(
        `notes.pdf` serves its own bytes instead of re-rendering `notes`. */
     const wanted = resolveExport(meta.files.map((f) => f.path), filePath);
     if (!wanted) return htmlResponse(errorShell(404), 404);
-    const src = meta.files.find((f) => f.path === wanted.source) as MetaFile;
+    const src = meta.files.find((f) => f.path === wanted.source);
+    if (!src) return htmlResponse(errorShell(404), 404);
     return exportArtifact(request, env, {
       space, hash, url, source: wanted.source, format: wanted.format, size: src.size,
     });

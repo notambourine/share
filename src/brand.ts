@@ -24,7 +24,9 @@ import DECK from '../upstream/brand-kit/deck.css';
 import LOCKUP from '../upstream/brand-kit/logo/lockup.svg';
 import { ROBOTS } from './lib/http';
 
-const TOKENS = [FONTS, VARS, ELEMENTS].join('\n');
+/** The three parts joined, so /tokens.css is one file on the wire and the PDF
+    export inlines the same string the browser gets. */
+export const TOKENS = [FONTS, VARS, ELEMENTS].join('\n');
 
 /** The wordmark, outlined, so no page has to load Nunito to render it. */
 export { LOCKUP };
@@ -34,13 +36,13 @@ export { DECK as DECK_THEME };
 
 /* The paths these answer on. `/vendor/marp/nt-marp.css` keeps its name: it is
    what public/render.js fetches, and the URL is the theme's, not the file's. */
-export const BRAND_ROUTES: Record<string, string> = {
-  '/tokens.css': TOKENS,
-  '/vendor/marp/nt-marp.css': DECK,
-};
+const BRAND_ROUTES = new Map([
+  ['/tokens.css', TOKENS],
+  ['/vendor/marp/nt-marp.css', DECK],
+]);
 
 export function brandSheet(path: string): Response | null {
-  const css = BRAND_ROUTES[path];
+  const css = BRAND_ROUTES.get(path);
   if (css === undefined) return null;
   return new Response(css, {
     headers: {

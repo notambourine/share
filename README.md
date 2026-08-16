@@ -104,6 +104,7 @@ header is the runbook.
 ```
 npm ci
 npm test        # vitest: signing, path safety, negotiation, auth
+npm run oxlint  # oxlint plus the vendored anti-slop rules in tools/oxlint/
 npm run types   # tsc --noEmit, Worker and CLI (bin/ runs as .ts, node 22.18+ strips the types)
 npm run vendor  # refresh public/vendor/, fonts/, and logo/ after bumping a pin
 npm run brand   # gate: those copies match upstream/brand-kit, colors and tokens too

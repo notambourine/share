@@ -75,7 +75,12 @@ export function derivedKey(
   return `${space}/${hash}/d/v${CACHE_VERSION}/${source}.${mode}.${ext}`;
 }
 
-function splitFrontMatter(markdown: string): { front: string; body: string } {
+interface FrontMatter {
+  front: string;
+  body: string;
+}
+
+function splitFrontMatter(markdown: string): FrontMatter {
   if (!/^---[ \t]*\r?\n/.test(markdown)) return { front: '', body: markdown };
   const end = /\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(markdown.slice(3));
   if (!end) return { front: '', body: markdown };

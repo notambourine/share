@@ -1,4 +1,6 @@
+import type { SigningKeys } from './sign';
 import { constantTimeEqual, mintToken, parseSigningKeys, verifyToken } from './sign';
+import { decodeTextMap } from './json';
 import { now } from './http';
 
 const enc = new TextEncoder();
@@ -16,7 +18,7 @@ export const SESSION_DEFAULT_SECS = 300;
 export const SESSION_MAX_SECS = 3600;
 
 export async function mintSession(
-  keys: Record<string, string>, name: string, exp: number,
+  keys: SigningKeys, name: string, exp: number,
 ): Promise<string> {
   return `${name}.${await mintToken(keys, `session:${name}`, exp)}`;
 }
@@ -33,14 +35,10 @@ export async function authenticateRaw(
   const m = h && /^Bearer\s+(\S+)$/.exec(h);
   if (!m) return null;
   const digest = await sha256hex(m[1]);
-  let map: Record<string, string>;
-  try {
-    map = JSON.parse(tokensJson);
-  } catch {
-    return null;
-  }
+  const map = decodeTextMap(tokensJson);
+  if (!map) return null;
   for (const [name, hash] of Object.entries(map)) {
-    if (typeof hash === 'string' && constantTimeEqual(hash.toLowerCase(), digest)) return name;
+    if (constantTimeEqual(hash.toLowerCase(), digest)) return name;
   }
   return null;
 }

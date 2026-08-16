@@ -1,16 +1,34 @@
-import type { Env } from '../lib/types';
+import type { Env, Tier } from '../lib/types';
 import { DEFAULT_LINK_DAYS } from '../lib/types';
 import { authenticate, SESSION_SCOPE_MSG } from '../lib/auth';
 import { readMeta, isExpired } from '../lib/r2';
 import { parseSigningKeys } from '../lib/sign';
 import { mintArtifactLink, publicUrl } from '../lib/link';
 import { isValidSpace, isValidHash, parseDuration } from '../lib/keys';
+import { flagAt, parseObject, textAt } from '../lib/json';
 import { jsonResponse, now } from '../lib/http';
 
 interface SignBody {
-  path?: string;
-  ttl?: string;
-  short?: boolean;
+  path: string | null;
+  ttl: string | null;
+  short: boolean;
+}
+
+/** A `type`, not an interface: it goes to `jsonResponse`, and only an inferred
+    object type carries the index signature `Serializable` asks for. */
+type MintResponse = {
+  url: string;
+  exp: number;
+  short?: string;
+  tier: Tier;
+  note?: string;
+  openUrl?: string;
+};
+
+function decodeSignBody(text: string): SignBody | null {
+  const record = parseObject(text);
+  if (!record) return null;
+  return { path: textAt(record, 'path'), ttl: textAt(record, 'ttl'), short: flagAt(record, 'short') };
 }
 
 /** "acme/Ab12Cd34Ef56", "/acme/Ab12.../", or a full share URL -> [space, hash]. */
@@ -39,12 +57,8 @@ export async function mint(request: Request, env: Env): Promise<Response> {
   if (auth.session || auth.expired) return jsonResponse({ error: SESSION_SCOPE_MSG.trim() }, 401);
   if (!auth.name) return jsonResponse({ error: 'unauthorized' }, 401);
 
-  let body: SignBody;
-  try {
-    body = await request.json<SignBody>();
-  } catch {
-    return jsonResponse({ error: 'expected JSON body {path, ttl?, short?}' }, 400);
-  }
+  const body = decodeSignBody(await request.text());
+  if (!body) return jsonResponse({ error: 'expected JSON body {path, ttl?, short?}' }, 400);
   const parsed = body.path && parseArtifactPath(body.path);
   if (!parsed) return jsonResponse({ error: 'path must be <space>/<hash>' }, 400);
   const [space, hash] = parsed;
@@ -61,13 +75,14 @@ export async function mint(request: Request, env: Env): Promise<Response> {
   if (!keys) return jsonResponse({ error: 'signing keys misconfigured' }, 500);
 
   const origin = new URL(request.url).origin;
-  const link = await mintArtifactLink(env, keys, origin, meta, exp, t, !!body.short);
+  const link = await mintArtifactLink(env, keys, origin, meta, exp, t, body.short);
 
-  const out: Record<string, unknown> = { ...link, tier: meta.tier };
-  if (meta.tier === 'open') {
-    // A signed link to an open artifact works, but the plain URL is shorter.
-    out.note = 'artifact is open tier; the unsigned URL also works';
-    out.openUrl = publicUrl(origin, meta);
-  }
-  return jsonResponse(out);
+  const out: MintResponse = { ...link, tier: meta.tier };
+  if (meta.tier !== 'open') return jsonResponse(out);
+  // A signed link to an open artifact works, but the plain URL is shorter.
+  return jsonResponse({
+    ...out,
+    note: 'artifact is open tier; the unsigned URL also works',
+    openUrl: publicUrl(origin, meta),
+  });
 }

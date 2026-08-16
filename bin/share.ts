@@ -49,6 +49,59 @@ function die(msg: string): never {
   process.exit(1);
 }
 
+/* The server's JSON, decoded rather than asserted. A field the CLI prints has
+   to exist before it is printed, or `undefined` reaches a terminal as a link. */
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
+function fields(body: string): { [key: string]: Json } {
+  const record = decode(body);
+  return record ?? die(`the server did not answer with a JSON object:\n${body.trim()}`);
+}
+
+function decode(body: string): { [key: string]: Json } | null {
+  let parsed: Json;
+  try {
+    /* SAFETY: JSON.parse is typed `any`; Json is the grammar it can return,
+       and every read below narrows before use. */
+    parsed = JSON.parse(body) as Json;
+  } catch {
+    return null;
+  }
+  return isRecord(parsed) ? parsed : null;
+}
+
+function isRecord(value: Json): value is { [key: string]: Json } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isText(value: Json): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: Json): value is number {
+  return typeof value === 'number';
+}
+
+function textAt(record: { [key: string]: Json }, key: string): string | null {
+  const value = record[key];
+  return isText(value) ? value : null;
+}
+
+function required(record: { [key: string]: Json }, key: string): string {
+  return textAt(record, key) ?? die(`the server answered without a ${key}`);
+}
+
+/** null rather than a die: a stale cache file is a re-mint, not an error. */
+function decodeSession(body: string): Session | null {
+  const record = decode(body);
+  if (!record) return null;
+  const token = textAt(record, 'token');
+  const name = textAt(record, 'name');
+  const expiresAt = record.expiresAt;
+  if (token === null || name === null || !isNumber(expiresAt)) return null;
+  return { token, name, expiresAt };
+}
+
 /** Boolean flags land as "1", so every value is a string. */
 function parseArgs(argv: string[]) {
   const pos: string[] = [];
@@ -62,6 +115,16 @@ function parseArgs(argv: string[]) {
   return { pos, flags };
 }
 
+/** Node types `spawnSync().error` as a plain Error; the errno is what tells a
+    missing binary from a failed read. */
+interface ErrnoError extends Error {
+  code?: string;
+}
+
+function isErrno(err: Error): err is ErrnoError {
+  return 'code' in err;
+}
+
 /* The one 1Password unlock. Stdout is a pipe, so the secret stays in this
    process and never reaches a terminal, a transcript, or a shell history. */
 function vaultToken(): string {
@@ -69,7 +132,7 @@ function vaultToken(): string {
   if (env && !env.startsWith('op://')) return env;
   const ref = env || REF;
   const r = spawnSync('op', ['read', '--no-newline', ref], { encoding: 'utf8' });
-  if ((r.error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+  if (r.error && isErrno(r.error) && r.error.code === 'ENOENT') {
     die('1Password CLI not found. Install it (brew install 1password-cli) and sign in, or set SHARE_TOKEN.');
   }
   const token = r.stdout?.trim();
@@ -81,21 +144,24 @@ function vaultToken(): string {
 
 /** 30s of skew so a token never dies mid-request. */
 async function cachedSession(): Promise<string | null> {
+  let cached: string;
   try {
-    const j = JSON.parse(await readFile(CACHE, 'utf8')) as Session;
-    if (j.token && j.expiresAt - 30 > Date.now() / 1000) return j.token;
-  } catch { /* absent or unreadable = no session */ }
-  return null;
+    cached = await readFile(CACHE, 'utf8');
+  } catch {
+    return null; // absent or unreadable = no session
+  }
+  const session = decodeSession(cached);
+  if (!session) return null;
+  return session.expiresAt - 30 > Date.now() / 1000 ? session.token : null;
 }
 
 async function mintSession(ttl?: string): Promise<Session> {
-  const json = JSON.parse(await api(
-    `/session${ttl ? `?ttl=${ttl}` : ''}`, { method: 'POST' }, vaultToken(),
-  )) as Session;
+  const answer = await api(`/session${ttl ? `?ttl=${ttl}` : ''}`, { method: 'POST' }, vaultToken());
+  const session = decodeSession(answer) ?? die(`the server did not answer with a session:\n${answer.trim()}`);
   await mkdir(join(CACHE, '..'), { recursive: true, mode: 0o700 });
-  await writeFile(CACHE, `${JSON.stringify(json)}\n`, { mode: 0o600 });
+  await writeFile(CACHE, `${JSON.stringify(session)}\n`, { mode: 0o600 });
   await chmod(CACHE, 0o600);
-  return json;
+  return session;
 }
 
 async function walk(root: string): Promise<{ abs: string; rel: string }[]> {
@@ -201,24 +267,26 @@ switch (cmd) {
     if (flags.tier) q.set('tier', flags.tier);
     if (flags['sign-ttl']) q.set('sign', flags['sign-ttl']);
     if (flags.short) q.set('short', '1');
-    const json = JSON.parse(await upload(
+    const made = fields(await upload(
       `/up/${space}${q.size ? `?${q}` : ''}`, { method: 'POST', body: form },
-    )) as { url: string; signedUrl?: string; short?: string };
-    console.log(json.signedUrl ?? json.url);
-    if (json.short) console.log(json.short);
+    ));
+    console.log(textAt(made, 'signedUrl') ?? required(made, 'url'));
+    const shortUrl = textAt(made, 'short');
+    if (shortUrl) console.log(shortUrl);
     break;
   }
   case 'sign':
   case 'short': {
     const [path] = rest;
     if (!path) die(`usage: nt-share ${cmd} <space>/<hash>`);
-    const json = JSON.parse(await api('/sign', {
+    const signed = fields(await api('/sign', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ path, ttl: flags.ttl, short: cmd === 'short' || !!flags.short }),
-    }, vaultToken())) as { url: string; short?: string };
-    console.log(cmd === 'short' ? json.short : json.url);
-    if (cmd === 'sign' && json.short) console.log(json.short);
+    }, vaultToken()));
+    console.log(cmd === 'short' ? required(signed, 'short') : required(signed, 'url'));
+    const alsoShort = cmd === 'sign' ? textAt(signed, 'short') : null;
+    if (alsoShort) console.log(alsoShort);
     break;
   }
   case 'ls': {

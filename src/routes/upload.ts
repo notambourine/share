@@ -1,25 +1,28 @@
-import type { Env, Meta, MetaFile, Tier } from '../lib/types';
+import type { Deferrals, Env, Meta, MetaFile, Tier } from '../lib/types';
 import { DEFAULT_ARTIFACT_DAYS, DEFAULT_LINK_DAYS } from '../lib/types';
 import { genSlug, normalizeUploadPath, contentTypeFor, isValidSpace, parseDuration } from '../lib/keys';
 import { authenticate, SESSION_EXPIRED_MSG } from '../lib/auth';
+import type { SigningKeys } from '../lib/sign';
 import { parseSigningKeys } from '../lib/sign';
 import { mintArtifactLink, publicUrl } from '../lib/link';
 import { prerender } from './export';
+import { decodeNumberMap } from '../lib/json';
 import { jsonResponse, textResponse, wantsJson, now } from '../lib/http';
 
 const MAX_FILES = 200;
 
+interface UploadEntry {
+  path: string;
+  blob: File;
+}
+
 function artifactDays(env: Env, space: string): number {
-  try {
-    const map = JSON.parse(env.SPACE_TTLS ?? '{}');
-    const d = Number(map[space]);
-    if (Number.isFinite(d) && d > 0) return d;
-  } catch { /* fall through to the default */ }
-  return DEFAULT_ARTIFACT_DAYS;
+  const days = decodeNumberMap(env.SPACE_TTLS ?? '{}')[space];
+  return days !== undefined && days > 0 ? days : DEFAULT_ARTIFACT_DAYS;
 }
 
 export async function upload(
-  request: Request, env: Env, ctx: ExecutionContext, space: string,
+  request: Request, env: Env, ctx: Deferrals, space: string,
 ): Promise<Response> {
   const auth = await authenticate(request, env);
   if (!auth.name) return textResponse(auth.expired ? SESSION_EXPIRED_MSG : 'unauthorized\n', 401);
@@ -38,7 +41,7 @@ export async function upload(
   /* Signing your own fresh upload spends no authority the upload did not, so a
      session token covers both and the signed tier costs one 1Password unlock. */
   let linkExp = 0;
-  let keys: Record<string, string> | null = null;
+  let keys: SigningKeys | null = null;
   const short = url.searchParams.has('short');
   if (tier === 'signed') {
     const signParam = url.searchParams.get('sign');
@@ -73,10 +76,11 @@ export async function upload(
     return textResponse('expected multipart/form-data\n', 400);
   }
 
-  const entries: { path: string; blob: File }[] = [];
+  const entries: UploadEntry[] = [];
   const seen = new Set<string>();
   for (const [, value] of form.entries()) {
-    if (typeof value === 'string') continue;
+    // A text field carries no name to key on, so only the files count.
+    if (!(value instanceof File)) continue;
     const path = normalizeUploadPath(value.name);
     if (!path) return textResponse(`unsafe file path: ${value.name}\n`, 400);
     if (seen.has(path)) return textResponse(`duplicate path: ${path}\n`, 400);

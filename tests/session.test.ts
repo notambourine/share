@@ -4,14 +4,15 @@ import { del } from '../src/routes/del';
 import { upload } from '../src/routes/upload';
 import { authenticate, mintSession, sha256hex } from '../src/lib/auth';
 import type { Env } from '../src/lib/types';
+import { DEFERRED, testEnv } from './bindings';
 
 const KEYS = { v1: 'unit-test-signing-secret' };
 
 async function makeEnv(): Promise<Env> {
-  return {
-    TOKENS: JSON.stringify({ tom: await sha256hex('raw-token') }),
-    SIGNING_KEYS: JSON.stringify(KEYS),
-  } as Env;
+  return testEnv({
+    tokens: JSON.stringify({ tom: await sha256hex('raw-token') }),
+    signingKeys: JSON.stringify(KEYS),
+  });
 }
 
 function post(auth: string | null, ttl?: string): Request {
@@ -63,7 +64,7 @@ describe('session scope and expiry messages', () => {
     const r = new Request('https://share.example/up/acme', {
       method: 'POST', headers: { authorization: await bearer(t - 60) },
     });
-    const res = await upload(r, env, {} as ExecutionContext, 'acme');
+    const res = await upload(r, env, DEFERRED, 'acme');
     expect(res.status).toBe(401);
     expect(await res.text()).toContain('session expired');
   });

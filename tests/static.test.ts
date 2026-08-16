@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import type { Env } from '../src/lib/types';
 import { ROBOTS, SHELL_CSP } from '../src/lib/http';
 import { isStatic, staticAsset } from '../src/worker';
-import { brandSheet, DECK_THEME, BRAND_ROUTES, LOCKUP } from '../src/brand';
+import { brandSheet, DECK_THEME, TOKENS, LOCKUP } from '../src/brand';
 import { homeShell } from '../src/render/shell';
+import { testEnv } from './bindings';
 
-const envWith = (body: string) => ({
-  ASSETS: { fetch: async () => new Response(body, { headers: { 'content-type': 'font/woff2' } }) },
-} as unknown as Env);
+const envWith = (body: string) => testEnv({
+  assets: { fetch: async () => new Response(body, { headers: { 'content-type': 'font/woff2' } }) },
+});
 
 /** Echoes back the path ASSETS was asked for, which is what an alias changes. */
-const envEcho = () => ({
-  ASSETS: { fetch: async (r: Request) => new Response(new URL(r.url).pathname) },
-} as unknown as Env);
+const envEcho = () => testEnv({
+  assets: { fetch: async (request: Request) => new Response(new URL(request.url).pathname) },
+});
 
 describe('isStatic', () => {
   it('serves the self-hosted fonts, so no page falls back to Google', () => {
@@ -60,15 +60,14 @@ describe('brand', () => {
      serve an empty stylesheet while every other test still passed. The length
      assertions are what make that failure loud. */
   it('imports the golden set as text, not as an asset URL', () => {
-    const tokens = BRAND_ROUTES['/tokens.css'];
     /* One assertion per part, because /tokens.css is the three joined here and
        a dropped import would still serve a plausible-looking stylesheet. */
-    expect(tokens).toContain("src: url('./fonts/nunito-latin-var.woff2')");
-    expect(tokens).toContain('--nt-pink:        #E75A7C;');
-    expect(tokens).toContain('--font-wordmark');
-    expect(tokens).toContain('h1, h2, h3, h4, .display {');
-    expect(tokens).not.toContain('@import');
-    expect(tokens.length).toBeGreaterThan(5000);
+    expect(TOKENS).toContain("src: url('./fonts/nunito-latin-var.woff2')");
+    expect(TOKENS).toContain('--nt-pink:        #E75A7C;');
+    expect(TOKENS).toContain('--font-wordmark');
+    expect(TOKENS).toContain('h1, h2, h3, h4, .display {');
+    expect(TOKENS).not.toContain('@import');
+    expect(TOKENS.length).toBeGreaterThan(5000);
 
     expect(DECK_THEME).toContain('/* @theme nt */');
     expect(DECK_THEME).toContain('section.lead');
