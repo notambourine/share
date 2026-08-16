@@ -3,7 +3,8 @@ import { authenticate, SESSION_SCOPE_MSG } from '../lib/auth';
 import { moveToTrash } from '../lib/r2';
 import { textResponse } from '../lib/http';
 
-/** DELETE /<space>/<hash>/: soft delete into _trash/ (90-day lifecycle rule purges). */
+/* DELETE /<space>/<hash>/: soft delete into _trash/ (90-day lifecycle rule purges).
+   Deletion is the whole revoke story; a per-link denylist would cost a KV read per view. */
 export async function del(request: Request, env: Env, space: string, hash: string): Promise<Response> {
   const auth = await authenticate(request, env);
   if (auth.session || auth.expired) return textResponse(SESSION_SCOPE_MSG, 401);

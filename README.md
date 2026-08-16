@@ -34,9 +34,6 @@ A markdown URL also takes a format suffix: `deck.md.pdf` for a branded PDF,
   secret; signing keys rotate by key id; the per-space retention map is a
   secret too. The source being public costs nothing; the URLs are the locks.
 
-`PLAN.md` is the pre-code decision record. The code is the source of truth for
-anything they disagree on.
-
 ## API
 
 `GET /llms.txt` documents everything in plain text. `GET /SKILL.md` is a

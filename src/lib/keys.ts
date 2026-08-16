@@ -34,7 +34,7 @@ export function isValidHash(s: string): boolean {
 
 /**
  * Normalize an uploaded file path into a safe R2 key suffix.
- * Returns null to reject the whole upload (R12 says fail loudly, not mangle).
+ * Returns null to reject the whole upload: fail loudly rather than mangle.
  */
 export function normalizeUploadPath(raw: string): string | null {
   if (!raw || raw.length > 512) return null;

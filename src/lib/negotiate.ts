@@ -9,7 +9,7 @@ export type ViewMode =
   | 'shell-download';
 
 /**
- * One rule: Accept decides, query string overrides (R7, R8).
+ * One rule: Accept decides, query string overrides.
  * A browser address bar sends text/html -> branded shell.
  * <img src>, Slack unfurls, curl -> raw bytes. Responses carry Vary: Accept.
  */
@@ -27,7 +27,8 @@ export function viewModeFor(
   const kind: Kind = kindOf(path);
 
   if (params.has('raw')) {
-    // ?raw always means bytes; svg and unknown types still download, never render inline.
+    // ?raw always means bytes. SVG executes on a navigation, so it downloads
+    // instead; the shell renders it inside an <img>. Unknown types download too.
     if (kind === 'svg' || kind === 'other') return 'attachment';
     if (kind === 'html') return 'page';
     return 'raw';

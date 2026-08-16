@@ -31,3 +31,9 @@
   its own repo.
 - Never generate or echo a raw bearer token in a session; that is terminal-only
   work via `scripts/add-employee.sh`.
+- Never put Cloudflare Access on this hostname. Uploaded JS runs here, and an
+  `CF_Authorization` cookie is an ambient credential a hosted script can replay.
+  A signature in a URL is not ambient, which is why the signed tier is the lock.
+- Never set a cookie on `notambourine.com` or any subdomain. `share` is
+  same-site with the marketing site, so a `Domain=notambourine.com` cookie set
+  here reaches it. That the site sets none is what makes the shared apex safe.
