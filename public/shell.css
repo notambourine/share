@@ -7,23 +7,26 @@ body {
   flex-direction: column;
 }
 
+/* Centered, not baseline: the lockup is a replaced box whose baseline is its
+   bottom edge, which would drop the eyebrow well below the wordmark's. */
 .bar {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-4) var(--sp-6);
   border-bottom: 1px solid var(--line-soft);
 }
 
-/* The lockup takes Nunito, not the heading face. Every shell header is the
-   wordmark, so this is the one place --font-wordmark applies. */
+/* The golden set's lockup, inlined by src/render/shell.ts. `currentColor`
+   beats the svg's own fill attribute, so the hover reads as it did in type. */
 .wordmark {
-  font-family: var(--font-wordmark);
-  font-weight: 800;
-  font-size: 20px;
+  display: block;
   color: var(--fg1);
   border-bottom: none;
 }
+/* 36px, not the 20px the wordmark ran at as type: the lockup's box is mostly
+   crescent, so the letters land at about a third of whatever height it takes. */
+.wordmark svg { display: block; height: 36px; width: auto; fill: currentColor; }
 .wordmark:hover { border-bottom: none; color: var(--nt-pink); }
 
 .spacer { flex: 1; }

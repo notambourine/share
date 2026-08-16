@@ -12,6 +12,8 @@ export const SHELL_CSP = [
   "font-src 'self'",
   "img-src 'self' data:",
   "media-src 'self'",
+  // The landing page links site.webmanifest; default-src 'none' would block it.
+  "manifest-src 'self'",
   "connect-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",

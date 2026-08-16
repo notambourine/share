@@ -21,10 +21,13 @@ const actual = (id: string) => id.slice(VIRTUAL.length, -'.txt'.length);
 export default defineConfig({
   plugins: [
     {
-      name: 'md-as-text',
+      name: 'md-and-svg-as-text',
       enforce: 'pre',
+      /* Vite would hand back an asset URL for both, where the worker sees the
+         bytes. Unlike CSS neither extension has a Vite pipeline that reclaims
+         the id, so one `load` hook is enough. */
       load(id) {
-        return id.endsWith('.md') ? asText(id) : null;
+        return /\.(md|svg)$/.test(id) ? asText(id) : null;
       },
     },
     /* CSS cannot go through the same `load` hook. Vite owns `.css` natively and

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Env } from '../src/lib/types';
 import { ROBOTS, SHELL_CSP } from '../src/lib/http';
 import { isStatic, staticAsset } from '../src/worker';
-import { brandSheet, DECK_THEME, BRAND_ROUTES } from '../src/brand';
+import { brandSheet, DECK_THEME, BRAND_ROUTES, LOCKUP } from '../src/brand';
+import { homeShell } from '../src/render/shell';
 
 const envWith = (body: string) => ({
   ASSETS: { fetch: async () => new Response(body, { headers: { 'content-type': 'font/woff2' } }) },
@@ -24,7 +25,14 @@ describe('isStatic', () => {
   it('keeps the existing static set and vendor prefix', () => {
     expect(isStatic('/shell.css')).toBe(true);
     expect(isStatic('/vendor/marp/marpit.js')).toBe(true);
-    expect(isStatic('/')).toBe(true);
+    expect(isStatic('/robots.txt')).toBe(true);
+  });
+
+  /* The landing page wears the same header as an artifact shell, and that
+     header inlines the lockup out of the bundle, so ASSETS cannot build it. */
+  it('leaves the landing page to the bundle', () => {
+    expect(isStatic('/')).toBe(false);
+    expect(isStatic('/index.html')).toBe(false);
   });
 
   it('serves the logo, and the root paths a browser asks for unprompted', () => {
@@ -75,6 +83,27 @@ describe('brand', () => {
     expect(res?.headers.get('content-type')).toBe('text/css; charset=utf-8');
     expect(res?.headers.get('x-robots-tag')).toBe(ROBOTS);
     expect(await res?.text()).toBe(DECK_THEME);
+  });
+
+  /* Same trap as the stylesheets: Vite hands back an asset URL for an svg
+     unless the config intercepts it, and a header holding the string
+     "/assets/lockup-a1b2.svg" would render as nothing with every other test
+     still green. `fill` is what shell.css overrides with currentColor. */
+  it('imports the lockup as markup, not as an asset URL', () => {
+    expect(LOCKUP).toMatch(/^<svg\b/);
+    expect(LOCKUP).toContain('viewBox=');
+    expect(LOCKUP).toContain('fill="#E75A7C"');
+    expect(LOCKUP.length).toBeGreaterThan(2000);
+  });
+
+  /* The wordmark is artwork now, so no shell may typeset the name in Nunito.
+     A stray --font-wordmark would render the fallback and nobody would look. */
+  it('draws the wordmark rather than setting it in type', () => {
+    const html = homeShell();
+    expect(html).toContain(LOCKUP);
+    expect(html).toContain('aria-label="NoTambourine"');
+    expect(html).not.toContain('--font-wordmark');
+    expect(html).toContain('rel="manifest"');
   });
 
   it('never swallows a share path', () => {
