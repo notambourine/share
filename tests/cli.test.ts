@@ -85,7 +85,9 @@ describe('install', () => {
 
     const shim = readFileSync(join(dir, 'nt-share'), 'utf8');
     expect(shim).toContain('nt-share/*/bin/share.');
-    expect(shim).toContain(BIN); // the fallback when no plugin copy is installed
+    // JSON.stringify, not the raw path: that is the quoting the shim embeds, and
+    // on Windows a backslash path only matches once it is escaped.
+    expect(shim).toContain(JSON.stringify(BIN)); // the fallback when no plugin copy is installed
     expect(statSync(join(dir, 'nt-share')).mode & 0o111).toBeTruthy();
   });
 });
