@@ -1,5 +1,10 @@
 # Local-dev secrets for `wrangler dev`: copy to .dev.vars (gitignored).
 # Production values are Worker secrets set in the Cloudflare dashboard.
+#
+# Every value below is a throwaway meant to be committed, so none of them is an
+# `op://` reference. The one real secret a person handles here is the uploader's
+# bearer token, and it never lands in a file at all:
+#   SHARE_TOKEN=op://Employee/share-token/credential op run -- share ...
 
 # JSON map of uploader name -> sha256 hex of their Bearer token.
 # Hash a token:  printf '%s' "the-token" | shasum -a 256

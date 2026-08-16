@@ -30,6 +30,9 @@ updates:
   # No cooldown and a daily interval, unlike the npm and actions blocks above.
   # Those wait out a supply-chain window on code from strangers. This is a repo
   # we own, and a brand correction is worth nothing sitting in a queue.
+  #
+  # No `security-updates` group either: GitHub keeps no advisory feed for the
+  # gitsubmodule ecosystem, so the group would never match a PR.
   - package-ecosystem: gitsubmodule
     directory: /
     schedule:
