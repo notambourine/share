@@ -12,8 +12,12 @@
   in the `SPACE_TTLS` Worker secret; committed examples use `acme`.
 - Cloudflare secrets are write-only. The 1Password vault is the source of truth
   for bearer tokens; the `TOKENS` secret is derived from it, never hand-edited.
-- `public/tokens.css` is a vendored copy. Upstream is `notambourine/notambourine.com`
-  `src/styles/theme.css`; change there first, then mirror.
+- Never hand-edit `public/tokens.css`, `public/vendor/marp/nt-marp.css`, or
+  `public/fonts/*`. They are copies of the nt-brand golden set, pinned at
+  `upstream/nt-brand`. Correct the value in that repo, bump the submodule,
+  then `npm run vendor:brand`. `npm run brand` is the gate and CI runs it.
+- Every color in this repo must be one `public/tokens.css` defines, including
+  inside a `var()` fallback. `npm run brand` fails on any other.
 - `skills/share/SKILL.md` is the only copy of the skill. `src/skill.ts` imports
   it to serve `/SKILL.md`; never add a copy under `public/`.
 - `skills/` is the published plugin surface, and this repo holds no other

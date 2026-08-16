@@ -126,8 +126,9 @@ a file, and the slides shell grew from 41 KB gzipped to 124 KB. Marpit renders t
 static HTML with no navigation, so `public/render.js` owns the one-slide-at-a-time
 view, the arrow keys, and the `#n` hash. The branded theme is
 `public/vendor/marp/nt-marp.css`, written against the `tokens.css` custom
-properties rather than mirrored from the kb deck theme, so there is one brand
-source and no mirror step.
+properties rather than mirrored, so a brand change reaches a deck with no second
+edit. That theme has since moved upstream into the nt-brand golden set, and this
+repo vendors it back; see "Brand coupling" below.
 
 ## Export formats
 
@@ -345,9 +346,32 @@ tests/                 vitest, pure units for sign, keys, negotiation, path safe
 wrangler.jsonc         R2 + KV bindings, custom domain, cron trigger
 ```
 
-`public/tokens.css` is a vendored copy carrying a header comment that names
-`notambourine/site` `src/styles/theme.css` as upstream (R17). Same contract the
-`notambourine-brand` skill already follows.
+## Brand coupling
+
+The brand's golden set is `notambourine/claude`, plugin `nt-brand`, skill
+`system`. This repo cannot fetch it at runtime - a self-only CSP forbids a CDN,
+and Workers Builds deploys the tree with no build step - so `public/tokens.css`,
+`public/vendor/marp/nt-marp.css`, and `public/fonts/*` are committed copies.
+
+**A copy is only DRY if something fails when it drifts.** Three mechanisms, each
+catching a different drift:
+
+- `upstream/nt-brand` is a git submodule pinned to a commit of the golden set.
+  `npm run vendor:brand` copies out of it. Dependabot's `gitsubmodule` ecosystem
+  opens the bump PR, so an upstream correction arrives as a reviewable diff
+  rather than as a value nobody re-typed.
+- `npm run brand` re-runs that copy and then `git diff --exit-code -- public`.
+  A file edited in place fails CI. This is the whole byte contract, offline, so
+  no lock file records a hash that would itself go stale.
+- `scripts/brand-audit.mjs` reads every color out of `tokens.css` and fails any
+  other file naming a color outside that set. It covers what a byte-diff cannot:
+  `shell.css`, `print.css`, `nt-code.css`, `favicon.svg`, and the print footer in
+  `export.ts` are this repo's own CSS, and a hand-picked hex there renders close
+  enough to survive review.
+
+A Dependabot bump PR goes red on the second mechanism until someone runs
+`npm run vendor:brand` on that branch. That is the intended signal, not a gap:
+the pointer and the bytes land in one commit or neither does.
 
 ## Build order
 

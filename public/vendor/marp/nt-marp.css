@@ -1,8 +1,22 @@
-/* Marpit theme on NoTambourine tokens. Ours, not vendored; marpit.js beside it
-   is the pinned artifact. Built on the tokens.css custom properties so a brand
-   change flows here with no mirror step, hence no `:root` block below.
-   Marpit scopes every selector under `div.marpit > svg > foreignObject`, and
-   custom properties still cascade in from the document root. */
+/* =========================================================
+   NoTambourine: Marpit deck theme
+   ---------------------------------------------------------
+   The golden set. `notambourine/claude`, plugin `nt-brand`,
+   skill `system`. Correct a value here and never sync one in.
+   Anything that disagrees with this file is downstream and
+   stale.
+
+   Every value is a `var()` off tokens.css, so a brand change
+   flows here with no mirror step - hence no `:root` block.
+   Marpit scopes every selector under `div.marpit > svg >
+   foreignObject`, and custom properties still cascade in from
+   the document root, so load tokens.css on the page and this
+   theme picks it up. The literal after each comma is the
+   fallback for a renderer that got the theme without tokens.
+
+   Deck grammar - what goes on a slide, in what order - is in
+   SKILL.md. This file only says how it looks.
+   ========================================================= */
 /* @theme nt */
 
 section {
@@ -22,7 +36,7 @@ section {
 }
 
 /* `<!-- _class: lead -->` centers a title slide. The directive vocabulary is
-   why this engine replaced a dumb split on `---`. */
+   why this engine beats a dumb split on `---`. */
 section.lead {
   align-items: center;
   text-align: center;
@@ -41,29 +55,29 @@ section h1 { font-size: 2.1em; }
 section h2 { font-size: 1.5em; }
 section h3 { font-size: 1.15em; }
 section h4 { font-size: 1em; }
-section h1 em, section h2 em { color: #E75A7C; font-style: italic; }
+section h1 em, section h2 em { color: var(--accent, #E75A7C); font-style: italic; }
 
 section p { margin: 0; text-wrap: pretty; }
-section a { color: #E75A7C; text-decoration: none; }
+section a { color: var(--accent, #E75A7C); text-decoration: none; }
 section strong { color: var(--fg1, #F5F5F7); font-weight: 600; }
 section em { font-style: italic; }
 
 section ul, section ol { margin: 0; padding-left: 1.2em; }
 section li { margin-bottom: 0.35em; }
-section li::marker { color: #E75A7C; }
+section li::marker { color: var(--accent, #E75A7C); }
 
 section code {
   font-family: var(--font-mono, ui-monospace, monospace);
-  background: rgba(231, 90, 124, 0.14);
-  color: #F5A6BB;
+  background: var(--accent-soft, rgba(231,90,124,0.16));
+  color: var(--accent-fg, #F5A6BB);
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-xs, 6px);
   font-size: 0.82em;
 }
 section pre {
   background: var(--bg-card, #141416);
   border: 1px solid var(--line, #2A2A2E);
-  border-radius: 14px;
+  border-radius: var(--r-md, 14px);
   padding: 0.9em 1.1em;
   font-size: 0.62em;
   line-height: 1.6;
@@ -78,7 +92,7 @@ section pre code {
 }
 
 section blockquote {
-  border-left: 2px solid #58C9B9;
+  border-left: 2px solid var(--support, #58C9B9);
   padding-left: 0.8em;
   margin: 0;
   color: var(--fg3, #8A8A92);
@@ -96,12 +110,12 @@ section th, section td {
 }
 section th { color: var(--fg1, #F5F5F7); font-weight: 600; }
 
-section img { max-height: 60%; border-radius: 10px; }
+section img { max-height: 60%; border-radius: var(--r-sm, 10px); }
 section hr { border: 0; border-top: 1px solid var(--line, #2A2A2E); width: 100%; }
 
 /* `<!-- paginate: true -->` opts a deck in; Marpit fills the attribute. */
 section::after {
-  color: var(--fg-mute, #5A5A62);
+  color: var(--nt-fg-mute, #5A5A62);
   font-family: var(--font-accent, ui-monospace, monospace);
   font-size: 16px;
   padding: 40px 48px;

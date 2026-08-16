@@ -23,6 +23,18 @@ updates:
         patterns:
           - "*"
     # majors match no group -> individual PRs
+  # upstream/nt-brand -> notambourine/claude, the brand's golden set. The bump
+  # PR moves the pinned commit only; CI then fails until someone runs
+  # `npm run vendor:brand` on that branch and commits the copied bytes.
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: cron
+      cronjob: "0 9 * * 1-5"
+      timezone: America/Chicago
+    cooldown:
+      default-days: 2
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

@@ -29,6 +29,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # upstream/nt-brand holds the brand's golden set. `npm run brand`
+          # re-copies out of it and diffs, so an un-cloned submodule is a
+          # silent pass rather than a failure.
+          submodules: true
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -39,6 +43,11 @@ jobs:
       # script gets a runner. vitest, tsc, and oxlint need none; the esbuild and
       # workerd binaries are only used by `npm run vendor` and deploys.
       - run: npm ci --ignore-scripts
+
+      # ubuntu only: it re-copies the submodule and diffs, and CRLF on the
+      # windows runner would fail that diff on the line endings alone.
+      - run: npm run brand
+        if: matrix.os == 'ubuntu-latest'
 
       - run: npm run lint
 

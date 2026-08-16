@@ -1,0 +1,4 @@
+[submodule "upstream/nt-brand"]
+	path = upstream/nt-brand
+	url = https://github.com/notambourine/claude.git
+	branch = main
