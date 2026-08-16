@@ -8,10 +8,13 @@ import { mint } from './routes/mint';
 import { listSpace } from './routes/list';
 import { del } from './routes/del';
 import { short } from './routes/short';
+import { skillDoc } from './skill';
 import { sweep } from './sweep';
 
+/* /SKILL.md is absent on purpose: src/skill.ts serves it from the bundle, so no
+   copy of the skill lives under public/. */
 const STATIC = new Set([
-  '/', '/index.html', '/robots.txt', '/llms.txt', '/SKILL.md',
+  '/', '/index.html', '/robots.txt', '/llms.txt',
   '/tokens.css', '/shell.css', '/print.css', '/render.js', '/favicon.svg', '/favicon.ico',
 ]);
 
@@ -39,6 +42,10 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
+
+    if (path === '/SKILL.md') {
+      return skillDoc();
+    }
 
     if (isStatic(path)) {
       return staticAsset(request, env);

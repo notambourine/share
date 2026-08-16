@@ -25,7 +25,7 @@
   function highlightAll(root) {
     if (!window.hljs) return;
     root.querySelectorAll('pre code').forEach(function (el) {
-      try { window.hljs.highlightElement(el); } catch (e) { /* plain text is fine */ }
+      try { window.hljs.highlightElement(el); } catch { /* plain text is fine */ }
     });
   }
 
@@ -37,7 +37,7 @@
       var dot = name.lastIndexOf('.');
       if (dot > 0) el.className = 'language-' + name.slice(dot + 1).toLowerCase();
       if (window.hljs) {
-        try { window.hljs.highlightElement(el); } catch (e) { /* plain text is fine */ }
+        try { window.hljs.highlightElement(el); } catch { /* plain text is fine */ }
       }
     });
   }
@@ -111,7 +111,7 @@
         /* An unparseable theme must not cost the deck: Marpit's built-in
            default still renders readable slides. */
         if (css) {
-          try { marpit.themeSet.default = marpit.themeSet.add(css); } catch (e) { /* default theme */ }
+          try { marpit.themeSet.default = marpit.themeSet.add(css); } catch { /* default theme */ }
         }
         var out = marpit.render(text);
         var style = document.createElement('style');

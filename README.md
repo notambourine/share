@@ -44,7 +44,9 @@ drop-in Claude skill. `bin/share.mjs` is the CLI (`put`, `sign`, `short`,
 `ls`, `rm`).
 
 A consumer carries only a stub, so the hosted skill stays the single source
-of truth and never drifts. The canonical stub lives at `skills/share/SKILL.md`,
+of truth and never drifts. `GET /SKILL.md` is served from the bundle rather
+than `public/`: `src/skill.ts` imports the skill file, so the served bytes and
+the installed skill cannot diverge. The canonical stub lives at `skills/share/SKILL.md`,
 which with `.claude-plugin/plugin.json` makes this repo an installable Claude
 Code plugin — the org marketplace (`notambourine/claude-plugin`) lists it by
 reference, so one user-scope install works in every repo. A repo that wants
