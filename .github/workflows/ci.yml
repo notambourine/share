@@ -24,7 +24,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # Steady state is 52s on the slowest leg (windows). The cap is set well above
+    # that for the cold-cache case: three OS legs, and setup-node's cache misses
+    # on every lockfile change, which is when a run is slowest.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,6 +44,11 @@ jobs:
       # --ignore-scripts: the first install in this repo's CI, so no lifecycle
       # script gets a runner. vitest, tsc, and oxlint need none; the esbuild and
       # workerd binaries are only used by `npm run vendor` and deploys.
+      #
+      # Deliberately NOT wrapped in `sfw`, which is why the sfw light sits
+      # yellow. Nothing in this job is worth exfiltrating: no step passes `env:`,
+      # the workflow grant is `contents: read`, the checkout drops the token, and
+      # the repo is public. Wrap it if a step here ever gains a secret.
       - run: npm ci --ignore-scripts
 
       # The brand contract, and the gate on a submodule bump PR: public/fonts/
