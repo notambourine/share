@@ -295,19 +295,87 @@ async function upload(path: string, init: RequestInit): Promise<string> {
   }
 }
 
-/* A shim, not a symlink to this file: it re-resolves the newest plugin copy on
-   every run, so a plugin upgrade (a new version dir) never strands it. */
-function shim(self: string): string {
-  return `#!/bin/sh
-# nt-share: newest installed nt-share CLI. Written by \`nt-share install\`.
-cli=$(ls -d "$HOME"/.claude/plugins/cache/*/nt-share/*/bin/share.* 2>/dev/null | sort -V | tail -1)
-[ -n "$cli" ] || cli=${JSON.stringify(self)}
-[ -f "$cli" ] || { echo "nt-share: no CLI found; reinstall the nt-share plugin" >&2; exit 127; }
-# Old node fails a .ts entry point with "Unknown file extension", which reads as a bug.
-node -e 'const[a,b]=process.versions.node.split(".").map(Number);if(a<22||(a===22&&b<18)){console.error("nt-share needs node 22.18+, found "+process.versions.node);process.exit(1)}' || exit 1
-exec node "$cli" "$@"
+/* The resolver, not a symlink to this file: it re-finds the newest plugin copy
+   on every run, so a plugin upgrade (a new version dir) never strands it. In
+   node rather than shell because `sort -V` has no batch equivalent, and cmd.exe
+   sorting names would rank 0.9.0 over 0.10.0. */
+function resolver(self: string): string {
+  return `#!/usr/bin/env node
+// nt-share: runs the newest installed nt-share CLI. Written by \`nt-share install\`.
+import { readdir, stat } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import process from 'node:process';
+
+const FALLBACK = ${JSON.stringify(self)};
+
+// Old node fails a .ts entry point with "Unknown file extension", which reads as a bug.
+const [major, minor] = process.versions.node.split('.').map(Number);
+if (major < 22 || (major === 22 && minor < 18)) {
+  console.error(\`nt-share needs node 22.18+, found \${process.versions.node}\`);
+  process.exit(1);
+}
+
+async function names(dir) {
+  try {
+    return await readdir(dir);
+  } catch {
+    return []; // absent level: no plugin copy down this path
+  }
+}
+
+function newer(a, b) {
+  const left = a.split('.').map(Number);
+  const right = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const gap = (left[i] ?? 0) - (right[i] ?? 0);
+    if (gap) return gap > 0;
+  }
+  return false;
+}
+
+const root = join(homedir(), '.claude', 'plugins', 'cache');
+let best = null;
+for (const market of await names(root)) {
+  const versions = join(root, market, 'nt-share');
+  for (const version of await names(versions)) {
+    for (const file of await names(join(versions, version, 'bin'))) {
+      if (!file.startsWith('share.')) continue;
+      const path = join(versions, version, 'bin', file);
+      if (!best || newer(version, best.version)) best = { version, path };
+    }
+  }
+}
+
+const cli = best ? best.path : FALLBACK;
+// Checked before the import, never caught around it: a catch here would relabel
+// every error the CLI itself throws as a missing install.
+if (!await stat(cli).then(() => true, () => false)) {
+  console.error('nt-share: no CLI found; reinstall the nt-share plugin');
+  process.exit(127);
+}
+
+// Imported, not spawned: the CLI reads process.argv.slice(2), which is already
+// this process's arguments, and a second node costs another cold start.
+await import(pathToFileURL(cli).href);
 `;
 }
+
+/* Two wrappers, both written on every platform: a shared home directory across
+   WSL and Windows needs each, and neither costs anything where it is inert.
+   CRLF on the batch file, which cmd.exe still wants. */
+const SH_WRAPPER = `#!/bin/sh
+# nt-share: written by \`nt-share install\`.
+exec node "$(dirname "$0")/nt-share.mjs" "$@"
+`;
+
+const CMD_WRAPPER = [
+  '@echo off',
+  'rem nt-share: written by `nt-share install`.',
+  'node "%~dp0nt-share.mjs" %*',
+  '',
+].join('\r\n');
 
 const { pos, flags } = parseArgs(process.argv.slice(2));
 const [cmd, ...rest] = pos;
@@ -317,9 +385,11 @@ switch (cmd) {
     const dir = flags.dir ?? join(homedir(), '.local', 'bin');
     const target = join(dir, 'nt-share');
     await mkdir(dir, { recursive: true });
-    await writeFile(target, shim(fileURLToPath(import.meta.url)), { mode: 0o755 });
+    await writeFile(join(dir, 'nt-share.mjs'), resolver(fileURLToPath(import.meta.url)));
+    await writeFile(target, SH_WRAPPER, { mode: 0o755 });
     await chmod(target, 0o755);
-    console.log(target);
+    await writeFile(`${target}.cmd`, CMD_WRAPPER);
+    console.log(process.platform === 'win32' ? `${target}.cmd` : target);
     if (!(process.env.PATH ?? '').split(delimiter).includes(dir)) {
       console.error(`${dir} is not on PATH; call it by full path or add the dir`);
     }

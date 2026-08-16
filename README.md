@@ -38,8 +38,16 @@ A markdown URL also takes a format suffix: `deck.md.pdf` for a branded PDF,
 
 `GET /llms.txt` documents everything in plain text. `GET /SKILL.md` is a
 drop-in Claude skill. `bin/share.ts` is the CLI (`install`, `session`, `put`,
-`sign`, `short`, `ls`, `rm`); `install` writes a `nt-share` shim onto PATH that
-re-resolves the newest plugin copy, so the skill can call it by name.
+`sign`, `short`, `ls`, `rm`); `install` puts it on PATH as `nt-share`, so the
+skill can call it by name.
+
+`install` writes three files into the target dir: `nt-share.mjs` resolves the
+newest installed plugin copy and imports it, so a plugin upgrade never strands
+the entry point, and `nt-share` plus `nt-share.cmd` are one-line wrappers onto
+it for sh and for cmd.exe. Both wrappers land on every platform, because one
+home directory can be shared between Windows and WSL. Version comparison lives
+in the resolver rather than a shell pipeline: `sort -V` has no cmd.exe
+equivalent, and every plain string sort ranks `0.9.0` above `0.10.0`.
 
 `nt-share put <space> --clip` uploads the image on the clipboard with no file
 on disk: `osascript` on macOS, `Clipboard::GetImage` through PowerShell on
