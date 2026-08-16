@@ -2,17 +2,17 @@
  * The brand's golden set, served from the bundle rather than from public/.
  *
  * These imports are load-bearing, the same way `src/skill.ts` imports SKILL.md:
- * they make drift between what this Worker serves and what nt-brand defines
+ * they make drift between what this Worker serves and what brand-kit defines
  * impossible, where a copy under public/ could only ever be detected after the
- * fact. Bumping `upstream/nt-brand` is the whole update - there is no second
+ * fact. Bumping `upstream/brand-kit` is the whole update - there is no second
  * step, so there is nothing to forget.
  *
  * The fonts stay on the ASSETS path. They are inert binaries rather than brand
  * decisions, a static server is the right thing to serve them, and tokens.css
  * asks for them at `./fonts/*.woff2`, which resolves to `/fonts/` either way.
  */
-import TOKENS from '../upstream/nt-brand/plugins/nt-brand/skills/system/tokens.css';
-import DECK from '../upstream/nt-brand/plugins/nt-brand/skills/system/deck.css';
+import TOKENS from '../upstream/brand-kit/tokens.css';
+import DECK from '../upstream/brand-kit/deck.css';
 import { ROBOTS } from './lib/http';
 
 /** Marpit takes a theme as a string, so the export and the browser both read this. */

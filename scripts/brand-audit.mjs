@@ -84,7 +84,7 @@ if (fails.length) {
   console.error('brand: drift\n');
   for (const f of fails) console.error(`  - ${f}`);
   console.error('\nColors come from a var() off the golden set. If one is genuinely new,');
-  console.error('add it in notambourine/claude first, then bump the submodule.');
+  console.error('add it in notambourine/brand-kit first, then bump the submodule.');
   process.exit(1);
 }
 

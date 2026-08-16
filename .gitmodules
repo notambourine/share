@@ -1,4 +1,4 @@
-[submodule "upstream/nt-brand"]
-	path = upstream/nt-brand
-	url = https://github.com/notambourine/claude.git
+[submodule "upstream/brand-kit"]
+	path = upstream/brand-kit
+	url = https://github.com/notambourine/brand-kit.git
 	branch = main

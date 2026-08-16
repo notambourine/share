@@ -12,7 +12,7 @@
   in the `SPACE_TTLS` Worker secret; committed examples use `acme`.
 - Cloudflare secrets are write-only. The 1Password vault is the source of truth
   for bearer tokens; the `TOKENS` secret is derived from it, never hand-edited.
-- The brand's golden set is the `upstream/nt-brand` submodule. `src/brand.ts`
+- The brand's golden set is the `upstream/brand-kit` submodule. `src/brand.ts`
   imports `tokens.css` and `deck.css` from it and the Worker serves them at
   `/tokens.css` and `/vendor/marp/nt-marp.css`. Never add a copy under
   `public/`; correct a brand value in that repo and bump the pin.

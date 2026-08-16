@@ -23,7 +23,7 @@ updates:
         patterns:
           - "*"
     # majors match no group -> individual PRs
-  # upstream/nt-brand -> notambourine/claude, the brand's golden set. The bump
+  # upstream/brand-kit -> notambourine/brand-kit, the golden set. The bump
   # PR is the whole update: src/brand.ts imports the stylesheets out of the
   # submodule, so moving the pin moves the bytes and CI checks the contract.
   #

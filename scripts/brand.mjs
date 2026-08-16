@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-export const BRAND = 'upstream/nt-brand/plugins/nt-brand/skills/system';
+export const BRAND = 'upstream/brand-kit';
 
 /** Every face in the golden set, paired to where public/ serves it from. */
 export async function fontPairs() {
