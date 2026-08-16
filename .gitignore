@@ -4,3 +4,10 @@ node_modules/
 !.dev.vars.example
 *.local.*
 .DS_Store
+
+# ~/.gitignore excludes .claude/ everywhere, and git will not descend into an
+# excluded directory, so re-including one child needs all three lines.
+# .claude/skills/ holds vendored dev skills that CI verifies and clones need.
+!.claude/
+.claude/*
+!.claude/skills/
