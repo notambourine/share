@@ -1,4 +1,4 @@
-# Local-dev secrets for `wrangler dev` — copy to .dev.vars (gitignored).
+# Local-dev secrets for `wrangler dev`: copy to .dev.vars (gitignored).
 # Production values are Worker secrets set in the Cloudflare dashboard.
 
 # JSON map of uploader name -> sha256 hex of their Bearer token.

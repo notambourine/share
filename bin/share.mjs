@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* share — CLI for share.notambourine.com (R15).
+/* share: CLI for share.notambourine.com (R15).
    Token comes from $SHARE_TOKEN; run under the op prefix so the secret never
    lands in a transcript ($SHARE_URL overrides the host for dev):
      SHARE_TOKEN=op://Employee/share-token/credential op run -- share ...
@@ -87,7 +87,7 @@ switch (cmd) {
     const body = await api(`/up/${space}${q.size ? `?${q}` : ''}`, { method: 'POST', body: form });
     const json = JSON.parse(body);
     console.log(json.url);
-    if (flags.tier === 'signed') console.error(`signed tier — mint a link: share sign ${space}/${json.hash}`);
+    if (flags.tier === 'signed') console.error(`signed tier: mint a link: share sign ${space}/${json.hash}`);
     break;
   }
   case 'sign':
@@ -118,5 +118,5 @@ switch (cmd) {
     break;
   }
   default:
-    die('commands: put, sign, short, ls, rm — see https://share.notambourine.com/llms.txt');
+    die('commands: put, sign, short, ls, rm; see https://share.notambourine.com/llms.txt');
 }

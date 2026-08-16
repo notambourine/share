@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 # Dependency gates (CVE, malware, tree scan) ride the org-level Socket app,
-# which checks every dep-touching PR — no vet/guarddog/socket-tree jobs here.
+# which checks every dep-touching PR; no vet/guarddog/socket-tree jobs here.
 jobs:
   wormhook:
     runs-on: ubuntu-slim
@@ -73,7 +73,7 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - name: zizmor workflow audit
         # `|| true`: zizmor exits 14 on findings, which would abort before the
-        # filter runs. Then fail CLOSED on non-JSON — a gate must not wave a PR
+        # filter runs. Then fail CLOSED on non-JSON: a gate must not wave a PR
         # through on a scan error. Filter copied from status-zizmor.sh, the
         # canonical source.
         env:
@@ -81,7 +81,7 @@ jobs:
         run: |
           OUT=$(uvx zizmor --format json --min-severity=medium .github/workflows || true)
           if ! jq -e 'type == "array"' <<<"$OUT" >/dev/null 2>&1; then
-            echo "::error::zizmor returned no valid JSON (scan errored) — failing closed"; exit 1
+            echo "::error::zizmor returned no valid JSON (scan errored); failing closed"; exit 1
           fi
           HITS=$(jq '[.[] | select(.ident != "unpinned-uses")]' <<<"$OUT")
           N=$(jq 'length' <<<"$HITS")

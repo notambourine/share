@@ -29,7 +29,7 @@ export function parseArtifactPath(raw: string): [string, string] | null {
 }
 
 /**
- * POST /sign — Bearer required: unauthenticated minting would let anyone
+ * POST /sign: Bearer required. Unauthenticated minting would let anyone
  * holding an expired link issue themselves a fresh one.
  */
 export async function mint(request: Request, env: Env): Promise<Response> {

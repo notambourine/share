@@ -28,5 +28,6 @@ jobs:
       # to upstream, and a rewritten dash conflicts on every `vendor:skills pull`.
       exclude: |
         public/vendor
+        public/tokens.css
         vendor/pristine
         .claude/skills

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Mint (or rotate) one share.notambourine.com bearer token, as the 1Password admin.
 # Safe to commit: generates secrets, contains none. Run in a plain terminal,
-# never inside an agent session — the raw token prints to stdout.
+# never inside an agent session; the raw token prints to stdout.
 #
 #   scripts/add-employee.sh <name>                              generate + print only
 #   scripts/add-employee.sh <name> --vault share-admin          upsert the canonical copy,
@@ -10,13 +10,13 @@
 #   scripts/add-employee.sh --map --vault share-admin           print the TOKENS map, mint nothing
 #
 # Lifecycle (the vault is the source of truth; TOKENS is derived from it, so
-# the Worker secret staying write-only costs nothing — never read it, rebuild it):
+# the Worker secret staying write-only costs nothing; never read it, rebuild it):
 #   onboard   run with --vault + --email; paste the reprinted TOKENS into the
 #             Worker secret; recipient saves the token into their built-in
 #             Employee vault, item title "share-token", field "credential",
 #             so op://Employee/share-token/credential resolves for everyone.
 #   rotate    re-run the same name (the item is edited in place), re-paste
-#             TOKENS — the old token dies at that moment — send a fresh link.
+#             TOKENS: the old token dies at that moment; send a fresh link.
 #             Unchanged people keep their tokens: sha256 is deterministic.
 #   offboard  op item delete "share-token-<name>" --vault share-admin, then
 #             --map to reprint, paste it. Nobody else rotates.
@@ -39,7 +39,7 @@ done
 [[ -n "$EMAIL" && -z "$VAULT" ]] && { echo "--email needs --vault" >&2; exit 1; }
 
 print_map() {
-  echo "TOKENS — re-paste the whole value into the Worker secret:"
+  echo "TOKENS: re-paste the whole value into the Worker secret:"
   local JSON="{" T N C
   while IFS= read -r T; do
     N="${T#share-token-}"
@@ -110,7 +110,7 @@ Send ${NAME} the view-once link above plus this block:
   op item create --vault Employee --category "API Credential" \\
     --title share-token 'credential=PASTE-TOKEN-HERE'
 
-  # 2. Verify, then use — no env file; op run resolves the reference from
+  # 2. Verify, then use: no env file; op run resolves the reference from
   #    the environment and the secret exists only inside the wrapped command:
   op read op://Employee/share-token/credential >/dev/null && echo ready
   SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c \\
