@@ -42,6 +42,8 @@ export function normalizeUploadPath(raw: string): string | null {
   for (const seg of p.split('/')) {
     if (seg === '' || seg === '.') continue;
     if (seg === '..') return null;
+    // Control bytes must never reach an R2 key, so matching them is the point.
+    // oxlint-disable-next-line no-control-regex
     if (/[\x00-\x1f\x7f?#]/.test(seg)) return null;
     if (seg.length > 255) return null;
     parts.push(seg);

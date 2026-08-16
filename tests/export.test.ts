@@ -116,7 +116,7 @@ describe('format suffixes', () => {
 
   it('a real uploaded file wins its own name', async () => {
     const files = [MD_FILE, { path: 'deck.md.pdf', size: 6, type: 'application/pdf' }];
-    const env = world({ [`${SPACE}/${HASH}/f/deck.md.pdf`]: 'REAL', ...{} }, files);
+    const env = world({ [`${SPACE}/${HASH}/f/deck.md.pdf`]: 'REAL' }, files);
     const res = await ask(env, 'deck.md.pdf', '*/*');
     expect(await res.text()).toBe('REAL');
   });

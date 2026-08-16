@@ -6,7 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "vendor": "node scripts/vendor.mjs",
-    "mirror": "cp skills/share/SKILL.md public/SKILL.md",
+    "lint": "oxlint --deny-warnings",
     "types": "tsc --noEmit"
   },
   "devDependencies": {
@@ -16,6 +16,7 @@
     "@marp-team/marpit": "^3.2.2",
     "esbuild": "^0.28.2",
     "marked": "18.0.9",
+    "oxlint": "^1.78.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10",
     "wrangler": "^4.30.0"
