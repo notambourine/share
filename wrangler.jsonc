@@ -10,6 +10,8 @@
 	// @cloudflare/puppeteer imports node:buffer; the flag is what resolves it.
 	"compatibility_flags": ["nodejs_compat"],
 	"main": "./src/worker.ts",
+	// src/skill.ts imports the plugin's SKILL.md and serves those exact bytes.
+	"rules": [{ "type": "Text", "globs": ["**/*.md"] }],
 	"assets": {
 		"directory": "./public",
 		"binding": "ASSETS",
