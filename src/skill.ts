@@ -1,5 +1,5 @@
 /**
- * GET /SKILL.md — the same bytes the published plugin installs.
+ * GET /SKILL.md serves the same bytes the published plugin installs.
  * The import is load-bearing: it makes drift between the served doc and the
  * skill impossible, where a copy in public/ could only be detected after it.
  */
