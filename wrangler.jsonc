@@ -12,8 +12,9 @@
 	"main": "./src/worker.ts",
 	// src/skill.ts imports the plugin's SKILL.md and serves those exact bytes.
 	// src/brand.ts does the same for the golden set in upstream/brand-kit, so no
-	// brand stylesheet is ever copied into public/.
-	"rules": [{ "type": "Text", "globs": ["**/*.md", "**/*.css"] }],
+	// brand stylesheet is ever copied into public/. The svg is the lockup: a PDF
+	// and an offline snapshot both need it in the markup, not behind a URL.
+	"rules": [{ "type": "Text", "globs": ["**/*.md", "**/*.css", "**/*.svg"] }],
 	"assets": {
 		"directory": "./public",
 		"binding": "ASSETS",

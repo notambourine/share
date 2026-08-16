@@ -21,6 +21,12 @@
   refreshes both from the submodule; never hand-edit or hand-add a file there.
 - Icons come from `public/logo/`. `/favicon.svg`, `/favicon.ico`, and
   `/apple-touch-icon.png` are Worker aliases onto it, never second copies.
+- Never typeset the brand name as display type. `src/brand.ts` exports `LOCKUP`
+  and every header inlines it, sized in CSS with `fill: currentColor`. That
+  covers the shells and the PDF, so nothing here loads Nunito.
+- Every HTML page comes from `layout()` in `src/render/shell.ts`, the landing
+  page included. Never add a second page under `public/`; it would carry a
+  second copy of the header.
 - Every color in this repo must be one the golden set defines, including inside
   a `var()` fallback, and every `var(--x)` must read a token it still declares.
   `npm run brand` is the gate and CI runs it.

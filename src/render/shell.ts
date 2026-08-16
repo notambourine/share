@@ -5,6 +5,7 @@
  */
 
 import type { MetaFile } from '../lib/types';
+import { LOCKUP } from '../brand';
 
 export function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => (
@@ -18,45 +19,47 @@ export function fmtSize(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/* The golden set's icons, served out of public/logo/. No manifest link here:
-   these pages are one client artifact apiece, and a manifest would offer to
-   install them as the NoTambourine app. index.html is the surface that owns it. */
+/* The golden set's icons, served out of public/logo/. The manifest rides the
+   landing page alone: every other shell is one client artifact, and a manifest
+   there would offer to install that artifact as the NoTambourine app. */
 const ICONS = `<link rel="icon" href="/logo/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/logo/export/favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="/logo/export/apple-touch-icon.png">`;
+const MANIFEST = '<link rel="manifest" href="/logo/site.webmanifest">';
 
 interface PageOpts {
   title: string;
   body: string;
   head?: string;
   bodyAttrs?: string;
+  /** The landing page: no copy button, no renderer, and its own bare title. */
+  home?: boolean;
 }
 
-function layout({ title, body, head = '', bodyAttrs = '' }: PageOpts): string {
+function layout({ title, body, head = '', bodyAttrs = '', home = false }: PageOpts): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow, noarchive, noimageindex">
-<title>${esc(title)} · notambourine</title>
+<title>${home ? esc(title) : `${esc(title)} · NoTambourine`}</title>
 <link rel="stylesheet" href="/tokens.css">
 <link rel="stylesheet" href="/shell.css">
-${ICONS}
+${ICONS}${home ? `\n${MANIFEST}` : ''}
 ${head}
 </head>
 <body${bodyAttrs}>
 <header class="bar">
-  <a class="wordmark" href="https://notambourine.com">notambourine</a>
+  <a class="wordmark" href="https://notambourine.com" aria-label="NoTambourine">${LOCKUP}</a>
   <span class="eyebrow">share</span>
-  <span class="spacer"></span>
+${home ? '' : `  <span class="spacer"></span>
   <button class="copy" type="button" data-copy>copy link</button>
-</header>
+`}</header>
 <main class="stage">
 ${body}
 </main>
-<script src="/render.js" defer></script>
-</body>
+${home ? '' : '<script src="/render.js" defer></script>\n'}</body>
 </html>`;
 }
 
@@ -150,6 +153,26 @@ export function dirShell(hash: string, files: MetaFile[]): string {
     body: `<div class="doc listing">
 <p class="eyebrow">${files.length} ${files.length === 1 ? 'file' : 'files'}</p>
 <ul class="files">${rows}</ul>
+</div>`,
+  });
+}
+
+/**
+ * The bare origin. Whoever lands here followed a share link that expired, or
+ * trimmed one back to the domain, so the reader is a prospective client and the
+ * copy sells the firm rather than the subdomain. Marketing register, so it says
+ * "you"; the fixtures it leans on are in the golden set's SKILL.md.
+ */
+export function homeShell(): string {
+  return layout({
+    home: true,
+    title: 'NoTambourine',
+    body: `<div class="card">
+<p class="eyebrow">boutique skunkworks engineering</p>
+<h2>Senior engineers. No <em>tambourine</em>.</h2>
+<p>Your growth is capped by the stack, not by the ambition. We embed with your team as a hands-on operating partner and put the work in prod.</p>
+<p>Scope holds, so the estimate is worth something. Tell us what you're building and we'll write back the same day.</p>
+<a class="btn" href="https://notambourine.com">See how we work</a>
 </div>`,
   });
 }

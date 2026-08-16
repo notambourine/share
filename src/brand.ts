@@ -18,9 +18,16 @@ import FONTS from '../upstream/brand-kit/fonts.css';
 import VARS from '../upstream/brand-kit/vars.css';
 import ELEMENTS from '../upstream/brand-kit/elements.css';
 import DECK from '../upstream/brand-kit/deck.css';
+/* Inline rather than `<img src="/logo/lockup.svg">`: a PDF header and an
+   offline `.html` snapshot both have to carry the mark with no origin to fetch
+   from, and inline is also the only form `fill: currentColor` can reach. */
+import LOCKUP from '../upstream/brand-kit/logo/lockup.svg';
 import { ROBOTS } from './lib/http';
 
 const TOKENS = [FONTS, VARS, ELEMENTS].join('\n');
+
+/** The wordmark, outlined, so no page has to load Nunito to render it. */
+export { LOCKUP };
 
 /** Marpit takes a theme as a string, so the export and the browser both read this. */
 export { DECK as DECK_THEME };

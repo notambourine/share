@@ -1,7 +1,7 @@
 import type { Env } from './lib/types';
 import { isValidSpace, isValidHash } from './lib/keys';
 import { htmlResponse, textResponse, ROBOTS } from './lib/http';
-import { errorShell } from './render/shell';
+import { errorShell, homeShell } from './render/shell';
 import { serve } from './routes/serve';
 import { upload } from './routes/upload';
 import { mint } from './routes/mint';
@@ -13,12 +13,14 @@ import { skillDoc } from './skill';
 import { brandSheet } from './brand';
 import { sweep } from './sweep';
 
-/* Three paths are absent on purpose. /SKILL.md, /tokens.css, and
+/* Four paths are absent on purpose. /SKILL.md, /tokens.css, and
    /vendor/marp/nt-marp.css are served from the bundle by src/skill.ts and
-   src/brand.ts, so no copy of the skill or the brand lives under public/.
+   src/brand.ts, so no copy of the skill or the brand lives under public/. The
+   landing page joins them because it wears the same header as every artifact
+   shell, and that header inlines the lockup out of the bundle.
    shell.css and print.css are this repo's own chrome and stay static. */
 const STATIC = new Set([
-  '/', '/index.html', '/robots.txt', '/llms.txt',
+  '/robots.txt', '/llms.txt',
   '/shell.css', '/print.css', '/render.js',
 ]);
 
@@ -59,6 +61,10 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
+
+    if (path === '/' || path === '/index.html') {
+      return htmlResponse(homeShell());
+    }
 
     if (path === '/SKILL.md') {
       return skillDoc();

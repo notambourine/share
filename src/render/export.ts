@@ -11,7 +11,7 @@
 import type { PDFOptions } from '@cloudflare/puppeteer';
 import type { Env } from '../lib/types';
 import type { Shape } from '../lib/exportPath';
-import { DECK_THEME, BRAND_ROUTES } from '../brand';
+import { DECK_THEME, BRAND_ROUTES, LOCKUP } from '../brand';
 import { esc } from './shell';
 
 const TOKENS = BRAND_ROUTES['/tokens.css'];
@@ -48,23 +48,16 @@ export function pdfOptionsFor(shape: Shape, title: string): PDFOptions {
  *
  * Both italics earn their place: a missing face does not fall back cleanly, the
  * browser synthesizes a slanted upright, and JetBrains Mono backs `--font-body`
- * so markdown `*emphasis*` reaches its italic. Nunito is the exception: it sets
- * one fixed string, the wordmark, so it ships as a ten-glyph static subset
- * rather than both 40 KB variable faces.
+ * so markdown `*emphasis*` reaches its italic.
  *
- * nunito-wordmark-800.woff2 is a static artifact of the pinned variable font:
- *   uvx --with brotli --from fonttools fonttools varLib.instancer \
- *     public/fonts/nunito-latin-var.woff2 wght=800 -o /tmp/n.ttf
- *   uvx --with brotli --from fonttools pyftsubset /tmp/n.ttf \
- *     --text=notambourine --flavor=woff2 --output-file=public/fonts/nunito-wordmark-800.woff2
- * 800 tracks `shell.css` `.wordmark`; regenerate if that weight changes.
+ * No Nunito, which the golden set carries only for the wordmark: the lockup is
+ * outlined artwork, so no page here renders `--font-wordmark`.
  */
 const FACES: { file: string; family: string; style: string; weight: string }[] = [
   { file: 'hanken-grotesk-latin-var.woff2', family: 'Hanken Grotesk', style: 'normal', weight: '100 900' },
   { file: 'hanken-grotesk-latin-var-italic.woff2', family: 'Hanken Grotesk', style: 'italic', weight: '100 900' },
   { file: 'jetbrains-mono-latin-var.woff2', family: 'JetBrains Mono', style: 'normal', weight: '100 800' },
   { file: 'jetbrains-mono-latin-var-italic.woff2', family: 'JetBrains Mono', style: 'italic', weight: '100 800' },
-  { file: 'nunito-wordmark-800.woff2', family: 'Nunito', style: 'normal', weight: '800' },
 ];
 
 /* tokens.css is missing here because it is not an asset: src/brand.ts imports it
@@ -173,7 +166,7 @@ export async function printHtml(env: Env, opts: PrintOpts): Promise<string> {
   /* On `html`, not `body`: tokens.css paints the dark canvas on `html`, and a
      `.theme-light` below it leaves that background on the paper. */
   const rootClass = shape === 'slides' ? 'print-deck' : 'print-doc theme-light';
-  const mark = shape === 'slides' ? '' : `<header class="print-mark">notambourine</header>\n`;
+  const mark = shape === 'slides' ? '' : `<header class="print-mark">${LOCKUP}</header>\n`;
   const scripts = shape === 'slides' ? [HLJS, MARPIT] : [HLJS, MARKED];
 
   return `<!doctype html>
