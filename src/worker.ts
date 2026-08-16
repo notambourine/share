@@ -19,19 +19,32 @@ import { sweep } from './sweep';
    shell.css and print.css are this repo's own chrome and stay static. */
 const STATIC = new Set([
   '/', '/index.html', '/robots.txt', '/llms.txt',
-  '/shell.css', '/print.css', '/render.js', '/favicon.svg', '/favicon.ico',
+  '/shell.css', '/print.css', '/render.js',
 ]);
 
 /* A space slug can never collide with these: isValidSpace rejects a leading
    slash, so a prefix match here cannot shadow a real upload path. */
-const STATIC_PREFIXES = ['/vendor/', '/fonts/'];
+const STATIC_PREFIXES = ['/vendor/', '/fonts/', '/logo/'];
+
+/* A browser asks for these at the root whatever a page links, so they answer
+   there too. Aliases, not copies: public/logo/ holds the only bytes. */
+const ROOT_ICONS: Record<string, string> = {
+  '/favicon.svg': '/logo/favicon.svg',
+  '/favicon.ico': '/logo/export/favicon.ico',
+  '/apple-touch-icon.png': '/logo/export/apple-touch-icon.png',
+  '/apple-touch-icon-precomposed.png': '/logo/export/apple-touch-icon.png',
+};
 
 export function isStatic(path: string): boolean {
-  return STATIC.has(path) || STATIC_PREFIXES.some((p) => path.startsWith(p));
+  return STATIC.has(path)
+    || path in ROOT_ICONS
+    || STATIC_PREFIXES.some((p) => path.startsWith(p));
 }
 
 export async function staticAsset(request: Request, env: Env): Promise<Response> {
-  const res = await env.ASSETS.fetch(request);
+  const alias = ROOT_ICONS[new URL(request.url).pathname];
+  const req = alias ? new Request(new URL(alias, request.url), request) : request;
+  const res = await env.ASSETS.fetch(req);
   const out = new Response(res.body, res);
   out.headers.set('x-robots-tag', ROBOTS);
   out.headers.set('cache-control', 'public, max-age=3600');

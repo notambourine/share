@@ -6,7 +6,9 @@ const BASE62 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 export const RESERVED = new Set([
   'up', 'sign', 'session', 'z', 'k', 'f', 'd', '_trash',
   'llms.txt', 'SKILL.md', 'robots.txt', 'favicon.ico', 'favicon.svg',
+  'apple-touch-icon.png', 'apple-touch-icon-precomposed.png',
   'tokens.css', 'shell.css', 'print.css', 'render.js', 'vendor', 'index.html',
+  'fonts', 'logo',
 ]);
 
 /** 12 base62 chars ≈ 71 bits. Rejection sampling keeps the distribution uniform. */

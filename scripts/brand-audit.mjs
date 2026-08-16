@@ -5,15 +5,16 @@
  * them out of the submodule, so bumping the pin is the whole update and a stale
  * copy cannot exist. What is left is everything that could not be an import.
  *
- * 1. The fonts. They are copied into public/ because a static asset server is
- *    the right thing to serve a woff2, so they can go stale in the one way an
- *    import cannot. Hashed against the submodule, offline, no lock file.
+ * 1. The fonts and the logo. They are copied into public/ because a static
+ *    asset server is the right thing to serve a woff2, a png, and an .ico, so
+ *    they can go stale in the one way an import cannot. Hashed against the
+ *    submodule, offline, no lock file.
  *
  * 2. Every color this repo writes itself. shell.css, print.css, nt-code.css,
- *    favicon.svg, and the print footer in export.ts are share's own CSS, where
- *    a hand-picked hex compiles fine, renders close enough to fool a reviewer,
- *    and then survives a brand correction it should have followed. A literal is
- *    allowed only where tokens.css names that exact color, which keeps
+ *    and the print footer in export.ts are share's own CSS, where a hand-picked
+ *    hex compiles fine, renders close enough to fool a reviewer, and then
+ *    survives a brand correction it should have followed. A literal is allowed
+ *    only where tokens.css names that exact color, which keeps
  *    `var(--line, #2A2A2E)` legal and a one-off grey illegal.
  *
  * 3. Every token this repo reads. `var(--x)` against a property the golden set
@@ -25,12 +26,14 @@
 import { createHash } from 'node:crypto';
 import { readFile, glob } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { root, BRAND, fontPairs } from './brand.mjs';
+import { root, BRAND, brandCopies } from './brand.mjs';
 
 /* vars.css, not tokens.css: tokens.css is three @import lines, and every value
    the audit compares against is declared in vars.css. */
 const TOKENS = `${BRAND}/vars.css`;
-const SCAN = ['public/*.css', 'public/vendor/**/*.css', 'public/*.svg', 'src/**/*.ts'];
+const SCAN = [
+  'public/*.css', 'public/vendor/**/*.css', 'public/*.svg', 'public/logo/*.svg', 'src/**/*.ts',
+];
 
 const HEX = /#([0-9a-fA-F]{3,8})\b/g;
 const RGB = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/g;
@@ -53,10 +56,24 @@ function colorsIn(text) {
 const sha = async (p) => createHash('sha256').update(await readFile(join(root, p))).digest('hex');
 const fails = [];
 
-for (const [from, to] of await fontPairs()) {
-  if (await sha(from) !== await sha(to)) {
-    fails.push(`${to} differs from ${from}. Run \`npm run vendor\`.`);
+const copies = await brandCopies();
+for (const [from, to] of copies) {
+  let same;
+  try {
+    same = await sha(from) === await sha(to);
+  } catch {
+    same = false; // a file the kit added and `npm run vendor` has not copied yet
   }
+  if (!same) fails.push(`${to} differs from ${from}. Run \`npm run vendor\`.`);
+}
+
+/* A hash check only sees files the kit still ships. Renaming one leaves the old
+   copy behind, still served, with nothing upstream to compare it against. */
+const wanted = new Set(copies.map(([, to]) => to));
+for await (const e of glob(join(root, 'public/{fonts,logo}/**/*'), { withFileTypes: true })) {
+  if (!e.isFile()) continue;
+  const path = relative(root, join(e.parentPath, e.name)).split('\\').join('/');
+  if (!wanted.has(path)) fails.push(`${path} is not a file the golden set ships. Delete it.`);
 }
 
 const tokensCss = await readFile(join(root, TOKENS), 'utf8');
@@ -90,5 +107,5 @@ if (fails.length) {
   process.exit(1);
 }
 
-console.log(`brand: fonts match the golden set; every color is one of its ${allowed.size},`);
-console.log(`       every var() reads one of its ${defined.size} tokens`);
+console.log(`brand: ${copies.length} copied files match the golden set; every color is one`);
+console.log(`       of its ${allowed.size}, every var() reads one of its ${defined.size} tokens`);
