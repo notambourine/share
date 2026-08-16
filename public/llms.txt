@@ -27,6 +27,9 @@ the session token and no 1Password unlock:
       https://share.notambourine.com/session
 
 Returns 201 {token, name, expiresAt}. ttl defaults to 5m (?ttl=, cap 1h).
+Convention: write the response to ~/.cache/notambourine-share/session.json
+(mode 0600) and read the token from there per upload, AWS-STS-cache style,
+so the token never enters a transcript or shell history.
 The session token authorizes /up only: sign, list, and delete still need the
 vault token, and a session cannot mint another session, so an exfiltrated
 session token caps at a few minutes of uploads. A 401 here means the server
