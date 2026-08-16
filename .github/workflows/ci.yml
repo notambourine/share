@@ -58,7 +58,7 @@ jobs:
       - run: npm run brand
         if: matrix.os == 'ubuntu-latest'
 
-      - run: npm run lint
+      - run: npm run oxlint
 
       - run: npm test
 

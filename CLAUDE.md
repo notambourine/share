@@ -4,7 +4,7 @@
   Do not add vet/guarddog/socket-tree jobs to CI; their lights are silenced
   in `.claude/settings.json`.
 - Deploys ride Cloudflare Workers Builds on push to `main`. Never run
-  `wrangler deploy` or `wrangler dev`; verify with `npm run lint`, `npm test`,
+  `wrangler deploy` or `wrangler dev`; verify with `npm run oxlint`, `npm test`,
   and `npm run types`. CI runs the same three.
 - One-time dashboard setup: README.md "Setup from zero". Token add, rotate,
   offboard, and delivery: `scripts/add-employee.sh` (its header is the runbook).

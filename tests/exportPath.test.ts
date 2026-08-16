@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CACHE_VERSION, parseExportPath, resolveExport, explicitShape,
+  CACHE_VERSION, parseExportPath, resolveExport, explicitMode,
   formatExt, derivedKey, sniffDeck,
 } from '../src/lib/exportPath';
 
@@ -52,13 +52,13 @@ describe('resolveExport', () => {
   });
 });
 
-describe('shape and extension', () => {
-  it('only the explicit spellings carry a shape', () => {
-    expect(explicitShape('slides-pdf')).toBe('slides');
-    expect(explicitShape('slides-html')).toBe('slides');
-    expect(explicitShape('doc-pdf')).toBe('doc');
-    expect(explicitShape('pdf')).toBeNull();
-    expect(explicitShape('html')).toBeNull();
+describe('mode and extension', () => {
+  it('only the explicit spellings carry a mode', () => {
+    expect(explicitMode('slides-pdf')).toBe('slides');
+    expect(explicitMode('slides-html')).toBe('slides');
+    expect(explicitMode('doc-pdf')).toBe('doc');
+    expect(explicitMode('pdf')).toBeNull();
+    expect(explicitMode('html')).toBeNull();
   });
 
   it('maps format to output extension', () => {
@@ -79,7 +79,7 @@ describe('derivedKey', () => {
     expect(key).toContain('/d/v');
   });
 
-  it('keys by resolved shape, so .pdf and its explicit spelling share one object', () => {
+  it('keys by resolved mode, so .pdf and its explicit spelling share one object', () => {
     const sniffed = derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'slides', 'pdf');
     const explicit = derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'slides', 'pdf');
     expect(sniffed).toBe(explicit);

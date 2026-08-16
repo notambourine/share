@@ -16,7 +16,7 @@ assets intact.
 
 A markdown URL also takes a format suffix: `deck.md.pdf` for a branded PDF,
 `deck.md.html` for a self-contained page that opens from a mail attachment,
-`deck.md.slides.pdf` and `deck.md.doc.pdf` to name the shape yourself.
+`deck.md.slides.pdf` and `deck.md.doc.pdf` to name the mode yourself.
 
 ## How it holds together
 

@@ -74,9 +74,9 @@ describe('format suffixes', () => {
     expect(await res.text()).toBe('PDFBYTES');
   });
 
-  it('sniffs deck content to the slides shape on a bare .pdf', async () => {
+  it('sniffs deck content to the slides mode on a bare .pdf', async () => {
     const env = world({ [derivedKey(SPACE, HASH, 'deck.md', 'doc', 'pdf')]: 'DOC' });
-    // Only the doc-shaped object exists, and the sniff wants the slides one.
+    // Only the doc object exists, and the sniff wants the slides one.
     const res = await ask(env, 'deck.md.pdf');
     expect(res.headers.get('content-type')).not.toBe('application/pdf');
   });

@@ -79,7 +79,7 @@ Append a suffix to a markdown share URL. The suffix decides the output, so
 
 Bare `.pdf` and `.html` read the content to choose: `marp: true` front matter
 or `---` slide separators mean deck, anything else means document. You cannot
-guess a sniff, so send `.slides.pdf` or `.doc.pdf` when the shape matters.
+guess a sniff, so send `.slides.pdf` or `.doc.pdf` when the mode matters.
 
 Attach `deck.md.pdf` to an email; send `deck.md.slides.html` when the recipient
 should click through the deck. The first PDF request after an upload can take a
