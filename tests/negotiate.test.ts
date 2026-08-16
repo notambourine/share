@@ -17,7 +17,7 @@ describe('acceptsHtml', () => {
 });
 
 describe('viewModeFor', () => {
-  it('image: shell for browsers, raw for hotlinks (R7, R8)', () => {
+  it('image: shell for browsers, raw for hotlinks', () => {
     expect(viewModeFor('shot.png', BROWSER, q())).toBe('shell-image');
     expect(viewModeFor('shot.png', IMG_TAG, q())).toBe('raw');
     expect(viewModeFor('shot.png', CURL, q())).toBe('raw');
@@ -33,13 +33,13 @@ describe('viewModeFor', () => {
     expect(viewModeFor('main.ts', CURL, q())).toBe('raw');
   });
 
-  it('markdown renders, ?slides runs the deck (R9)', () => {
+  it('markdown renders, ?slides runs the deck', () => {
     expect(viewModeFor('deck.md', BROWSER, q())).toBe('shell-md');
     expect(viewModeFor('deck.md', BROWSER, q('slides'))).toBe('shell-slides');
     expect(viewModeFor('deck.md', CURL, q())).toBe('raw');
   });
 
-  it('html is the page itself everywhere; ?view=source highlights (R10)', () => {
+  it('html is the page itself everywhere; ?view=source highlights', () => {
     expect(viewModeFor('index.html', BROWSER, q())).toBe('page');
     expect(viewModeFor('index.html', CURL, q())).toBe('page');
     expect(viewModeFor('index.html', BROWSER, q('view=source'))).toBe('shell-code');

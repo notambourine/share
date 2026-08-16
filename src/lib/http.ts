@@ -1,9 +1,10 @@
 export const ROBOTS = 'noindex, nofollow, noarchive, noimageindex';
 
-/** 10 minutes, so a revoke lands (R3). Private: client material skips shared caches. */
+/** 10 minutes, so a revoke lands. Private: client material skips shared caches. */
 export const CACHE = 'private, max-age=600';
 
-/** Self-only. Fonts and renderers are all vendored, so no origin is allowed out. */
+/* Self-only. Fonts and renderers are all vendored, so no origin is allowed out.
+   A Google Fonts @import would send every artifact URL to Google as a Referer. */
 export const SHELL_CSP = [
   "default-src 'none'",
   "script-src 'self'",

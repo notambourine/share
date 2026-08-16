@@ -94,7 +94,7 @@ describe('SHELL_CSP', () => {
 });
 
 describe('staticAsset', () => {
-  it('stamps x-robots-tag on a font, same as every other asset (R2)', async () => {
+  it('stamps x-robots-tag on a font, same as every other asset', async () => {
     const res = await staticAsset(new Request('https://s.test/fonts/nunito-latin-var.woff2'), envWith('woff2'));
     expect(res.headers.get('x-robots-tag')).toBe(ROBOTS);
     expect(res.headers.get('cache-control')).toBe('public, max-age=3600');

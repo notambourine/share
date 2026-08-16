@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* share: CLI for share.notambourine.com (R15).
+/* share: CLI for share.notambourine.com.
    Token comes from $SHARE_TOKEN; run under the op prefix so the secret never
    lands in a transcript ($SHARE_URL overrides the host for dev):
      SHARE_TOKEN=op://Employee/share-token/credential op run -- share ...

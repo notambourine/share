@@ -8,12 +8,12 @@ import { isExpired } from '../lib/r2';
 
 /**
  * GET /<space>/: Bearer only. Anonymous gets the same 404 as a missing page,
- * so a space never confirms its own existence (R6).
+ * so a space never confirms its own existence.
  */
 export async function listSpace(request: Request, env: Env, space: string): Promise<Response> {
   const auth = await authenticate(request, env);
   // A valid-signature session (live or expired) is a proven insider, so the
-  // scope refusal breaks no R6 anonymity; strangers still get the plain 404.
+  // scope refusal leaks nothing; strangers still get the plain 404.
   if (auth.session || auth.expired) return textResponse(SESSION_SCOPE_MSG, 401);
   if (!auth.name) return htmlResponse(errorShell(404), 404);
 

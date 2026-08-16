@@ -2,6 +2,9 @@
  * Signed-tier tokens: a path segment `/k/v1.<exp>.<sig>/`.
  * sig = base64url(HMAC-SHA256(key_v1, "<space>/<hash>|<exp>")) truncated to 128 bits.
  * The signature covers the upload prefix, so one token admits every file inside it.
+ *
+ * A path segment, never `?k=`: relative URLs drop a query string, so a signed
+ * index.html would 401 every ./style.css it loads. Same length either way.
  */
 
 const enc = new TextEncoder();
