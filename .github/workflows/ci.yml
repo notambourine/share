@@ -63,3 +63,51 @@ jobs:
       - run: npm test
 
       - run: npm run types
+
+  # Claude Code keys a plugin's cache dir by the `version` string in
+  # .claude-plugin/plugin.json, not by commit SHA (that fallback applies only to
+  # a manifest with no version). An installed 0.1.0 therefore never re-clones
+  # while main ships 0.1.0, and every consumer runs a frozen skill. This job is
+  # the only thing standing between an edit here and that silent staleness.
+  plugin-version:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The base branch has to be a real ref to diff against.
+          fetch-depth: 0
+
+      - env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE"
+
+          # The installed surface only. src/, public/, and tests/ ride the Worker
+          # deploy, which is fresh on every push and needs no bump.
+          changed=$(git diff --name-only "origin/$BASE...HEAD" -- skills bin .claude-plugin)
+          if [ -z "$changed" ]; then
+            echo "no change to the installed surface; no bump needed"
+            exit 0
+          fi
+
+          old=$(git show "origin/$BASE:.claude-plugin/plugin.json" | jq -r .version)
+          new=$(jq -r .version .claude-plugin/plugin.json)
+
+          if [ "$new" = "$old" ]; then
+            echo "::error file=.claude-plugin/plugin.json::installed surface changed but version is still $old - bump it"
+            printf '%s\n' "$changed" | sed 's/^/  /'
+            exit 1
+          fi
+
+          # A cache dir is never overwritten, so a version that goes sideways or
+          # backwards can land on a name someone already has and stay stale.
+          if [ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -1)" != "$new" ]; then
+            echo "::error file=.claude-plugin/plugin.json::version must go up: $old -> $new"
+            exit 1
+          fi
+
+          echo "version $old -> $new"

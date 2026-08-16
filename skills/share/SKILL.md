@@ -18,42 +18,51 @@ upload-only, and cached to a mode-0600 file - the same pattern as the AWS
 CLI's STS cache - so it stays out of the conversation too. Worst case for
 an exfiltrated copy: a few minutes of uploads, nothing else.
 
-## Session (do this first)
+## Session (your first tool call)
 
-Mint one session at the start; it is both the preflight and the only
-1Password unlock the whole conversation needs. The response lands in a
-mode-0600 cache file, so the token never appears in the conversation.
-Single quotes on the inner command matter: they keep your shell from
-expanding `$SHARE_TOKEN` to nothing before `op run` injects it.
+Run the mint before anything else - before reading the file you are about to
+share, and before any check that 1Password is installed, signed in, or holds
+the item. Assume it is all there. `op run` raises its own unlock prompt, and
+the 201 is the preflight: one call proves the vault path, the token, and the
+Worker. Never probe first with `op read`, `op whoami`, `op item get`,
+`op vault ls`, or `which op`; each costs a second unlock and proves nothing
+the mint does not. Single quotes on the inner command matter: they keep your
+shell from expanding `$SHARE_TOKEN` to nothing before `op run` injects it.
 
     mkdir -p ~/.cache/notambourine-share && chmod 700 ~/.cache/notambourine-share && \
+    umask 077 && \
     SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c \
       'curl -sS -X POST -H "Authorization: Bearer $SHARE_TOKEN" \
         https://share.notambourine.com/session' \
-      > ~/.cache/notambourine-share/session.json && \
-    chmod 600 ~/.cache/notambourine-share/session.json && \
-    jq '{name, expiresAt}' ~/.cache/notambourine-share/session.json
+      > ~/.cache/notambourine-share/session.json.tmp && \
+    jq -e .token ~/.cache/notambourine-share/session.json.tmp >/dev/null && \
+    mv ~/.cache/notambourine-share/session.json.tmp ~/.cache/notambourine-share/session.json && \
+    jq '{name, expiresAt}' ~/.cache/notambourine-share/session.json \
+    || cat ~/.cache/notambourine-share/session.json.tmp
 
-A success prints `{name, expiresAt}`; the token stays in the file. Every
-`put` reads it fresh, so it works in any later shell with no carrying.
-The commands assume a POSIX shell; on Windows run them in Git Bash (which
-Claude Code uses there), and the `~/.cache` path applies on every platform. A 401
-that says `session expired` means exactly that; re-run the mint (`?ttl=1h`
-stretches one for long batches). The session token authorizes `put` only -
-`sign`, `ls`, and `rm` are rarer and sharper, so each runs under the
-`op run` prefix with the vault token and costs its own unlock.
+A success prints `{name, expiresAt}`; the token stays in the mode-0600 file
+and never reaches the conversation. A failure prints the error instead - the
+`jq -e` guard catches a 200-shaped refusal, so a bad mint never overwrites a
+working session. Every `put` reads the file fresh, so it works in any later
+shell with no carrying. The commands assume a POSIX shell; on Windows run them
+in Git Bash (which Claude Code uses there), and the `~/.cache` path applies on
+every platform. A 401 that says `session expired` means exactly that; re-run
+the mint (`?ttl=1h` stretches one for long batches). The session token
+authorizes `put` only - `sign`, `ls`, and `rm` are rarer and sharper, so each
+runs under the `op run` prefix with the vault token and costs its own unlock.
 
-On failure, stop - do not attempt an upload, and never accept a raw vault
-token into the conversation:
+Diagnose from what the mint printed. Do not go probing, and never accept a raw
+vault token into the conversation:
 
-- `op read op://Employee/share-token/credential` fails -> one-time setup:
-  they get a token from whoever runs the share repo (minted by
-  `scripts/add-employee.sh`, delivered as a view-once 1Password link) and
-  save it per the Token section. Re-run the mint.
-- `op read` works but the mint returns `401 unauthorized` -> the Worker's
-  `TOKENS` secret has drifted from the vault (a rotation that was never
-  pasted). The share-repo admin re-runs `scripts/add-employee.sh --map`
-  and re-pastes the printed map into the Worker secret.
+- `op` reports the item or vault missing -> one-time setup: they get a token
+  from whoever runs the share repo (minted by `scripts/add-employee.sh`,
+  delivered as a view-once 1Password link) and save it per the Token section.
+  Re-run the mint.
+- the mint returns `401 unauthorized` -> the Worker's `TOKENS` secret has
+  drifted from the vault (a rotation that was never pasted). The share-repo
+  admin re-runs `scripts/add-employee.sh --map` and re-pastes the printed map
+  into the Worker secret.
+- anything else -> stop and report it; do not attempt an upload.
 
 ## Verbs
 
