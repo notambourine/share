@@ -11,7 +11,9 @@
 	"compatibility_flags": ["nodejs_compat"],
 	"main": "./src/worker.ts",
 	// src/skill.ts imports the plugin's SKILL.md and serves those exact bytes.
-	"rules": [{ "type": "Text", "globs": ["**/*.md"] }],
+	// src/brand.ts does the same for the golden set in upstream/nt-brand, so no
+	// brand stylesheet is ever copied into public/.
+	"rules": [{ "type": "Text", "globs": ["**/*.md", "**/*.css"] }],
 	"assets": {
 		"directory": "./public",
 		"binding": "ASSETS",

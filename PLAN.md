@@ -349,29 +349,35 @@ wrangler.jsonc         R2 + KV bindings, custom domain, cron trigger
 ## Brand coupling
 
 The brand's golden set is `notambourine/claude`, plugin `nt-brand`, skill
-`system`. This repo cannot fetch it at runtime - a self-only CSP forbids a CDN,
-and Workers Builds deploys the tree with no build step - so `public/tokens.css`,
-`public/vendor/marp/nt-marp.css`, and `public/fonts/*` are committed copies.
+`system`, pinned here as the `upstream/nt-brand` submodule.
 
-**A copy is only DRY if something fails when it drifts.** Three mechanisms, each
-catching a different drift:
+**The brand is not copied into this repo.** `src/brand.ts` imports `tokens.css`
+and `deck.css` out of the submodule through wrangler's `rules` Text loader, and
+the Worker serves them at `/tokens.css` and `/vendor/marp/nt-marp.css`. That is
+the same mechanism `src/skill.ts` uses for `SKILL.md`, for the same reason its
+header gives: an import makes drift impossible, where a copy under `public/`
+could only ever be detected after the fact. Bumping the pin is the entire
+update, so a Dependabot bump PR is complete on its own and green on its own.
 
-- `upstream/nt-brand` is a git submodule pinned to a commit of the golden set.
-  `npm run vendor:brand` copies out of it. Dependabot's `gitsubmodule` ecosystem
-  opens the bump PR, so an upstream correction arrives as a reviewable diff
-  rather than as a value nobody re-typed.
-- `npm run brand` re-runs that copy and then `git diff --exit-code -- public`.
-  A file edited in place fails CI. This is the whole byte contract, offline, so
-  no lock file records a hash that would itself go stale.
-- `scripts/brand-audit.mjs` reads every color out of `tokens.css` and fails any
-  other file naming a color outside that set. It covers what a byte-diff cannot:
-  `shell.css`, `print.css`, `nt-code.css`, `favicon.svg`, and the print footer in
-  `export.ts` are this repo's own CSS, and a hand-picked hex there renders close
-  enough to survive review.
+Three things could not be imports, and each has a check:
 
-A Dependabot bump PR goes red on the second mechanism until someone runs
-`npm run vendor:brand` on that branch. That is the intended signal, not a gap:
-the pointer and the bytes land in one commit or neither does.
+- **The fonts.** A static asset server is the right thing to serve a woff2, so
+  `public/fonts/*` is a real copy. `scripts/brand-audit.mjs` hashes it against
+  the submodule. Offline, no lock file, no network.
+- **This repo's own colors.** `shell.css`, `print.css`, `nt-code.css`,
+  `favicon.svg`, and the print footer in `export.ts` are share's CSS, not the
+  brand's. A hand-picked hex there compiles, renders close enough to fool a
+  reviewer, and survives a brand correction it should have followed. A literal
+  is allowed only where `tokens.css` names that exact color.
+- **The token contract.** `var(--x)` against a property the golden set no longer
+  defines is the failure with no symptom: CSS falls through to the fallback, or
+  to nothing, and the page still renders. The deck theme shipped for months
+  reading `var(--fg-mute)`, which `tokens.css` has never defined. This is what a
+  submodule bump has to clear.
+
+The Marpit render path is unchanged and stays here. Uploading markdown and
+getting a PDF link back with no local toolchain is the point of this service;
+only the theme's bytes moved.
 
 ## Build order
 
