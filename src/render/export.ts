@@ -11,7 +11,10 @@
 import type { PDFOptions } from '@cloudflare/puppeteer';
 import type { Env } from '../lib/types';
 import type { Shape } from '../lib/exportPath';
+import { DECK_THEME, BRAND_ROUTES } from '../brand';
 import { esc } from './shell';
+
+const TOKENS = BRAND_ROUTES['/tokens.css'];
 
 /** 1152x648 is 16:9 at the same aspect as Marpit's 1280x720 slide box. */
 const DECK_PAGE = { width: '1152px', height: '648px' };
@@ -64,7 +67,9 @@ const FACES: { file: string; family: string; style: string; weight: string }[] =
   { file: 'nunito-wordmark-800.woff2', family: 'Nunito', style: 'normal', weight: '800' },
 ];
 
-const SHEETS = ['/tokens.css', '/vendor/highlight/nt-code.css', '/print.css'];
+/* tokens.css is missing here because it is not an asset: src/brand.ts imports it
+   from the golden set and it is already a string in this bundle. */
+const SHEETS = ['/vendor/highlight/nt-code.css', '/print.css'];
 
 function base64(bytes: Uint8Array): string {
   let binary = '';
@@ -93,8 +98,8 @@ function buildStyle(env: Env, origin: string): Promise<string> {
       const b64 = base64(new Uint8Array(await res.arrayBuffer()));
       return `@font-face{font-family:'${f.family}';font-style:${f.style};font-weight:${f.weight};font-display:block;src:url(data:font/woff2;base64,${b64}) format('woff2');}`;
     }));
-    const sheets = await Promise.all(SHEETS.map((p) => asset(env, origin, p)));
-    /* tokens.css declares the same families against `/fonts/*.woff2`, which a
+    const sheets = [TOKENS, ...await Promise.all(SHEETS.map((p) => asset(env, origin, p)))];
+    /* tokens.css declares the same families against `./fonts/*.woff2`, which a
        snapshot opened from disk cannot reach. Drop those blocks and let the
        data: rules above stand alone. Safe while tokens.css keeps @font-face
        flat, which it does. */
@@ -157,7 +162,7 @@ export interface PrintOpts {
 export async function printHtml(env: Env, opts: PrintOpts): Promise<string> {
   const { origin, baseHref, title, markdown, shape } = opts;
   const style = await inlineStyle(env, origin);
-  const theme = shape === 'slides' ? await asset(env, origin, '/vendor/marp/nt-marp.css') : '';
+  const theme = shape === 'slides' ? DECK_THEME : '';
 
   /* An `@page` rule cannot be scoped to a class, so the page box is the one
      piece of print CSS that has to come from here rather than print.css. */

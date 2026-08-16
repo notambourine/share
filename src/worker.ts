@@ -10,13 +10,16 @@ import { del } from './routes/del';
 import { short } from './routes/short';
 import { session } from './routes/session';
 import { skillDoc } from './skill';
+import { brandSheet } from './brand';
 import { sweep } from './sweep';
 
-/* /SKILL.md is absent on purpose: src/skill.ts serves it from the bundle, so no
-   copy of the skill lives under public/. */
+/* Three paths are absent on purpose. /SKILL.md, /tokens.css, and
+   /vendor/marp/nt-marp.css are served from the bundle by src/skill.ts and
+   src/brand.ts, so no copy of the skill or the brand lives under public/.
+   shell.css and print.css are this repo's own chrome and stay static. */
 const STATIC = new Set([
   '/', '/index.html', '/robots.txt', '/llms.txt',
-  '/tokens.css', '/shell.css', '/print.css', '/render.js', '/favicon.svg', '/favicon.ico',
+  '/shell.css', '/print.css', '/render.js', '/favicon.svg', '/favicon.ico',
 ]);
 
 /* A space slug can never collide with these: isValidSpace rejects a leading
@@ -47,6 +50,11 @@ export default {
     if (path === '/SKILL.md') {
       return skillDoc();
     }
+
+    /* Ahead of isStatic: /vendor/marp/nt-marp.css sits under a static prefix,
+       and the bundle owns that URL now. */
+    const sheet = brandSheet(path);
+    if (sheet) return sheet;
 
     if (isStatic(path)) {
       return staticAsset(request, env);
