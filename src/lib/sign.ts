@@ -7,7 +7,12 @@
  * index.html would 401 every ./style.css it loads. Same length either way.
  */
 
+import { decodeTextMap } from './json';
+
 const enc = new TextEncoder();
+
+/** Key id ("v1") -> base64url secret. */
+export type SigningKeys = Readonly<Record<string, string>>;
 
 export function b64url(bytes: ArrayBuffer | Uint8Array): string {
   const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -28,8 +33,12 @@ async function sig(secret: string, prefix: string, exp: number): Promise<string>
   return b64url(new Uint8Array(mac).slice(0, 16));
 }
 
+export function parseSigningKeys(env: { SIGNING_KEYS: string }): SigningKeys | null {
+  return decodeTextMap(env.SIGNING_KEYS);
+}
+
 /** Numerically-highest key id mints; older ids only verify, so links age out on rotation. */
-export function mintKeyId(keys: Record<string, string>): string {
+export function mintKeyId(keys: SigningKeys): string {
   const ids = Object.keys(keys).filter((k) => /^v\d+$/.test(k));
   if (ids.length === 0) throw new Error('SIGNING_KEYS has no v<n> key');
   ids.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
@@ -38,7 +47,7 @@ export function mintKeyId(keys: Record<string, string>): string {
 
 /** exp is epoch seconds; 0 = no expiry, still signed. */
 export async function mintToken(
-  keys: Record<string, string>, prefix: string, exp: number,
+  keys: SigningKeys, prefix: string, exp: number,
 ): Promise<string> {
   const id = mintKeyId(keys);
   return `${id}.${exp}.${await sig(keys[id], prefix, exp)}`;
@@ -57,7 +66,7 @@ export interface VerifyResult {
 }
 
 export async function verifyToken(
-  keys: Record<string, string>, prefix: string, token: string, now: number,
+  keys: SigningKeys, prefix: string, token: string, now: number,
 ): Promise<VerifyResult> {
   const m = /^(v\d+)\.(\d+)\.([A-Za-z0-9_-]{22})$/.exec(token);
   if (!m) return { ok: false, reason: 'malformed' };

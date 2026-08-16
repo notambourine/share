@@ -16,7 +16,7 @@ export const CACHE_VERSION = 2;
 export type ExportFormat = 'slides-html' | 'html' | 'pdf' | 'slides-pdf' | 'doc-pdf';
 
 /** What the print HTML renders as. `slides` is one page per slide, `doc` is A4. */
-export type Shape = 'slides' | 'doc';
+export type RenderMode = 'slides' | 'doc';
 
 /* Longest first: `.slides.html` must not lose its tail to `.html`. */
 const SUFFIXES: [string, ExportFormat][] = [
@@ -56,8 +56,8 @@ export function resolveExport(paths: readonly string[], requested: string): Expo
   return paths.includes(parsed.source) ? parsed : null;
 }
 
-/** null means the format carries no shape of its own and the content decides. */
-export function explicitShape(format: ExportFormat): Shape | null {
+/** null means the format carries no mode of its own and the content decides. */
+export function explicitMode(format: ExportFormat): RenderMode | null {
   if (format === 'slides-html' || format === 'slides-pdf') return 'slides';
   if (format === 'doc-pdf') return 'doc';
   return null;
@@ -67,15 +67,20 @@ export function formatExt(format: ExportFormat): 'html' | 'pdf' {
   return format === 'slides-html' || format === 'html' ? 'html' : 'pdf';
 }
 
-/** Keyed by resolved shape, not by requested spelling, so `.pdf` and the
+/** Keyed by resolved mode, not by requested spelling, so `.pdf` and the
     explicit spelling it sniffs to share one cached object. */
 export function derivedKey(
-  space: string, hash: string, source: string, shape: Shape, ext: 'html' | 'pdf',
+  space: string, hash: string, source: string, mode: RenderMode, ext: 'html' | 'pdf',
 ): string {
-  return `${space}/${hash}/d/v${CACHE_VERSION}/${source}.${shape}.${ext}`;
+  return `${space}/${hash}/d/v${CACHE_VERSION}/${source}.${mode}.${ext}`;
 }
 
-function splitFrontMatter(markdown: string): { front: string; body: string } {
+interface FrontMatter {
+  front: string;
+  body: string;
+}
+
+function splitFrontMatter(markdown: string): FrontMatter {
   if (!/^---[ \t]*\r?\n/.test(markdown)) return { front: '', body: markdown };
   const end = /\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(markdown.slice(3));
   if (!end) return { front: '', body: markdown };

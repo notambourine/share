@@ -30,21 +30,21 @@ const STATIC_PREFIXES = ['/vendor/', '/fonts/', '/logo/'];
 
 /* A browser asks for these at the root whatever a page links, so they answer
    there too. Aliases, not copies: public/logo/ holds the only bytes. */
-const ROOT_ICONS: Record<string, string> = {
-  '/favicon.svg': '/logo/favicon.svg',
-  '/favicon.ico': '/logo/export/favicon.ico',
-  '/apple-touch-icon.png': '/logo/export/apple-touch-icon.png',
-  '/apple-touch-icon-precomposed.png': '/logo/export/apple-touch-icon.png',
-};
+const ROOT_ICONS = new Map([
+  ['/favicon.svg', '/logo/favicon.svg'],
+  ['/favicon.ico', '/logo/export/favicon.ico'],
+  ['/apple-touch-icon.png', '/logo/export/apple-touch-icon.png'],
+  ['/apple-touch-icon-precomposed.png', '/logo/export/apple-touch-icon.png'],
+]);
 
 export function isStatic(path: string): boolean {
   return STATIC.has(path)
-    || path in ROOT_ICONS
+    || ROOT_ICONS.has(path)
     || STATIC_PREFIXES.some((p) => path.startsWith(p));
 }
 
 export async function staticAsset(request: Request, env: Env): Promise<Response> {
-  const alias = ROOT_ICONS[new URL(request.url).pathname];
+  const alias = ROOT_ICONS.get(new URL(request.url).pathname);
   const req = alias ? new Request(new URL(alias, request.url), request) : request;
   const res = await env.ASSETS.fetch(req);
   const out = new Response(res.body, res);

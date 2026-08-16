@@ -88,39 +88,43 @@ export function kindOf(path: string): Kind {
   return 'other';
 }
 
-const TYPES: Record<string, string> = {
-  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp',
-  gif: 'image/gif', avif: 'image/avif', ico: 'image/x-icon', bmp: 'image/bmp',
-  svg: 'image/svg+xml',
-  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', m4v: 'video/mp4',
-  html: 'text/html; charset=utf-8', htm: 'text/html; charset=utf-8',
-  md: 'text/markdown; charset=utf-8', markdown: 'text/markdown; charset=utf-8',
-  css: 'text/css; charset=utf-8', js: 'text/javascript; charset=utf-8',
-  mjs: 'text/javascript; charset=utf-8', cjs: 'text/javascript; charset=utf-8',
-  json: 'application/json; charset=utf-8', jsonc: 'application/json; charset=utf-8',
-  txt: 'text/plain; charset=utf-8', csv: 'text/csv; charset=utf-8',
-  xml: 'application/xml; charset=utf-8', pdf: 'application/pdf',
-  yaml: 'text/plain; charset=utf-8', yml: 'text/plain; charset=utf-8',
-  zip: 'application/zip', gz: 'application/gzip', tar: 'application/x-tar',
-  woff2: 'font/woff2', woff: 'font/woff',
-  mp3: 'audio/mpeg', wav: 'audio/wav',
-};
+/* A Map, not an object: the key is whatever extension an upload carries, and a
+   lookup on an open dictionary would type as a hit that was never there. */
+const TYPES = new Map([
+  ['png', 'image/png'], ['jpg', 'image/jpeg'], ['jpeg', 'image/jpeg'], ['webp', 'image/webp'],
+  ['gif', 'image/gif'], ['avif', 'image/avif'], ['ico', 'image/x-icon'], ['bmp', 'image/bmp'],
+  ['svg', 'image/svg+xml'],
+  ['mp4', 'video/mp4'], ['webm', 'video/webm'], ['mov', 'video/quicktime'], ['m4v', 'video/mp4'],
+  ['html', 'text/html; charset=utf-8'], ['htm', 'text/html; charset=utf-8'],
+  ['md', 'text/markdown; charset=utf-8'], ['markdown', 'text/markdown; charset=utf-8'],
+  ['css', 'text/css; charset=utf-8'], ['js', 'text/javascript; charset=utf-8'],
+  ['mjs', 'text/javascript; charset=utf-8'], ['cjs', 'text/javascript; charset=utf-8'],
+  ['json', 'application/json; charset=utf-8'], ['jsonc', 'application/json; charset=utf-8'],
+  ['txt', 'text/plain; charset=utf-8'], ['csv', 'text/csv; charset=utf-8'],
+  ['xml', 'application/xml; charset=utf-8'], ['pdf', 'application/pdf'],
+  ['yaml', 'text/plain; charset=utf-8'], ['yml', 'text/plain; charset=utf-8'],
+  ['zip', 'application/zip'], ['gz', 'application/gzip'], ['tar', 'application/x-tar'],
+  ['woff2', 'font/woff2'], ['woff', 'font/woff'],
+  ['mp3', 'audio/mpeg'], ['wav', 'audio/wav'],
+]);
 
 export function contentTypeFor(path: string): string {
-  const ext = extOf(path);
-  if (TYPES[ext]) return TYPES[ext];
+  const type = TYPES.get(extOf(path));
+  if (type) return type;
   if (kindOf(path) === 'code') return 'text/plain; charset=utf-8';
   return 'application/octet-stream';
 }
+
+const UNIT_SECS = new Map([['m', 60], ['h', 3600], ['d', 86400], ['w', 604800]]);
 
 /** "90d" | "12h" | "30m" | "forever" -> seconds (0 = forever). null = unparseable. */
 export function parseDuration(raw: string): number | null {
   if (raw === 'forever') return 0;
   const m = /^(\d+)([mhdw])$/.exec(raw);
   if (!m) return null;
-  const n = Number(m[1]);
-  const unit = { m: 60, h: 3600, d: 86400, w: 604800 }[m[2] as 'm' | 'h' | 'd' | 'w'];
-  const secs = n * unit;
+  const unit = UNIT_SECS.get(m[2]);
+  if (unit === undefined) return null;
+  const secs = Number(m[1]) * unit;
   if (secs <= 0 || secs > 100 * 365 * 86400) return null;
   return secs;
 }

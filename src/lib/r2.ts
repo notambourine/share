@@ -1,14 +1,59 @@
-import type { Env, Meta } from './types';
+import type { Env, Meta, MetaFile } from './types';
 import { TRASH_PREFIX } from './types';
+import type { JsonObject } from './json';
+import { numberAt, parseObject, recordsAt, textAt } from './json';
+
+function decodeFile(record: JsonObject): MetaFile | null {
+  const path = textAt(record, 'path');
+  const size = numberAt(record, 'size');
+  const type = textAt(record, 'type');
+  return path !== null && size !== null && type !== null ? { path, size, type } : null;
+}
+
+/**
+ * meta.json is this Worker's own record, and it still gets decoded: a partial
+ * write or an older field set would otherwise reach the router as a `Meta` that
+ * lies, and the router is what decides whether a link needs a signature.
+ */
+export function decodeMeta(text: string): Meta | null {
+  const record = parseObject(text);
+  if (!record) return null;
+
+  const space = textAt(record, 'space');
+  const hash = textAt(record, 'hash');
+  const tier = textAt(record, 'tier');
+  const uploader = textAt(record, 'uploader');
+  const createdAt = numberAt(record, 'createdAt');
+  const lastAccess = numberAt(record, 'lastAccess');
+  const files = recordsAt(record, 'files');
+  if (space === null || hash === null || uploader === null || tier === null) return null;
+  if (createdAt === null || lastAccess === null || files === null) return null;
+
+  const decoded: MetaFile[] = [];
+  for (const file of files) {
+    const one = decodeFile(file);
+    if (!one) return null;
+    decoded.push(one);
+  }
+
+  return {
+    space,
+    hash,
+    // Anything but the literal `open` demands a token: fail toward the lock.
+    tier: tier === 'open' ? 'open' : 'signed',
+    uploader,
+    createdAt,
+    lastAccess,
+    expiresAt: numberAt(record, 'expiresAt'),
+    idleTtl: numberAt(record, 'idleTtl'),
+    files: decoded,
+  };
+}
 
 export async function readMeta(env: Env, space: string, hash: string): Promise<Meta | null> {
   const obj = await env.BUCKET.get(`${space}/${hash}/meta.json`);
   if (!obj) return null;
-  try {
-    return await obj.json<Meta>();
-  } catch {
-    return null;
-  }
+  return decodeMeta(await obj.text());
 }
 
 export function isExpired(meta: Meta, nowSecs: number): boolean {

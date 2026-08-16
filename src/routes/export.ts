@@ -8,8 +8,8 @@
 
 import type { Env, Meta } from '../lib/types';
 import {
-  type ExportFormat, type Shape,
-  explicitShape, formatExt, derivedKey, sniffDeck,
+  type ExportFormat, type RenderMode,
+  explicitMode, formatExt, derivedKey, sniffDeck,
 } from '../lib/exportPath';
 import { render, type Artifacts } from '../lib/pdf';
 import { printHtml, pdfOptionsFor } from '../render/export';
@@ -46,12 +46,12 @@ function downloadName(source: string, ext: 'html' | 'pdf'): string {
   return `${baseName(source)}.${ext}`;
 }
 
-async function store(env: Env, space: string, hash: string, source: string, shape: Shape, out: Artifacts): Promise<void> {
+async function store(env: Env, space: string, hash: string, source: string, mode: RenderMode, out: Artifacts): Promise<void> {
   await Promise.all([
-    env.BUCKET.put(derivedKey(space, hash, source, shape, 'html'), out.html, {
+    env.BUCKET.put(derivedKey(space, hash, source, mode, 'html'), out.html, {
       httpMetadata: { contentType: 'text/html; charset=utf-8' },
     }),
-    env.BUCKET.put(derivedKey(space, hash, source, shape, 'pdf'), out.pdf, {
+    env.BUCKET.put(derivedKey(space, hash, source, mode, 'pdf'), out.pdf, {
       httpMetadata: { contentType: 'application/pdf' },
     }),
   ]);
@@ -60,7 +60,7 @@ async function store(env: Env, space: string, hash: string, source: string, shap
 /** One page load, both artifacts, both stored. Null means the browser was
     unreachable and the caller degrades. */
 async function produce(
-  env: Env, space: string, hash: string, source: string, shape: Shape, markdown: string, url: URL,
+  env: Env, space: string, hash: string, source: string, mode: RenderMode, markdown: string, url: URL,
 ): Promise<Artifacts | null> {
   if (!env.BROWSER) {
     console.log('export: no BROWSER binding');
@@ -75,25 +75,25 @@ async function produce(
       baseHref: `${url.origin}${dir}`,
       title,
       markdown,
-      shape,
+      mode,
     });
   } catch (err) {
     console.log(`export: print HTML failed: ${err}`);
     return null;
   }
-  const out = await render(env.BROWSER, html, pdfOptionsFor(shape, title));
-  if (out) await store(env, space, hash, source, shape, out);
+  const out = await render(env.BROWSER, html, pdfOptionsFor(mode, title));
+  if (out) await store(env, space, hash, source, mode, out);
   return out;
 }
 
 /** Rate limit hit, budget spent, or no binding: hand back the live client-side
     shell. A missing PDF is a worse day than a broken one. */
-function degrade(target: ExportTarget, shape: Shape): Response {
+function degrade(target: ExportTarget, mode: RenderMode): Response {
   const { url, source, size } = target;
   const dir = url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1);
   const rawHref = `${url.origin}${dir}${encodeURI(source)}?raw`;
   console.log(`export: render unavailable, serving the live shell for ${url.pathname}`);
-  return htmlResponse(fileShell(shape === 'slides' ? 'slides' : 'md', source, rawHref, size));
+  return htmlResponse(fileShell(mode === 'slides' ? 'slides' : 'md', source, rawHref, size));
 }
 
 export async function exportArtifact(
@@ -109,24 +109,24 @@ export async function exportArtifact(
   }
 
   const ext = formatExt(format);
-  let shape = explicitShape(format);
+  let mode = explicitMode(format);
   let markdown: string | null = null;
 
-  if (!shape) {
+  if (!mode) {
     markdown = await readSource(env, space, hash, source);
     if (markdown === null) return htmlResponse(errorShell(404), 404);
-    shape = sniffDeck(markdown) ? 'slides' : 'doc';
+    mode = sniffDeck(markdown) ? 'slides' : 'doc';
   }
 
-  const key = derivedKey(space, hash, source, shape, ext);
+  const key = derivedKey(space, hash, source, mode, ext);
   const name = downloadName(source, ext);
   if (await env.BUCKET.head(key)) return serveDerived(request, env, key, name, ext);
 
   if (markdown === null) markdown = await readSource(env, space, hash, source);
   if (markdown === null) return htmlResponse(errorShell(404), 404);
 
-  const out = await produce(env, space, hash, source, shape, markdown, url);
-  if (!out) return degrade(target, shape);
+  const out = await produce(env, space, hash, source, mode, markdown, url);
+  if (!out) return degrade(target, mode);
 
   return serveDerived(request, env, key, name, ext);
 }
@@ -157,9 +157,9 @@ export async function prerender(env: Env, url: URL, meta: Meta): Promise<void> {
   for (const file of take) {
     const text = await readSource(env, meta.space, meta.hash, file.path);
     if (text === null) continue;
-    const shape: Shape = sniffDeck(text) ? 'slides' : 'doc';
+    const mode: RenderMode = sniffDeck(text) ? 'slides' : 'doc';
     const at = new URL(`${url.origin}/${meta.space}/${meta.hash}/${encodeURI(file.path)}`);
-    const out = await produce(env, meta.space, meta.hash, file.path, shape, text, at);
+    const out = await produce(env, meta.space, meta.hash, file.path, mode, text, at);
     if (!out) {
       console.log(`prerender: ${meta.space}/${meta.hash}/${file.path} deferred to on demand`);
       return; // the budget is account-wide; the next file would fail the same way

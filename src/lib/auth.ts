@@ -1,4 +1,6 @@
-import { constantTimeEqual, mintToken, verifyToken } from './sign';
+import type { SigningKeys } from './sign';
+import { constantTimeEqual, mintToken, parseSigningKeys, verifyToken } from './sign';
+import { decodeTextMap } from './json';
 import { now } from './http';
 
 const enc = new TextEncoder();
@@ -16,7 +18,7 @@ export const SESSION_DEFAULT_SECS = 300;
 export const SESSION_MAX_SECS = 3600;
 
 export async function mintSession(
-  keys: Record<string, string>, name: string, exp: number,
+  keys: SigningKeys, name: string, exp: number,
 ): Promise<string> {
   return `${name}.${await mintToken(keys, `session:${name}`, exp)}`;
 }
@@ -33,14 +35,10 @@ export async function authenticateRaw(
   const m = h && /^Bearer\s+(\S+)$/.exec(h);
   if (!m) return null;
   const digest = await sha256hex(m[1]);
-  let map: Record<string, string>;
-  try {
-    map = JSON.parse(tokensJson);
-  } catch {
-    return null;
-  }
+  const map = decodeTextMap(tokensJson);
+  if (!map) return null;
   for (const [name, hash] of Object.entries(map)) {
-    if (typeof hash === 'string' && constantTimeEqual(hash.toLowerCase(), digest)) return name;
+    if (constantTimeEqual(hash.toLowerCase(), digest)) return name;
   }
   return null;
 }
@@ -48,7 +46,8 @@ export async function authenticateRaw(
 export interface AuthResult {
   name: string | null;
   /** Authenticated by a session token. Only /up honors these: a session in an
-      exfilled transcript or env must not be able to list, sign, or delete. */
+      exfilled transcript or env must not be able to list, delete, or sign an
+      artifact it did not just create. */
   session?: boolean;
   /** A well-signed session failed only on time. Say so in the 401: the caller
       should mint a new session, not walk the token-drift runbook. */
@@ -70,10 +69,7 @@ export async function authenticate(
   const sess = SESSION_RE.exec(m[1]);
   if (sess) {
     const [, name, token] = sess;
-    let keys: Record<string, string> | null = null;
-    try {
-      keys = JSON.parse(env.SIGNING_KEYS);
-    } catch { /* fall through to the raw map */ }
+    const keys = parseSigningKeys(env); // null falls through to the raw map
     if (keys) {
       const v = await verifyToken(keys, `session:${name}`, token, now());
       // exp=0 means "forever" in the link grammar; a session must always expire.

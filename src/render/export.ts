@@ -10,19 +10,17 @@
 
 import type { PDFOptions } from '@cloudflare/puppeteer';
 import type { Env } from '../lib/types';
-import type { Shape } from '../lib/exportPath';
-import { DECK_THEME, BRAND_ROUTES, LOCKUP } from '../brand';
+import type { RenderMode } from '../lib/exportPath';
+import { DECK_THEME, TOKENS, LOCKUP } from '../brand';
 import { esc } from './shell';
-
-const TOKENS = BRAND_ROUTES['/tokens.css'];
 
 /** 1152x648 is 16:9 at the same aspect as Marpit's 1280x720 slide box. */
 const DECK_PAGE = { width: '1152px', height: '648px' };
 
 const DOC_MARGIN = { top: '18mm', right: '16mm', bottom: '20mm', left: '16mm' };
 
-export function pdfOptionsFor(shape: Shape, title: string): PDFOptions {
-  if (shape === 'slides') {
+export function pdfOptionsFor(mode: RenderMode, title: string): PDFOptions {
+  if (mode === 'slides') {
     return {
       ...DECK_PAGE,
       printBackground: true,
@@ -125,8 +123,8 @@ const HLJS = '/vendor/highlight/highlight.min.js';
 const MARKED = '/vendor/marked/marked.min.js';
 const MARPIT = '/vendor/marp/marpit.js';
 
-function renderScript(shape: Shape): string {
-  const body = shape === 'slides'
+function renderScript(mode: RenderMode): string {
+  const body = mode === 'slides'
     ? `var m=new Marpit.Marpit({inlineSVG:true,markdown:['default',{html:true,linkify:true}]});
 try{m.themeSet.default=m.themeSet.add(THEME);}catch(e){}
 var out=m.render(MD);
@@ -149,25 +147,25 @@ export interface PrintOpts {
   baseHref: string;
   title: string;
   markdown: string;
-  shape: Shape;
+  mode: RenderMode;
 }
 
 export async function printHtml(env: Env, opts: PrintOpts): Promise<string> {
-  const { origin, baseHref, title, markdown, shape } = opts;
+  const { origin, baseHref, title, markdown, mode } = opts;
   const style = await inlineStyle(env, origin);
-  const theme = shape === 'slides' ? DECK_THEME : '';
+  const theme = mode === 'slides' ? DECK_THEME : '';
 
   /* An `@page` rule cannot be scoped to a class, so the page box is the one
      piece of print CSS that has to come from here rather than print.css. */
-  const page = shape === 'slides'
+  const page = mode === 'slides'
     ? `@page{size:${DECK_PAGE.width} ${DECK_PAGE.height};margin:0;}`
     : `@page{size:A4;margin:${DOC_MARGIN.top} ${DOC_MARGIN.right} ${DOC_MARGIN.bottom} ${DOC_MARGIN.left};}`;
 
   /* On `html`, not `body`: tokens.css paints the dark canvas on `html`, and a
      `.theme-light` below it leaves that background on the paper. */
-  const rootClass = shape === 'slides' ? 'print-deck' : 'print-doc theme-light';
-  const mark = shape === 'slides' ? '' : `<header class="print-mark">${LOCKUP}</header>\n`;
-  const scripts = shape === 'slides' ? [HLJS, MARPIT] : [HLJS, MARKED];
+  const rootClass = mode === 'slides' ? 'print-deck' : 'print-doc theme-light';
+  const mark = mode === 'slides' ? '' : `<header class="print-mark">${LOCKUP}</header>\n`;
+  const scripts = mode === 'slides' ? [HLJS, MARPIT] : [HLJS, MARKED];
 
   return `<!doctype html>
 <html lang="en" class="${rootClass}">
@@ -184,7 +182,7 @@ ${scripts.map((s) => `<script data-transient src="${origin}${s}"></script>`).joi
 <script data-transient>
 var MD=${jsLiteral(markdown)};
 var THEME=${jsLiteral(theme)};
-${renderScript(shape)}
+${renderScript(mode)}
 </script>
 </body>
 </html>`;

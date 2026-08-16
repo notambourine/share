@@ -7,10 +7,12 @@
 import type { MetaFile } from '../lib/types';
 import { LOCKUP } from '../brand';
 
+const ESCAPES = new Map([
+  ['&', '&amp;'], ['<', '&lt;'], ['>', '&gt;'], ['"', '&quot;'], ["'", '&#39;'],
+]);
+
 export function esc(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
-  ));
+  return s.replace(/[&<>"']/g, (c) => ESCAPES.get(c) ?? c);
 }
 
 export function fmtSize(n: number): string {

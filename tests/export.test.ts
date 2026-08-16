@@ -2,40 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { Env, Meta, MetaFile } from '../src/lib/types';
 import { serve } from '../src/routes/serve';
 import { derivedKey } from '../src/lib/exportPath';
+import { DEFERRED, testEnv } from './bindings';
 
 const SPACE = 'acme';
 const HASH = 'Xk92mQ7bTp01';
 const DECK = '# One\n\ntext\n\n---\n\n# Two\n';
-
-const enc = new TextEncoder();
-
-/** Enough R2 for the serve path: meta read, cache probe, byte serve. */
-function stubEnv(objects: Record<string, string>): Env {
-  const at = (key: string) => {
-    const v = objects[key];
-    if (v === undefined) return null;
-    const bytes = enc.encode(v);
-    return {
-      body: new Response(bytes).body,
-      httpEtag: `"${bytes.byteLength}"`,
-      size: bytes.byteLength,
-      text: async () => v,
-      json: async () => JSON.parse(v),
-    };
-  };
-  return {
-    BUCKET: {
-      get: async (key: string) => at(key),
-      head: async (key: string) => at(key),
-      put: async (key: string, value: unknown) => { objects[key] = String(value); },
-    },
-    ASSETS: { fetch: async () => new Response('') },
-    TOKENS: '{}',
-    SIGNING_KEYS: '{}',
-  } as unknown as Env;
-}
-
-const CTX = { waitUntil: () => { /* nothing to await in a test */ }, passThroughOnException: () => {} } as unknown as ExecutionContext;
 
 function metaFor(files: MetaFile[]): string {
   const meta: Meta = {
@@ -47,11 +18,13 @@ function metaFor(files: MetaFile[]): string {
 
 const MD_FILE: MetaFile = { path: 'deck.md', size: DECK.length, type: 'text/markdown; charset=utf-8' };
 
-function world(extra: Record<string, string> = {}, files: MetaFile[] = [MD_FILE]) {
-  return stubEnv({
-    [`${SPACE}/${HASH}/meta.json`]: metaFor(files),
-    [`${SPACE}/${HASH}/f/deck.md`]: DECK,
-    ...extra,
+function world(extra: Record<string, string> = {}, files: MetaFile[] = [MD_FILE]): Env {
+  return testEnv({
+    objects: {
+      [`${SPACE}/${HASH}/meta.json`]: metaFor(files),
+      [`${SPACE}/${HASH}/f/deck.md`]: DECK,
+      ...extra,
+    },
   });
 }
 
@@ -62,7 +35,7 @@ function get(path: string, accept = BROWSER): Request {
 }
 
 const ask = (env: Env, path: string, accept?: string) =>
-  serve(get(path, accept), env, CTX, SPACE, HASH, null, path);
+  serve(get(path, accept), env, DEFERRED, SPACE, HASH, null, path);
 
 describe('format suffixes', () => {
   it('serves a cached PDF, and the suffix outranks Accept', async () => {
@@ -74,9 +47,9 @@ describe('format suffixes', () => {
     expect(await res.text()).toBe('PDFBYTES');
   });
 
-  it('sniffs deck content to the slides shape on a bare .pdf', async () => {
+  it('sniffs deck content to the slides mode on a bare .pdf', async () => {
     const env = world({ [derivedKey(SPACE, HASH, 'deck.md', 'doc', 'pdf')]: 'DOC' });
-    // Only the doc-shaped object exists, and the sniff wants the slides one.
+    // Only the doc object exists, and the sniff wants the slides one.
     const res = await ask(env, 'deck.md.pdf');
     expect(res.headers.get('content-type')).not.toBe('application/pdf');
   });

@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   verify:
-    # The windows and macos legs exist for bin/share.mjs: employees run the CLI
+    # The windows and macos legs exist for bin/share.ts: employees run the CLI
     # and the session cache on those boxes, and only a real runner proves the
     # fs paths. ubuntu stays as the cheapest fast-feedback leg.
     strategy:
@@ -58,7 +58,7 @@ jobs:
       - run: npm run brand
         if: matrix.os == 'ubuntu-latest'
 
-      - run: npm run lint
+      - run: npm run oxlint
 
       - run: npm test
 

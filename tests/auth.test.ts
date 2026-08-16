@@ -75,10 +75,10 @@ describe('session tokens', () => {
     expect(await authenticateRaw(req(`Bearer ${tok}`), e.TOKENS)).toBeNull();
   });
 
-  it('a raw token shaped like a session still reaches the map', async () => {
-    const shaped = 'tom.v1.99.aaaaaaaaaaaaaaaaaaaaaa';
-    const e = await env({ tom: shaped });
-    expect((await authenticate(req(`Bearer ${shaped}`), e)).name).toBe('tom');
+  it('a raw token that looks like a session still reaches the map', async () => {
+    const sessionLike = 'tom.v1.99.aaaaaaaaaaaaaaaaaaaaaa';
+    const e = await env({ tom: sessionLike });
+    expect((await authenticate(req(`Bearer ${sessionLike}`), e)).name).toBe('tom');
   });
 });
 

@@ -16,7 +16,7 @@ assets intact.
 
 A markdown URL also takes a format suffix: `deck.md.pdf` for a branded PDF,
 `deck.md.html` for a self-contained page that opens from a mail attachment,
-`deck.md.slides.pdf` and `deck.md.doc.pdf` to name the shape yourself.
+`deck.md.slides.pdf` and `deck.md.doc.pdf` to name the mode yourself.
 
 ## How it holds together
 
@@ -37,8 +37,9 @@ A markdown URL also takes a format suffix: `deck.md.pdf` for a branded PDF,
 ## API
 
 `GET /llms.txt` documents everything in plain text. `GET /SKILL.md` is a
-drop-in Claude skill. `bin/share.mjs` is the CLI (`put`, `sign`, `short`,
-`ls`, `rm`).
+drop-in Claude skill. `bin/share.ts` is the CLI (`install`, `session`, `put`,
+`sign`, `short`, `ls`, `rm`); `install` writes a `nt-share` shim onto PATH that
+re-resolves the newest plugin copy, so the skill can call it by name.
 
 A consumer carries only a stub, so the hosted skill stays the single source
 of truth and never drifts. `GET /SKILL.md` is served from the bundle rather
@@ -103,7 +104,8 @@ header is the runbook.
 ```
 npm ci
 npm test        # vitest: signing, path safety, negotiation, auth
-npm run types   # tsc --noEmit
+npm run oxlint  # oxlint plus the vendored anti-slop rules in tools/oxlint/
+npm run types   # tsc --noEmit, Worker and CLI (bin/ runs as .ts, node 22.18+ strips the types)
 npm run vendor  # refresh public/vendor/, fonts/, and logo/ after bumping a pin
 npm run brand   # gate: those copies match upstream/brand-kit, colors and tokens too
 ```
