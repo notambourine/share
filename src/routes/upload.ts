@@ -1,19 +1,13 @@
 import type { Env, Meta, MetaFile, Tier } from '../lib/types';
-import { DEFAULT_ARTIFACT_DAYS } from '../lib/types';
+import { DEFAULT_ARTIFACT_DAYS, DEFAULT_LINK_DAYS } from '../lib/types';
 import { genSlug, normalizeUploadPath, contentTypeFor, isValidSpace, parseDuration } from '../lib/keys';
 import { authenticate, SESSION_EXPIRED_MSG } from '../lib/auth';
+import { parseSigningKeys } from '../lib/sign';
+import { mintArtifactLink, publicUrl } from '../lib/link';
 import { prerender } from './export';
 import { jsonResponse, textResponse, wantsJson, now } from '../lib/http';
 
 const MAX_FILES = 200;
-
-export function publicUrl(origin: string, meta: Meta): string {
-  const base = `${origin}/${meta.space}/${meta.hash}/`;
-  if (meta.files.length === 1 && meta.files[0].path !== 'index.html') {
-    return base + encodeURI(meta.files[0].path);
-  }
-  return base;
-}
 
 function artifactDays(env: Env, space: string): number {
   try {
@@ -40,6 +34,21 @@ export async function upload(
     return textResponse('tier must be open or signed\n', 400);
   }
   const tier: Tier = tierParam;
+
+  /* Signing your own fresh upload spends no authority the upload did not, so a
+     session token covers both and the signed tier costs one 1Password unlock. */
+  let linkExp = 0;
+  let keys: Record<string, string> | null = null;
+  const short = url.searchParams.has('short');
+  if (tier === 'signed') {
+    const signParam = url.searchParams.get('sign');
+    const secs = signParam ? parseDuration(signParam) : DEFAULT_LINK_DAYS * 86400;
+    if (secs === null) return textResponse('bad sign duration\n', 400);
+    linkExp = secs === 0 ? 0 : t + secs;
+    // Before a byte lands: a stored artifact with no link is a dead end.
+    keys = parseSigningKeys(env);
+    if (!keys) return textResponse('signing keys misconfigured\n', 500);
+  }
 
   let expiresAt: number | null;
   let idleTtl: number | null = null;
@@ -102,8 +111,14 @@ export async function upload(
   }));
 
   const link = publicUrl(url.origin, meta);
+  const signed = keys && await mintArtifactLink(env, keys, url.origin, meta, linkExp, t, short);
+
   if (wantsJson(request)) {
-    return jsonResponse({ url: link, hash, tier, expiresAt, files: files.map((f) => f.path) }, 201);
+    return jsonResponse({
+      url: link, hash, tier, expiresAt, files: files.map((f) => f.path),
+      ...(signed && { signedUrl: signed.url, signedExp: signed.exp, short: signed.short }),
+    }, 201);
   }
-  return textResponse(`${link}\n`, 201);
+  // The bare URL 401s on a signed artifact, so the signed one is the answer.
+  return textResponse(`${signed ? signed.url : link}\n`, 201);
 }

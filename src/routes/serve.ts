@@ -1,6 +1,6 @@
 import type { Env, Meta, MetaFile } from '../lib/types';
 import { readMeta, isExpired } from '../lib/r2';
-import { verifyToken } from '../lib/sign';
+import { parseSigningKeys, verifyToken } from '../lib/sign';
 import { viewModeFor } from '../lib/negotiate';
 import { resolveExport } from '../lib/exportPath';
 import { exportArtifact } from './export';
@@ -25,12 +25,8 @@ export async function serve(
 
   if (meta.tier === 'signed') {
     if (!token) return htmlResponse(errorShell(401), 401);
-    let keys: Record<string, string>;
-    try {
-      keys = JSON.parse(env.SIGNING_KEYS);
-    } catch {
-      return htmlResponse(errorShell(401), 401);
-    }
+    const keys = parseSigningKeys(env);
+    if (!keys) return htmlResponse(errorShell(401), 401);
     const v = await verifyToken(keys, `${space}/${hash}`, token, t);
     if (!v.ok) return htmlResponse(errorShell(401), 401);
   }

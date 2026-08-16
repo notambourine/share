@@ -1,6 +1,7 @@
 import type { Env } from '../lib/types';
 import { authenticateRaw, mintSession, SESSION_DEFAULT_SECS, SESSION_MAX_SECS } from '../lib/auth';
 import { parseDuration } from '../lib/keys';
+import { parseSigningKeys } from '../lib/sign';
 import { jsonResponse, now } from '../lib/http';
 
 /**
@@ -23,12 +24,8 @@ export async function session(request: Request, env: Env): Promise<Response> {
     secs = parsed;
   }
 
-  let keys: Record<string, string>;
-  try {
-    keys = JSON.parse(env.SIGNING_KEYS);
-  } catch {
-    return jsonResponse({ error: 'signing keys misconfigured' }, 500);
-  }
+  const keys = parseSigningKeys(env);
+  if (!keys) return jsonResponse({ error: 'signing keys misconfigured' }, 500);
 
   const expiresAt = now() + secs;
   const token = await mintSession(keys, name, expiresAt);

@@ -30,11 +30,13 @@ Returns 201 {token, name, expiresAt}. ttl defaults to 5m (?ttl=, cap 1h).
 Convention: write the response to ~/.cache/notambourine-share/session.json
 (mode 0600) and read the token from there per upload, AWS-STS-cache style,
 so the token never enters a transcript or shell history.
-The session token authorizes /up only: sign, list, and delete still need the
-vault token, and a session cannot mint another session, so an exfiltrated
-session token caps at a few minutes of uploads. A 401 here means the server
-rejects your vault token itself. An expired session 401s with "session
-expired" on upload; mint a new one and retry.
+The session token authorizes /up only: list, delete, and signing an older
+artifact still need the vault token, and a session cannot mint another
+session, so an exfiltrated session token caps at a few minutes of uploads.
+A signed-tier upload returns its own link (see Upload), because signing what
+you just created spends no authority beyond the upload itself. A 401 here
+means the server rejects your vault token itself. An expired session 401s
+with "session expired" on upload; mint a new one and retry.
 
 ## Upload
 
@@ -49,8 +51,14 @@ Query parameters:
   tier=open|signed   default open; signed requires a minted /k/ token to view
   ttl=<dur>|forever  fixed artifact expiry, default 90d (e.g. 7d, 12h, 4w)
   idle=<dur>         expire this long after last access instead of a fixed date
+  sign=<dur>|forever signed tier only: link life, default 30d
+  short              signed tier only: also mint a /z/<id> shortlink
 
-## Mint a signed link
+A signed-tier upload returns the signed link, not the bare one, because the
+bare one 401s. With `Accept: application/json` it comes back as signedUrl,
+signedExp, and short, alongside url and hash.
+
+## Re-sign an older artifact
 
     curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
       -H "Content-Type: application/json" \

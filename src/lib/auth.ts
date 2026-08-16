@@ -1,4 +1,4 @@
-import { constantTimeEqual, mintToken, verifyToken } from './sign';
+import { constantTimeEqual, mintToken, parseSigningKeys, verifyToken } from './sign';
 import { now } from './http';
 
 const enc = new TextEncoder();
@@ -48,7 +48,8 @@ export async function authenticateRaw(
 export interface AuthResult {
   name: string | null;
   /** Authenticated by a session token. Only /up honors these: a session in an
-      exfilled transcript or env must not be able to list, sign, or delete. */
+      exfilled transcript or env must not be able to list, delete, or sign an
+      artifact it did not just create. */
   session?: boolean;
   /** A well-signed session failed only on time. Say so in the 401: the caller
       should mint a new session, not walk the token-drift runbook. */
@@ -70,10 +71,7 @@ export async function authenticate(
   const sess = SESSION_RE.exec(m[1]);
   if (sess) {
     const [, name, token] = sess;
-    let keys: Record<string, string> | null = null;
-    try {
-      keys = JSON.parse(env.SIGNING_KEYS);
-    } catch { /* fall through to the raw map */ }
+    const keys = parseSigningKeys(env); // null falls through to the raw map
     if (keys) {
       const v = await verifyToken(keys, `session:${name}`, token, now());
       // exp=0 means "forever" in the link grammar; a session must always expire.

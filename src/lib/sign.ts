@@ -28,6 +28,15 @@ async function sig(secret: string, prefix: string, exp: number): Promise<string>
   return b64url(new Uint8Array(mac).slice(0, 16));
 }
 
+export function parseSigningKeys(env: { SIGNING_KEYS: string }): Record<string, string> | null {
+  try {
+    const keys: unknown = JSON.parse(env.SIGNING_KEYS);
+    return keys && typeof keys === 'object' ? keys as Record<string, string> : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Numerically-highest key id mints; older ids only verify, so links age out on rotation. */
 export function mintKeyId(keys: Record<string, string>): string {
   const ids = Object.keys(keys).filter((k) => /^v\d+$/.test(k));

@@ -3,7 +3,7 @@ import { authenticate, SESSION_SCOPE_MSG } from '../lib/auth';
 import { readMeta } from '../lib/r2';
 import { jsonResponse, htmlResponse, textResponse, now } from '../lib/http';
 import { errorShell } from '../render/shell';
-import { publicUrl } from './upload';
+import { publicUrl } from '../lib/link';
 import { isExpired } from '../lib/r2';
 
 /**
