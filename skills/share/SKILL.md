@@ -14,26 +14,34 @@ Two tokens exist. The **vault token** lives in 1Password (Employee vault,
 item `share-token`, field `credential`) and never enters a transcript, a
 query string, or a commit. The **session token** is what uploads use:
 short-lived (5 minutes by default, 1 hour cap), minted from the vault token,
-upload-only, and safe to hold in the conversation because an exfiltrated
-copy can add files for a few minutes and nothing else.
+upload-only, and cached to a mode-0600 file - the same pattern as the AWS
+CLI's STS cache - so it stays out of the conversation too. Worst case for
+an exfiltrated copy: a few minutes of uploads, nothing else.
 
 ## Session (do this first)
 
 Mint one session at the start; it is both the preflight and the only
-1Password unlock the whole conversation needs. Single quotes on the inner
-command matter: they keep your shell from expanding `$SHARE_TOKEN` to
-nothing before `op run` injects it.
+1Password unlock the whole conversation needs. The response lands in a
+mode-0600 cache file, so the token never appears in the conversation.
+Single quotes on the inner command matter: they keep your shell from
+expanding `$SHARE_TOKEN` to nothing before `op run` injects it.
 
+    mkdir -p ~/.cache/notambourine-share && chmod 700 ~/.cache/notambourine-share && \
     SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c \
       'curl -sS -X POST -H "Authorization: Bearer $SHARE_TOKEN" \
-        https://share.notambourine.com/session'
+        https://share.notambourine.com/session' \
+      > ~/.cache/notambourine-share/session.json && \
+    chmod 600 ~/.cache/notambourine-share/session.json && \
+    jq '{name, expiresAt}' ~/.cache/notambourine-share/session.json
 
-A `201` returns `{token, name, expiresAt}`. Each shell command runs fresh, so
-carry the `token` value forward yourself: substitute it for `$SHARE_SESSION`
-in each `put`. A 401 that says `session expired` means exactly that; mint a
-new one (`?ttl=1h` stretches one for long batches). The session token
-authorizes `put` only - `sign`, `ls`, and `rm` are rarer and sharper, so each
-runs under the `op run` prefix with the vault token and costs its own unlock.
+A success prints `{name, expiresAt}`; the token stays in the file. Every
+`put` reads it fresh, so it works in any later shell with no carrying.
+The commands assume a POSIX shell; on Windows run them in Git Bash (which
+Claude Code uses there), and the `~/.cache` path applies on every platform. A 401
+that says `session expired` means exactly that; re-run the mint (`?ttl=1h`
+stretches one for long batches). The session token authorizes `put` only -
+`sign`, `ls`, and `rm` are rarer and sharper, so each runs under the
+`op run` prefix with the vault token and costs its own unlock.
 
 On failure, stop - do not attempt an upload, and never accept a raw vault
 token into the conversation:
@@ -49,18 +57,17 @@ token into the conversation:
 
 ## Verbs
 
-`$SHARE_SESSION` stands for the literal `token` value from the mint and only
-works on `put`. The other verbs use `$SHARE_TOKEN` and run under the same
-`op run` prefix as the mint.
+`put` reads the cached session; the other verbs use `$SHARE_TOKEN` and run
+under the same `op run` prefix as the mint.
 
 **put**: one file or a whole folder (relative paths survive; an `index.html`
 makes the link serve as a real page):
 
-    curl -sS -H "Authorization: Bearer $SHARE_SESSION" \
+    curl -sS -H "Authorization: Bearer $(jq -r .token ~/.cache/notambourine-share/session.json)" \
       -F f=@report.png https://share.notambourine.com/up/<space>
 
     # folder: one -F per file, filename carries the relative path
-    curl -sS -H "Authorization: Bearer $SHARE_SESSION" \
+    curl -sS -H "Authorization: Bearer $(jq -r .token ~/.cache/notambourine-share/session.json)" \
       -F 'f=@dist/index.html;filename=index.html' \
       -F 'f=@dist/app.js;filename=app.js' \
       https://share.notambourine.com/up/<space>
