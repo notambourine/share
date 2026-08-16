@@ -10,44 +10,57 @@ render; curl, `<img src>`, and Slack unfurls get raw bytes from the same URL.
 
 ## Token
 
-`SHARE_TOKEN` resolves from 1Password by `op://` reference. Never echo it,
-never put it in a query string, never commit it. The convention: every team
-member keeps their token in their built-in Employee vault as an item titled
-`share-token` with the value in a field named `credential`, so one reference
-works for everyone and nothing lives on disk. Run every verb below under
-this prefix; `op run` resolves the reference from the environment and the
-secret exists only inside the wrapped command:
+Two tokens exist. The **vault token** lives in 1Password (Employee vault,
+item `share-token`, field `credential`) and never enters a transcript, a
+query string, or a commit. The **session token** is what uploads use:
+short-lived (5 minutes by default, 1 hour cap), minted from the vault token,
+upload-only, and safe to hold in the conversation because an exfiltrated
+copy can add files for a few minutes and nothing else.
 
-    SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c '<verb>'
+## Session (do this first)
 
-Single quotes on the inner command matter: they keep your shell from
-expanding `$SHARE_TOKEN` to nothing before `op run` injects it.
+Mint one session at the start; it is both the preflight and the only
+1Password unlock the whole conversation needs. Single quotes on the inner
+command matter: they keep your shell from expanding `$SHARE_TOKEN` to
+nothing before `op run` injects it.
 
-## Preflight
+    SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c \
+      'curl -sS -X POST -H "Authorization: Bearer $SHARE_TOKEN" \
+        https://share.notambourine.com/session'
 
-Before the first verb, confirm the machine is wired:
+A `201` returns `{token, name, expiresAt}`. Each shell command runs fresh, so
+carry the `token` value forward yourself: substitute it for `$SHARE_SESSION`
+in each `put`. A 401 that says `session expired` means exactly that; mint a
+new one (`?ttl=1h` stretches one for long batches). The session token
+authorizes `put` only - `sign`, `ls`, and `rm` are rarer and sharper, so each
+runs under the `op run` prefix with the vault token and costs its own unlock.
 
-    op read op://Employee/share-token/credential >/dev/null 2>&1 && echo ready
+On failure, stop - do not attempt an upload, and never accept a raw vault
+token into the conversation:
 
-If not ready, stop and walk the user through one-time setup. Do not attempt
-an upload, and never accept a raw token into the conversation:
-
-1. They get a token from whoever runs the share repo (minted by
-   `scripts/add-employee.sh`, delivered as a view-once 1Password link).
-2. They save it per the Token section above (Employee vault, item
-   `share-token`, field `credential`).
-3. Re-run the check.
+- `op read op://Employee/share-token/credential` fails -> one-time setup:
+  they get a token from whoever runs the share repo (minted by
+  `scripts/add-employee.sh`, delivered as a view-once 1Password link) and
+  save it per the Token section. Re-run the mint.
+- `op read` works but the mint returns `401 unauthorized` -> the Worker's
+  `TOKENS` secret has drifted from the vault (a rotation that was never
+  pasted). The share-repo admin re-runs `scripts/add-employee.sh --map`
+  and re-pastes the printed map into the Worker secret.
 
 ## Verbs
+
+`$SHARE_SESSION` stands for the literal `token` value from the mint and only
+works on `put`. The other verbs use `$SHARE_TOKEN` and run under the same
+`op run` prefix as the mint.
 
 **put**: one file or a whole folder (relative paths survive; an `index.html`
 makes the link serve as a real page):
 
-    curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
+    curl -sS -H "Authorization: Bearer $SHARE_SESSION" \
       -F f=@report.png https://share.notambourine.com/up/<space>
 
     # folder: one -F per file, filename carries the relative path
-    curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
+    curl -sS -H "Authorization: Bearer $SHARE_SESSION" \
       -F 'f=@dist/index.html;filename=index.html' \
       -F 'f=@dist/app.js;filename=app.js' \
       https://share.notambourine.com/up/<space>
@@ -56,7 +69,7 @@ Options: `?tier=signed` (viewing needs a minted key), `?ttl=7d|forever`
 (default 90d), `?idle=14d` (expire after inactivity instead).
 Add `-H "Accept: application/json"` for `{url, hash, files}`.
 
-**sign**: mint a time-boxed link for a signed-tier artifact:
+**sign**: mint a time-boxed link for a signed-tier artifact (vault token):
 
     curl -sS -H "Authorization: Bearer $SHARE_TOKEN" -H "Content-Type: application/json" \
       -d '{"path":"<space>/<hash>","ttl":"30d"}' https://share.notambourine.com/sign

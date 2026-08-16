@@ -1,7 +1,7 @@
 import type { Env, Meta } from '../lib/types';
-import { authenticate } from '../lib/auth';
+import { authenticate, SESSION_SCOPE_MSG } from '../lib/auth';
 import { readMeta } from '../lib/r2';
-import { jsonResponse, htmlResponse, now } from '../lib/http';
+import { jsonResponse, htmlResponse, textResponse, now } from '../lib/http';
 import { errorShell } from '../render/shell';
 import { publicUrl } from './upload';
 import { isExpired } from '../lib/r2';
@@ -11,8 +11,11 @@ import { isExpired } from '../lib/r2';
  * so a space never confirms its own existence (R6).
  */
 export async function listSpace(request: Request, env: Env, space: string): Promise<Response> {
-  const who = await authenticate(request, env.TOKENS);
-  if (!who) return htmlResponse(errorShell(404), 404);
+  const auth = await authenticate(request, env);
+  // A valid-signature session (live or expired) is a proven insider, so the
+  // scope refusal breaks no R6 anonymity; strangers still get the plain 404.
+  if (auth.session || auth.expired) return textResponse(SESSION_SCOPE_MSG, 401);
+  if (!auth.name) return htmlResponse(errorShell(404), 404);
 
   const origin = new URL(request.url).origin;
   const t = now();

@@ -4,6 +4,13 @@
    lands in a transcript ($SHARE_URL overrides the host for dev):
      SHARE_TOKEN=op://Employee/share-token/credential op run -- share ...
 
+   Uploading more than one thing? Mint a session first (one 1Password unlock),
+   then run every put with the printed short-lived token instead of op. The
+   session token is upload-only; sign, ls, and rm still take the vault token:
+     SHARE_TOKEN=op://Employee/share-token/credential op run -- share session
+     SHARE_TOKEN=<printed token> share put ...
+
+   share session [--ttl 5m]   (max 1h; also the preflight: 401 = server rejects your vault token)
    share put <space> <file|dir ...> [--ttl 90d|forever] [--ttl-idle 7d] [--tier signed]
    share sign <space>/<hash> [--ttl 30d] [--short]
    share short <space>/<hash> [--ttl 30d]
@@ -60,6 +67,11 @@ async function api(path, init = {}) {
     },
   });
   const text = await res.text();
+  if (res.status === 401) {
+    if (text.includes('session expired')) die(`401 ${text.trim()}\nRe-run \`share session\` (under op run) and retry with the fresh token.`);
+    if (text.includes('only authorizes /up')) die(`401 ${text.trim()}`);
+    die(`401 ${text.trim()}\nThe server rejects this token. If op read works, the Worker TOKENS map has drifted from the vault: re-run scripts/add-employee.sh --map and re-paste it (rotate first if the token ever leaked).`);
+  }
   if (!res.ok) die(`${res.status} ${text.trim()}`);
   return text;
 }
@@ -68,6 +80,13 @@ const { pos, flags } = parseArgs(process.argv.slice(2));
 const [cmd, ...rest] = pos;
 
 switch (cmd) {
+  case 'session': {
+    const q = flags.ttl ? `?ttl=${flags.ttl}` : '';
+    const json = JSON.parse(await api(`/session${q}`, { method: 'POST' }));
+    console.log(json.token);
+    console.error(`session for ${json.name}, expires ${new Date(json.expiresAt * 1000).toISOString()}`);
+    break;
+  }
   case 'put': {
     const [space, ...paths] = rest;
     if (!space || paths.length === 0) die('usage: share put <space> <file|dir ...>');
@@ -118,5 +137,5 @@ switch (cmd) {
     break;
   }
   default:
-    die('commands: put, sign, short, ls, rm; see https://share.notambourine.com/llms.txt');
+    die('commands: session, put, sign, short, ls, rm; see https://share.notambourine.com/llms.txt');
 }

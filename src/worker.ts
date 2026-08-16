@@ -8,6 +8,7 @@ import { mint } from './routes/mint';
 import { listSpace } from './routes/list';
 import { del } from './routes/del';
 import { short } from './routes/short';
+import { session } from './routes/session';
 import { skillDoc } from './skill';
 import { sweep } from './sweep';
 
@@ -67,6 +68,11 @@ export default {
     if (segs[0] === 'sign' && segs.length === 1) {
       if (request.method !== 'POST') return textResponse('POST only\n', 405);
       return mint(request, env);
+    }
+
+    if (segs[0] === 'session' && segs.length === 1) {
+      if (request.method !== 'POST') return textResponse('POST only\n', 405);
+      return session(request, env);
     }
 
     if (segs[0] === 'z' && segs.length === 2 && request.method === 'GET') {

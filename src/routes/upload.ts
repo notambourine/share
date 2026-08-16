@@ -1,7 +1,7 @@
 import type { Env, Meta, MetaFile, Tier } from '../lib/types';
 import { DEFAULT_ARTIFACT_DAYS } from '../lib/types';
 import { genSlug, normalizeUploadPath, contentTypeFor, isValidSpace, parseDuration } from '../lib/keys';
-import { authenticate } from '../lib/auth';
+import { authenticate, SESSION_EXPIRED_MSG } from '../lib/auth';
 import { prerender } from './export';
 import { jsonResponse, textResponse, wantsJson, now } from '../lib/http';
 
@@ -27,8 +27,9 @@ function artifactDays(env: Env, space: string): number {
 export async function upload(
   request: Request, env: Env, ctx: ExecutionContext, space: string,
 ): Promise<Response> {
-  const uploader = await authenticate(request, env.TOKENS);
-  if (!uploader) return textResponse('unauthorized\n', 401);
+  const auth = await authenticate(request, env);
+  if (!auth.name) return textResponse(auth.expired ? SESSION_EXPIRED_MSG : 'unauthorized\n', 401);
+  const uploader = auth.name;
   if (!isValidSpace(space)) return textResponse('invalid space name\n', 400);
 
   const url = new URL(request.url);

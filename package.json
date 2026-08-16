@@ -1,12 +1,11 @@
 {
   "name": "share",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "test": "vitest run",
     "vendor": "node scripts/vendor.mjs",
-    "vendor:skills": "node scripts/vendor-skills.mjs",
     "lint": "oxlint --deny-warnings",
     "types": "tsc --noEmit"
   },
