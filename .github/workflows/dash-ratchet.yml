@@ -24,5 +24,9 @@ jobs:
     with:
       # Upstream bundles mirrored byte-for-byte. Rewriting a dash here forks the
       # copy from upstream, and the next re-vendor would raise the total again.
+      # Same reason for the vendored skills: their merge base must stay byte-identical
+      # to upstream, and a rewritten dash conflicts on every `vendor:skills pull`.
       exclude: |
         public/vendor
+        vendor/pristine
+        .claude/skills

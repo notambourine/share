@@ -6,6 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "vendor": "node scripts/vendor.mjs",
+    "vendor:skills": "node scripts/vendor-skills.mjs",
     "lint": "oxlint --deny-warnings",
     "types": "tsc --noEmit"
   },
