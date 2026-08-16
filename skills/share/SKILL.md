@@ -12,6 +12,7 @@ render; curl, `<img src>`, and Slack unfurls get raw bytes from the same URL.
 
     nt-share put <space> <file|dir ...> [--tier signed] [--ttl 90d|forever]
                                         [--ttl-idle 14d] [--sign-ttl 30d] [--short]
+    nt-share put <space> --clip [--name shot.png]        # the image on the clipboard
     nt-share sign <space>/<hash> [--ttl 30d] [--short]   # re-sign an older artifact
     nt-share ls <space>
     nt-share rm <space>/<hash>                           # revoke; lands within 10 min
@@ -19,6 +20,12 @@ render; curl, `<img src>`, and Slack unfurls get raw bytes from the same URL.
 `put` prints the URL to hand over - the signed one when the tier is signed, so
 there is no second call. A folder keeps its relative paths, and one with an
 `index.html` serves as a real page.
+
+`--clip` uploads the image sitting on the OS clipboard as a PNG, no file on
+disk: use it when someone says "share this screenshot" and names no path. It
+reads the clipboard of the machine the CLI runs on, so it does nothing for an
+image pasted into this conversation - write that to a file and upload the file.
+"no image on the clipboard" means the copy did not take; say so and stop.
 
 Run the verb you need and nothing else. The CLI raises the 1Password prompt
 itself, caches a short-lived upload token in a mode-0600 file, and re-mints it
