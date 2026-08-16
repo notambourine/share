@@ -2,7 +2,6 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "ignorePatterns": [
     "node_modules/**",
-    "public/vendor/**",
-    ".claude/skills/**"
+    "public/vendor/**"
   ]
 }

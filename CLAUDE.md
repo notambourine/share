@@ -16,12 +16,8 @@
   `src/styles/theme.css`; change there first, then mirror.
 - `skills/share/SKILL.md` is the only copy of the skill. `src/skill.ts` imports
   it to serve `/SKILL.md`; never add a copy under `public/`.
-- `skills/` is the published plugin surface; `.claude/skills/` is dev-only and
-  never ships. Put a third-party skill only in `.claude/skills/`, and add it by
-  appending to `vendor/skills.json` then running `npm run vendor:skills pull`.
-  Vendor the whole upstream directory, never a lone `SKILL.md`: these skills link
-  to siblings. Never hand-edit `vendor/pristine/`, `vendor/NOTICE.md`, or a
-  manifest `sha`/`files`: they are the merge base that keeps local edits from
-  being overwritten on the next pull.
+- `skills/` is the published plugin surface, and this repo holds no other
+  skills. Never vendor a third-party skill tree here; that machinery lives in
+  its own repo.
 - Never generate or echo a raw bearer token in a session; that is terminal-only
   work via `scripts/add-employee.sh`.

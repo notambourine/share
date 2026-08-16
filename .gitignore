@@ -7,7 +7,7 @@ node_modules/
 
 # ~/.gitignore excludes .claude/ everywhere, and git will not descend into an
 # excluded directory, so re-including one child needs all three lines.
-# .claude/skills/ holds vendored dev skills that CI verifies and clones need.
+# settings.json carries repo policy: silenced lights.
 !.claude/
 .claude/*
-!.claude/skills/
+!.claude/settings.json
