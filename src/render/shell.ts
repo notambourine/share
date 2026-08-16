@@ -18,6 +18,13 @@ export function fmtSize(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/* The golden set's icons, served out of public/logo/. No manifest link here:
+   these pages are one client artifact apiece, and a manifest would offer to
+   install them as the NoTambourine app. index.html is the surface that owns it. */
+const ICONS = `<link rel="icon" href="/logo/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/logo/export/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/logo/export/apple-touch-icon.png">`;
+
 interface PageOpts {
   title: string;
   body: string;
@@ -35,7 +42,7 @@ function layout({ title, body, head = '', bodyAttrs = '' }: PageOpts): string {
 <title>${esc(title)} · notambourine</title>
 <link rel="stylesheet" href="/tokens.css">
 <link rel="stylesheet" href="/shell.css">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+${ICONS}
 ${head}
 </head>
 <body${bodyAttrs}>

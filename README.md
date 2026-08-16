@@ -107,7 +107,8 @@ header is the runbook.
 npm ci
 npm test        # vitest: signing, path safety, negotiation, auth
 npm run types   # tsc --noEmit
-npm run vendor  # refresh public/vendor/ after bumping a pinned renderer
+npm run vendor  # refresh public/vendor/, fonts/, and logo/ after bumping a pin
+npm run brand   # gate: those copies match upstream/brand-kit, colors and tokens too
 ```
 
 Deploys ride Cloudflare Workers Builds on push to `main`; there is no manual

@@ -8,6 +8,11 @@ const envWith = (body: string) => ({
   ASSETS: { fetch: async () => new Response(body, { headers: { 'content-type': 'font/woff2' } }) },
 } as unknown as Env);
 
+/** Echoes back the path ASSETS was asked for, which is what an alias changes. */
+const envEcho = () => ({
+  ASSETS: { fetch: async (r: Request) => new Response(new URL(r.url).pathname) },
+} as unknown as Env);
+
 describe('isStatic', () => {
   it('serves the self-hosted fonts, so no page falls back to Google', () => {
     expect(isStatic('/fonts/nunito-latin-var.woff2')).toBe(true);
@@ -20,6 +25,15 @@ describe('isStatic', () => {
     expect(isStatic('/shell.css')).toBe(true);
     expect(isStatic('/vendor/marp/marpit.js')).toBe(true);
     expect(isStatic('/')).toBe(true);
+  });
+
+  it('serves the logo, and the root paths a browser asks for unprompted', () => {
+    expect(isStatic('/logo/favicon.svg')).toBe(true);
+    expect(isStatic('/logo/export/apple-touch-icon.png')).toBe(true);
+    expect(isStatic('/logo/site.webmanifest')).toBe(true);
+    expect(isStatic('/favicon.svg')).toBe(true);
+    expect(isStatic('/favicon.ico')).toBe(true);
+    expect(isStatic('/apple-touch-icon.png')).toBe(true);
   });
 
   /* isStatic still says yes to the deck theme's URL because it sits under
@@ -85,5 +99,19 @@ describe('staticAsset', () => {
     expect(res.headers.get('x-robots-tag')).toBe(ROBOTS);
     expect(res.headers.get('cache-control')).toBe('public, max-age=3600');
     expect(res.headers.get('content-type')).toBe('font/woff2');
+  });
+
+  /* public/logo/ holds the only bytes, so a root icon has to be rewritten
+     rather than copied. A copy is what would drift on the next kit bump. */
+  it('rewrites a root icon onto the golden set, and passes everything else through', async () => {
+    const at = async (path: string) => (
+      await staticAsset(new Request(`https://s.test${path}`), envEcho())
+    ).text();
+    expect(await at('/favicon.svg')).toBe('/logo/favicon.svg');
+    expect(await at('/favicon.ico')).toBe('/logo/export/favicon.ico');
+    expect(await at('/apple-touch-icon.png')).toBe('/logo/export/apple-touch-icon.png');
+    expect(await at('/apple-touch-icon-precomposed.png')).toBe('/logo/export/apple-touch-icon.png');
+    expect(await at('/logo/favicon.svg')).toBe('/logo/favicon.svg');
+    expect(await at('/shell.css')).toBe('/shell.css');
   });
 });

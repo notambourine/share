@@ -16,8 +16,11 @@
   imports `tokens.css` and `deck.css` from it and the Worker serves them at
   `/tokens.css` and `/vendor/marp/nt-marp.css`. Never add a copy under
   `public/`; correct a brand value in that repo and bump the pin.
-- `public/fonts/*` is the one brand copy, because a static server should serve
-  a woff2. `npm run vendor` refreshes it.
+- `public/fonts/*` and `public/logo/*` are the only brand copies, because a
+  static server should serve a woff2, a png, and an .ico. `npm run vendor`
+  refreshes both from the submodule; never hand-edit or hand-add a file there.
+- Icons come from `public/logo/`. `/favicon.svg`, `/favicon.ico`, and
+  `/apple-touch-icon.png` are Worker aliases onto it, never second copies.
 - Every color in this repo must be one the golden set defines, including inside
   a `var()` fallback, and every `var(--x)` must read a token it still declares.
   `npm run brand` is the gate and CI runs it.

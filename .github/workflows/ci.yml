@@ -43,10 +43,10 @@ jobs:
       # workerd binaries are only used by `npm run vendor` and deploys.
       - run: npm ci --ignore-scripts
 
-      # The brand contract, and the gate on a submodule bump PR: the fonts
-      # match the golden set, every color is one it defines, and every var()
-      # reads a token it still declares. ubuntu only - the font hashes would
-      # trip on CRLF if the windows runner rewrote a text file.
+      # The brand contract, and the gate on a submodule bump PR: public/fonts/
+      # and public/logo/ match the golden set file for file, every color is one
+      # it defines, and every var() reads a token it still declares. ubuntu only
+      # - the hashes would trip on CRLF if the windows runner rewrote a text file.
       - run: npm run brand
         if: matrix.os == 'ubuntu-latest'
 

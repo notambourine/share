@@ -24,7 +24,7 @@ describe('space and hash validation', () => {
     expect(isValidSpace('sara-2')).toBe(true);
   });
   it('rejects reserved router names', () => {
-    for (const r of ['up', 'sign', 'z', 'vendor', 'robots.txt']) {
+    for (const r of ['up', 'sign', 'z', 'vendor', 'robots.txt', 'logo', 'fonts']) {
       expect(isValidSpace(r)).toBe(false);
     }
   });

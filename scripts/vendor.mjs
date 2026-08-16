@@ -1,5 +1,5 @@
 /* Copies pinned renderer builds out of node_modules into public/vendor/, and
-   the brand's font binaries out of the `upstream/brand-kit` submodule.
+   the brand's fonts and logo out of the `upstream/brand-kit` submodule.
 
    Run after bumping a pinned version in package.json or the submodule. The
    output is committed, because Workers Builds deploys the tree as it stands and
@@ -8,20 +8,21 @@
 
    tokens.css and the deck theme are deliberately absent. src/brand.ts imports
    those from the submodule and the Worker serves them out of the bundle, so
-   they are never copied and can never drift. Only the woff2 files are copied,
-   because a static asset server is the right thing to serve a font and a font
-   is an upstream artifact rather than a brand decision. scripts/brand-audit.mjs
-   hashes them against the submodule to keep that copy honest. */
+   they are never copied and can never drift. Fonts and logo files are copied
+   because a static asset server is the right thing to serve a woff2, a png, and
+   an .ico, and a browser fetches `/logo/favicon.svg` on its own before any
+   bundle code runs. scripts/brand-audit.mjs hashes both against the submodule
+   to keep that copy honest. */
 import { copyFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { root, fontPairs } from './brand.mjs';
+import { root, brandCopies } from './brand.mjs';
 
 const COPIES = [
   ['node_modules/@highlightjs/cdn-assets/highlight.min.js', 'public/vendor/highlight/highlight.min.js'],
   ['node_modules/marked/lib/marked.umd.js', 'public/vendor/marked/marked.min.js'],
 ];
 
-for (const [from, to] of [...COPIES, ...await fontPairs()]) {
+for (const [from, to] of [...COPIES, ...await brandCopies()]) {
   await mkdir(join(root, dirname(to)), { recursive: true });
   await copyFile(join(root, from), join(root, to));
   console.log(`${from} -> ${to}`);
