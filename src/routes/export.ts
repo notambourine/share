@@ -139,8 +139,8 @@ async function exportPage(request: Request, env: Env, target: ExportTarget): Pro
   return rawBytes(request, env, key, name, false);
 }
 
-function storePage(env: Env, space: string, hash: string, source: string, out: PageArtifacts): Promise<unknown> {
-  return Promise.all([
+async function storePage(env: Env, space: string, hash: string, source: string, out: PageArtifacts): Promise<void> {
+  await Promise.all([
     env.BUCKET.put(derivedKey(space, hash, source, 'page', 'pdf'), out.pdf, {
       httpMetadata: { contentType: 'application/pdf' },
     }),
