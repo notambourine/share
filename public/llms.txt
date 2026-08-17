@@ -56,7 +56,10 @@ Query parameters:
 
 A signed-tier upload returns the signed link, not the bare one, because the
 bare one 401s. With `Accept: application/json` it comes back as signedUrl,
-signedExp, and short, alongside url and hash.
+signedExp, and short, alongside url and hash. The JSON answer also carries
+adminUrl and adminExp: the artifact's admin link (see Admin link), live for
+5 minutes, for the uploader only - never a link to hand over. The plain-text
+answer stays the one hand-over URL.
 
 ## Re-sign an older artifact
 
@@ -73,7 +76,8 @@ short:true also mints a /z/<id> shortlink that 302s to the signed URL.
     curl -sS -X POST -H "Authorization: Bearer $SHARE_TOKEN" \
       https://share.notambourine.com/<space>/<hash>/admin
 
-Returns {url, exp}: the artifact's admin link, live for 5 minutes. The url
+Returns {url, exp}: the artifact's admin link, live for 5 minutes. Upload
+mints one too (adminUrl in its JSON answer); this route re-opens it. The url
 carries ?c=<token>, a credential scoped to exactly this artifact's config and
 delete routes - it is not a view token and never belongs in a link you hand
 over. It authorizes two writes:

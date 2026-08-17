@@ -5,6 +5,7 @@ import { authenticate, SESSION_EXPIRED_MSG } from '../lib/auth';
 import type { SigningKeys } from '../lib/sign';
 import { parseSigningKeys } from '../lib/sign';
 import { mintArtifactLink, publicUrl } from '../lib/link';
+import { mintAdminLink } from '../lib/admin';
 import { writeMeta } from '../lib/r2';
 import { prerender } from './export';
 import { decodeNumberMap } from '../lib/json';
@@ -40,9 +41,12 @@ export async function upload(
   const tier: Tier = tierParam;
 
   /* Signing your own fresh upload spends no authority the upload did not, so a
-     session token covers both and the signed tier costs one 1Password unlock. */
+     session token covers both and the signed tier costs one 1Password unlock.
+     Keys parse for every tier: the admin link mints from the same set. Missing
+     keys only block the signed tier - an open upload still lands, just without
+     its admin link. */
   let linkExp = 0;
-  let keys: SigningKeys | null = null;
+  const keys: SigningKeys | null = parseSigningKeys(env);
   const short = url.searchParams.has('short');
   if (tier === 'signed') {
     const signParam = url.searchParams.get('sign');
@@ -50,7 +54,6 @@ export async function upload(
     if (secs === null) return textResponse('bad sign duration\n', 400);
     linkExp = secs === 0 ? 0 : t + secs;
     // Before a byte lands: a stored artifact with no link is a dead end.
-    keys = parseSigningKeys(env);
     if (!keys) return textResponse('signing keys misconfigured\n', 500);
   }
 
@@ -114,12 +117,16 @@ export async function upload(
   }));
 
   const link = publicUrl(url.origin, meta);
-  const signed = keys && await mintArtifactLink(env, keys, url.origin, meta, linkExp, t, short);
+  const signed = tier === 'signed' && keys
+    ? await mintArtifactLink(env, keys, url.origin, meta, linkExp, t, short) : null;
+  // The sender's second link: TTL chips and delete, live 5 minutes from now.
+  const admin = keys && await mintAdminLink(keys, url.origin, space, hash, t);
 
   if (wantsJson(request)) {
     return jsonResponse({
       url: link, hash, tier, expiresAt, files: files.map((f) => f.path),
       ...(signed && { signedUrl: signed.url, signedExp: signed.exp, short: signed.short }),
+      ...(admin && { adminUrl: admin.url, adminExp: admin.exp }),
     }, 201);
   }
   // The bare URL 401s on a signed artifact, so the signed one is the answer.

@@ -33,13 +33,18 @@ async function sig(secret: string, prefix: string, exp: number): Promise<string>
   return b64url(new Uint8Array(mac).slice(0, 16));
 }
 
+const KEY_ID = /^v\d+$/;
+
 export function parseSigningKeys(env: { SIGNING_KEYS: string }): SigningKeys | null {
-  return decodeTextMap(env.SIGNING_KEYS);
+  const keys = decodeTextMap(env.SIGNING_KEYS);
+  // No v<n> key can mint or verify anything, so an empty map is the same
+  // misconfiguration as an unparseable one, answered the same way.
+  return keys && Object.keys(keys).some((k) => KEY_ID.test(k)) ? keys : null;
 }
 
 /** Numerically-highest key id mints; older ids only verify, so links age out on rotation. */
 export function mintKeyId(keys: SigningKeys): string {
-  const ids = Object.keys(keys).filter((k) => /^v\d+$/.test(k));
+  const ids = Object.keys(keys).filter((k) => KEY_ID.test(k));
   if (ids.length === 0) throw new Error('SIGNING_KEYS has no v<n> key');
   ids.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
   return ids[ids.length - 1];
