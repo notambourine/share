@@ -107,7 +107,7 @@ link dies within 10 minutes (cache lifetime).
 
 The same URL renders for browsers and serves raw bytes to everything else
 (curl, <img src>, Slack unfurls). Overrides: ?raw forces bytes, ?view forces
-the branded shell, ?slides renders markdown as a deck, ?view=source shows
+the branded shell, ?view=source shows
 uploaded HTML highlighted instead of executed.
 
 Decks render with Marp. --- splits slides, and Marp directives apply:
@@ -116,20 +116,25 @@ them. Arrow keys move between slides and the #n fragment links to one.
 
 ## Formats
 
-Append a suffix to a markdown share URL for a branded export. A suffix decides
-the output on its own, so Accept gets no vote, and a file uploaded under the
-suffixed name always wins over the export.
+Swap a markdown share URL's extension for a branded export: uploaded
+`deck.md`, ask for `deck.pdf`. A suffix decides the output on its own, so
+Accept gets no vote, and a file uploaded under the suffixed name always wins
+over the export.
 
-    deck.md                 branded document, rendered in the browser
-    deck.md.slides.html     branded deck, rendered in the browser (same as ?slides)
-    deck.md.html            self-contained page: fonts inlined, opens offline
-    deck.md.pdf             PDF, deck or document decided from the content
-    deck.md.slides.pdf      PDF, always a deck
-    deck.md.doc.pdf         PDF, always a document
+    deck.md              branded document, rendered in the browser
+    deck.txt             the source, text/plain, always
+    deck.html            self-contained page: fonts inlined, opens offline; deck or document from the content
+    deck.slides.html     self-contained deck
+    deck.doc.html        self-contained document
+    deck.pdf             PDF, deck or document decided from the content
+    deck.slides.pdf      PDF, always a deck
+    deck.doc.pdf         PDF, always a document
 
 Bare .pdf and .html read the content to choose: `marp: true` front matter or
 `---` slide separators mean deck, anything else means document. Name
-.slides.pdf or .doc.pdf when you want to decide instead of guessing.
+.slides.* or .doc.* when you want to decide instead of guessing. When one
+upload holds both deck.md and deck.markdown, the .md spelling wins the base
+name.
 
 PDFs render in a headless browser and then cache, so the first request after an
 upload can take a few seconds. A .pdf URL that is not rendered yet answers

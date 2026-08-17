@@ -72,7 +72,6 @@ export async function serve(
     case 'shell-svg': return htmlResponse(fileShell('svg', filePath, rawHref, file.size));
     case 'shell-code': return htmlResponse(fileShell('code', filePath, rawHref, file.size));
     case 'shell-md': return htmlResponse(fileShell('md', filePath, rawHref, file.size));
-    case 'shell-slides': return htmlResponse(fileShell('slides', filePath, rawHref, file.size));
     case 'shell-download': return htmlResponse(fileShell('download', filePath, rawHref, file.size));
     default:
       return rawBytes(request, env, `${space}/${hash}/f/${filePath}`, filePath, mode === 'attachment');

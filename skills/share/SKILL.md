@@ -75,31 +75,34 @@ vault token into the conversation.
 - Space = client or person slug, lowercase (`acme`, `sara`). The space is
   visible in the URL, so pick the name you'd show the recipient.
 - Client-facing material takes `--tier signed`; internal scratch stays open.
-- Markdown renders as a document; add `?slides` to the share URL for a deck.
-  Decks run through Marp, so `---` splits slides and Marp directives work:
+- Markdown renders as a document; swap the extension for `.slides.html` for a
+  deck. Decks run through Marp, so `---` splits slides and Marp directives work:
   `<!-- _class: lead -->` for a title slide, `<!-- paginate: true -->` for
   slide numbers.
 - Full HTTP API: https://share.notambourine.com/llms.txt
 
 ## Export formats
 
-Append a suffix to a markdown share URL. The suffix decides the output, so
-`Accept` gets no vote, and a file uploaded under the suffixed name wins.
+Swap the extension on a markdown share URL: uploaded `deck.md`, ask for
+`deck.pdf`. The suffix decides the output, so `Accept` gets no vote, and a
+file uploaded under the suffixed name wins.
 
 | URL | Output |
 | --- | --- |
 | `deck.md` | branded document, rendered in the browser |
-| `deck.md.slides.html` | branded deck, rendered in the browser (same as `?slides`) |
-| `deck.md.html` | self-contained page, fonts inlined, opens offline |
-| `deck.md.pdf` | PDF, deck or document decided from the content |
-| `deck.md.slides.pdf` | PDF, always a deck |
-| `deck.md.doc.pdf` | PDF, always a document |
+| `deck.txt` | the source, `text/plain`, always |
+| `deck.html` | self-contained page, fonts inlined, opens offline; deck or document from the content |
+| `deck.slides.html` | self-contained deck |
+| `deck.doc.html` | self-contained document |
+| `deck.pdf` | PDF, deck or document decided from the content |
+| `deck.slides.pdf` | PDF, always a deck |
+| `deck.doc.pdf` | PDF, always a document |
 
 Bare `.pdf` and `.html` read the content to choose: `marp: true` front matter
 or `---` slide separators mean deck, anything else means document. You cannot
-guess a sniff, so send `.slides.pdf` or `.doc.pdf` when the mode matters.
+guess a sniff, so send `.slides.*` or `.doc.*` when the mode matters.
 
-Attach `deck.md.pdf` to an email; send `deck.md.slides.html` when the recipient
+Attach `deck.pdf` to an email; send `deck.slides.html` when the recipient
 should click through the deck. The first PDF request after an upload can take a
 few seconds while the browser renders it; a 202 answer means it is still
 rendering and lands on its own. Hand the URL over as `put` printed it - never

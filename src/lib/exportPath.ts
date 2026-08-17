@@ -13,7 +13,10 @@
  */
 export const CACHE_VERSION = 2;
 
-export type ExportFormat = 'slides-html' | 'html' | 'pdf' | 'slides-pdf' | 'doc-pdf';
+export type ExportFormat = 'slides-html' | 'html' | 'doc-html' | 'pdf' | 'slides-pdf' | 'doc-pdf' | 'txt';
+
+/** A rendered format; `txt` is the source's own bytes and never renders. */
+export type RenderFormat = Exclude<ExportFormat, 'txt'>;
 
 /** What the print HTML renders as. `slides` is one page per slide, `doc` is A4. */
 export type RenderMode = 'slides' | 'doc';
@@ -22,49 +25,66 @@ export type RenderMode = 'slides' | 'doc';
 const SUFFIXES: [string, ExportFormat][] = [
   ['.slides.html', 'slides-html'],
   ['.slides.pdf', 'slides-pdf'],
+  ['.doc.html', 'doc-html'],
   ['.doc.pdf', 'doc-pdf'],
   ['.html', 'html'],
   ['.pdf', 'pdf'],
+  ['.txt', 'txt'],
 ];
 
 export interface ExportRequest {
-  /** The uploaded markdown file the suffix hangs off. */
+  /** The uploaded markdown file the suffix resolved to. */
   source: string;
   format: ExportFormat;
 }
 
-export function parseExportPath(path: string): ExportRequest | null {
+interface ParsedExport {
+  /** The requested name with the suffix cut: `deck.pdf` -> `deck`. */
+  base: string;
+  format: ExportFormat;
+}
+
+export function parseExportPath(path: string): ParsedExport | null {
   for (const [suffix, format] of SUFFIXES) {
     if (!path.endsWith(suffix)) continue;
-    const source = path.slice(0, -suffix.length);
-    if (source) return { source, format };
+    const base = path.slice(0, -suffix.length);
+    if (base) return { base, format };
   }
   return null;
 }
 
-const MARKDOWN = /\.(md|markdown)$/i;
+function sourceFor(paths: readonly string[], base: string): string | null {
+  const matches = paths.filter((p) => {
+    const m = /^(.*)\.(md|markdown)$/i.exec(p);
+    return m !== null && m[1] === base;
+  });
+  // `.md` beats `.markdown` when one upload holds both spellings (llms.txt).
+  return matches.find((p) => /\.md$/i.test(p)) ?? matches[0] ?? null;
+}
 
 /**
- * Resolve a requested path against the upload's file list.
- * Returns null when an uploaded file owns the name, so `notes.pdf` uploaded as
- * a real PDF serves its own bytes rather than re-rendering `notes`.
+ * Resolve a requested path against the upload's file list: `deck.pdf` finds
+ * the uploaded `deck.md`. Returns null when an uploaded file owns the name,
+ * so `notes.pdf` uploaded as a real PDF serves its own bytes rather than
+ * re-rendering `notes`.
  */
 export function resolveExport(paths: readonly string[], requested: string): ExportRequest | null {
   if (paths.includes(requested)) return null;
   const parsed = parseExportPath(requested);
-  if (!parsed || !MARKDOWN.test(parsed.source)) return null;
-  return paths.includes(parsed.source) ? parsed : null;
+  if (!parsed) return null;
+  const source = sourceFor(paths, parsed.base);
+  return source ? { source, format: parsed.format } : null;
 }
 
 /** null means the format carries no mode of its own and the content decides. */
-export function explicitMode(format: ExportFormat): RenderMode | null {
+export function explicitMode(format: RenderFormat): RenderMode | null {
   if (format === 'slides-html' || format === 'slides-pdf') return 'slides';
-  if (format === 'doc-pdf') return 'doc';
+  if (format === 'doc-html' || format === 'doc-pdf') return 'doc';
   return null;
 }
 
-export function formatExt(format: ExportFormat): 'html' | 'pdf' {
-  return format === 'slides-html' || format === 'html' ? 'html' : 'pdf';
+export function formatExt(format: RenderFormat): 'html' | 'pdf' {
+  return format === 'slides-html' || format === 'html' || format === 'doc-html' ? 'html' : 'pdf';
 }
 
 /** Keyed by resolved mode, not by requested spelling, so `.pdf` and the

@@ -5,7 +5,7 @@ export type ViewMode =
   | 'attachment'   // the bytes, Content-Disposition: attachment
   | 'page'         // uploaded HTML served as itself
   | 'shell-image' | 'shell-video' | 'shell-svg'
-  | 'shell-code' | 'shell-md' | 'shell-slides'
+  | 'shell-code' | 'shell-md'
   | 'shell-download';
 
 /**
@@ -34,7 +34,7 @@ export function viewModeFor(
     return 'raw';
   }
 
-  const wantsView = params.has('view') || params.has('slides');
+  const wantsView = params.has('view');
   const browser = wantsView || acceptsHtml(accept);
 
   if (!browser) {
@@ -47,7 +47,7 @@ export function viewModeFor(
     case 'image': return 'shell-image';
     case 'video': return 'shell-video';
     case 'svg': return 'shell-svg';
-    case 'md': return params.has('slides') ? 'shell-slides' : 'shell-md';
+    case 'md': return 'shell-md';
     case 'code': return 'shell-code';
     case 'html': return params.get('view') === 'source' ? 'shell-code' : 'page';
     default: return 'shell-download';

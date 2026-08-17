@@ -41,8 +41,8 @@ function baseName(source: string): string {
   return name.replace(/\.(md|markdown)$/i, '') || name;
 }
 
-/** `deck.md.slides.pdf` downloads as `deck.pdf`; the suffix is grammar, not a name. */
-function downloadName(source: string, ext: 'html' | 'pdf'): string {
+/** `deck.slides.pdf` downloads as `deck.pdf`; the mode is grammar, not a name. */
+function downloadName(source: string, ext: 'html' | 'pdf' | 'txt'): string {
   return `${baseName(source)}.${ext}`;
 }
 
@@ -111,13 +111,12 @@ function degrade(target: ExportTarget, mode: RenderMode, ext: 'html' | 'pdf'): R
 export async function exportArtifact(
   request: Request, env: Env, target: ExportTarget,
 ): Promise<Response> {
-  const { space, hash, source, format, url, size } = target;
+  const { space, hash, source, format, url } = target;
 
-  /* `.slides.html` and `?slides` are the same live deck: client-side, current
-     with the brand on every load, and no browser minute spent. */
-  if (format === 'slides-html') {
-    const dir = url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1);
-    return htmlResponse(fileShell('slides', source, `${url.origin}${dir}${encodeURI(source)}?raw`, size));
+  /* `.txt` is the source's own bytes as text/plain, always: it renders
+     nothing and survives being pasted where a query string would not. */
+  if (format === 'txt') {
+    return rawBytes(request, env, `${space}/${hash}/f/${source}`, downloadName(source, 'txt'), false);
   }
 
   const ext = formatExt(format);
