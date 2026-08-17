@@ -86,6 +86,10 @@ restarts the clock; adopt the new c) and the expiry it committed. The ttl
 counts from upload and takes over expiry entirely, clearing any idle rule; a
 ttl the artifact has already outlived counts from the write instead.
 
+Opened in a browser, the url serves an admin page: format links to hand over
+(they carry no c=), the expiry chips, and delete. An invalid or expired c=
+serves the plain view, never a 401.
+
 ## List a space
 
     curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \

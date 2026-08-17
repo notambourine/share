@@ -4,7 +4,7 @@ import { mintToken } from './sign';
 import { genSlug } from './keys';
 
 /** A lone file links straight at itself rather than at a one-row index. */
-function fileSuffix(meta: Meta): string {
+export function fileSuffix(meta: Meta): string {
   return meta.files.length === 1 && meta.files[0].path !== 'index.html'
     ? encodeURI(meta.files[0].path) : '';
 }

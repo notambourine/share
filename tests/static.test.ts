@@ -26,6 +26,7 @@ describe('isStatic', () => {
     expect(isStatic('/shell.css')).toBe(true);
     expect(isStatic('/vendor/marp/marpit.js')).toBe(true);
     expect(isStatic('/robots.txt')).toBe(true);
+    expect(isStatic('/admin.js')).toBe(true);
   });
 
   /* The landing page wears the same header as an artifact shell, and that

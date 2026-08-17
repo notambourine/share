@@ -7,7 +7,7 @@ export const RESERVED = new Set([
   'up', 'sign', 'session', 'z', 'k', 'f', 'd', '_trash',
   'llms.txt', 'SKILL.md', 'robots.txt', 'favicon.ico', 'favicon.svg',
   'apple-touch-icon.png', 'apple-touch-icon-precomposed.png',
-  'tokens.css', 'shell.css', 'print.css', 'render.js', 'vendor', 'index.html',
+  'tokens.css', 'shell.css', 'print.css', 'render.js', 'admin.js', 'vendor', 'index.html',
   'fonts', 'logo',
 ]);
 
