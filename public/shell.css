@@ -241,6 +241,7 @@ body.locked .locked-only { display: block; }
   border-radius: var(--r-pill); border: 2px solid var(--line);
   border-top-color: var(--accent); animation: tstate-spin 0.9s linear infinite; }
 .tstate.err { display: inline-flex; color: var(--accent-fg); }
+.tstate.todo { display: inline-flex; color: var(--fg3); }
 @keyframes tstate-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .tstate.gen::before { animation: none; } }
 

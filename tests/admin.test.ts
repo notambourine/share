@@ -319,6 +319,19 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     expect(html.match(/class="tstate"/g)).toHaveLength(4);
   });
 
+  it('an uploaded page gets its click-to-generate export tiles', async () => {
+    const env = seededEnv({ files: [{ path: 'page.html', size: 9, type: 'text/html' }] });
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const html = await (await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '')).text();
+    expect(html).toContain('page.pdf');
+    expect(html).toContain('page.png');
+    expect(html).toContain('page.browser.png');
+    expect(html).toContain('data-src="page.html" data-await="page.full.png" data-gen="1"');
+    // Three exports generate on click; the page tile itself awaits nothing.
+    expect(html.match(/data-gen/g)).toHaveLength(3);
+    expect(html.match(/data-await/g)).toHaveLength(3);
+  });
+
   it('a folder with an index.html reads as one site tile', async () => {
     const env = seededEnv({
       files: [

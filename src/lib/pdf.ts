@@ -88,20 +88,38 @@ async function acquire(binding: Fetcher): Promise<Browser | null> {
   }
 }
 
+type BrowserPage = Awaited<ReturnType<Browser['newPage']>>;
+
+async function withPage<T>(binding: Fetcher, work: (page: BrowserPage) => Promise<T>): Promise<T | null> {
+  const browser = await acquire(binding);
+  if (!browser) return null;
+
+  let page: BrowserPage | null = null;
+  try {
+    page = await browser.newPage();
+    return await work(page);
+  } catch (err) {
+    console.log(`pdf: render failed: ${err}`);
+    return null;
+  } finally {
+    if (page) await page.close().catch(() => { /* the session outlives the page */ });
+    /* disconnect, not close: the browser stays warm for the next request
+       inside the 20-second new-instance window. */
+    try {
+      browser.disconnect();
+    } catch { /* already gone */ }
+  }
+}
+
 /**
  * One page load, both artifacts. `page.content()` is the `.html` snapshot and
  * `page.pdf()` is the `.pdf`; rendering twice would double the only budget
  * that binds.
  */
-export async function render(
+export function render(
   binding: Fetcher, html: string, pdfOptions: PDFOptions, measureSlides = false,
 ): Promise<Artifacts | null> {
-  const browser = await acquire(binding);
-  if (!browser) return null;
-
-  let page: Awaited<ReturnType<Browser['newPage']>> | null = null;
-  try {
-    page = await browser.newPage();
+  return withPage(binding, async (page) => {
     await page.setContent(html);
     /* The print HTML flags itself once Marpit, highlight.js, and the fonts
        have all landed. Waiting on a load event would catch none of them. */
@@ -118,15 +136,32 @@ export async function render(
     const out = await page.content();
     const pdf = await page.pdf(pdfOptions);
     return { html: out, pdf: new Uint8Array(pdf), check };
-  } catch (err) {
-    console.log(`pdf: render failed: ${err}`);
-    return null;
-  } finally {
-    if (page) await page.close().catch(() => { /* the session outlives the page */ });
-    /* disconnect, not close: the browser stays warm for the next request
-       inside the 20-second new-instance window. */
-    try {
-      browser.disconnect();
-    } catch { /* already gone */ }
-  }
+  });
+}
+
+/** The browser shot's box; the full shot keeps the width at content height. */
+const PAGE_VIEWPORT = { width: 1280, height: 720 };
+
+export interface PageArtifacts {
+  pdf: Uint8Array;
+  browserPng: Uint8Array;
+  fullPng: Uint8Array;
+}
+
+/**
+ * Navigate-based render for an uploaded page: the browser loads the served
+ * URL, so relative assets resolve and the source is never rebuilt. One load,
+ * three artifacts. Uploaded HTML carries no ready flag, so networkidle0
+ * stands in, plus a fonts.ready await for the late face swap idle can miss.
+ */
+export function renderPage(binding: Fetcher, url: string, pdfOptions: PDFOptions): Promise<PageArtifacts | null> {
+  return withPage(binding, async (page) => {
+    await page.setViewport(PAGE_VIEWPORT);
+    await page.goto(url, { waitUntil: 'networkidle0', timeout: RENDER_TIMEOUT_MS });
+    await page.evaluate('document.fonts.ready.then(() => 1)');
+    const browserPng = new Uint8Array(await page.screenshot());
+    const fullPng = new Uint8Array(await page.screenshot({ fullPage: true }));
+    const pdf = new Uint8Array(await page.pdf(pdfOptions));
+    return { pdf, browserPng, fullPng };
+  });
 }

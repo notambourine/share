@@ -202,8 +202,10 @@ interface Tile {
   thumb: string;
   fmt?: string;
   /** Derived render this tile waits on, keyed by source path; admin.js polls
-      the status route and paints the state. `html` means either mode's html. */
-  status?: { src: string; awaits: string };
+      the status route and paints the state. `html` means either mode's html.
+      `click` marks a render nothing prerenders: the tile says "click to
+      generate" and the click's own GET fires it (decision 9). */
+  status?: { src: string; awaits: string; click?: boolean };
 }
 
 function srcThumb(text: string): string {
@@ -212,6 +214,22 @@ function srcThumb(text: string): string {
 
 function mdStem(path: string): string {
   return path.replace(/\.(md|markdown)$/i, '');
+}
+
+function htmlStem(path: string): string {
+  return path.replace(/\.html?$/i, '');
+}
+
+/** An uploaded page: the page itself plus its three click-to-generate
+    exports (no prerender for HTML - decision 9). */
+function pageTiles(path: string, tag: string): Tile[] {
+  const stem = encodeURI(htmlStem(path));
+  return [
+    { target: encodeURI(path), label: `${tag}page`, sub: 'the uploaded page, opens in a tab', thumb: THUMB_LAND, fmt: 'html' },
+    { target: `${stem}.pdf`, label: `${tag}pdf`, sub: 'print of the page', thumb: THUMB_PORT, fmt: 'pdf', status: { src: path, awaits: 'page.pdf', click: true } },
+    { target: `${stem}.png`, label: `${tag}full shot`, sub: 'the whole page, one image', thumb: THUMB_PORT, fmt: 'png', status: { src: path, awaits: 'page.full.png', click: true } },
+    { target: `${stem}.browser.png`, label: `${tag}browser shot`, sub: 'above the fold, 1280x720', thumb: THUMB_LAND, fmt: 'png', status: { src: path, awaits: 'page.browser.png', click: true } },
+  ];
 }
 
 /** The mock's five, per markdown source. Tile targets under the shipped
@@ -248,11 +266,14 @@ function tilesFor(meta: Meta): Tile[] {
           { target: `${encoded}?raw`, label: `${tag}hotlink`, sub: 'the bytes, for img src and unfurls', thumb: srcThumb(`<img src=\n"${fileName(f.path)}">`) },
         );
         break;
+      case 'html':
+        tiles.push(...pageTiles(f.path, meta.files.length > 1 ? `${fileName(htmlStem(f.path))} · ` : ''));
+        break;
       case 'code':
       case 'other':
         tiles.push({ target: encoded, label: fileName(f.path), sub: 'branded page, opens in a tab', thumb: srcThumb(fileName(f.path)) });
         break;
-      default: // video, svg, html
+      default: // video, svg
         tiles.push({ target: encoded, label: fileName(f.path), sub: 'branded page, opens in a tab', thumb: THUMB_LAND });
     }
   }
@@ -260,7 +281,9 @@ function tilesFor(meta: Meta): Tile[] {
 }
 
 function tileHtml(base: string, t: Tile): string {
-  const status = t.status ? ` data-src="${esc(t.status.src)}" data-await="${esc(t.status.awaits)}"` : '';
+  const status = t.status
+    ? ` data-src="${esc(t.status.src)}" data-await="${esc(t.status.awaits)}"${t.status.click ? ' data-gen="1"' : ''}`
+    : '';
   return `<a class="tile" href="${base}${t.target}" target="_blank" rel="noopener"${status}>
 <span class="thumb">${t.thumb}${t.fmt ? `<span class="fmt">${esc(t.fmt)}</span>` : ''}</span>
 <span class="tlabel"><span class="t">${esc(t.label)}</span><span class="s">${esc(t.sub)}</span>${t.status ? '<span class="tstate"></span>' : ''}</span>
@@ -303,6 +326,15 @@ function lockedRows(meta: Meta, base: string): string {
         row(`${enc}.slides.html`, `${stem}.slides.html`, 'deck'),
         row(`${enc}.html`, `${stem}.html`, 'offline'),
         row(`${enc}.txt`, `${stem}.txt`, 'source'),
+      );
+    }
+    if (!site && kindOf(f.path) === 'html') {
+      const stem = htmlStem(f.path);
+      const enc = encodeURI(stem);
+      rows.push(
+        row(`${enc}.pdf`, `${stem}.pdf`, 'pdf'),
+        row(`${enc}.png`, `${stem}.png`, 'full shot'),
+        row(`${enc}.browser.png`, `${stem}.browser.png`, 'browser shot'),
       );
     }
   }

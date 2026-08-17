@@ -144,10 +144,21 @@ Bare .pdf and .html read the content to choose: `marp: true` front matter or
 upload holds both deck.md and deck.markdown, the .md spelling wins the base
 name.
 
+An uploaded HTML page exports too: uploaded `page.html`, ask for
+
+    page.pdf             PDF of the page, plain A4
+    page.png             screenshot, the whole page at 1280 wide
+    page.full.png        the same object, spelled out
+    page.browser.png     screenshot, above the fold, 1280x720
+
+PNG is HTML-only; markdown keeps its own family above. When one upload holds
+both deck.md and deck.html, markdown wins the base and deck.png is a 404.
+Nothing prerenders these: the first request pays the render.
+
 PDFs render in a headless browser and then cache, so the first request after an
-upload can take a few seconds. A .pdf URL that is not rendered yet answers
-202 with Retry-After: 5 - wait that long and re-request. A cold .html serves
-the live browser-rendered shell instead.
+upload can take a few seconds. A .pdf or .png URL that is not rendered yet
+answers 202 with Retry-After: 5 - wait that long and re-request. A cold .html
+serves the live browser-rendered shell instead.
 
 ## Skill
 

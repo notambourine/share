@@ -27,6 +27,9 @@ export function pdfOptionsFor(mode: RenderMode, title: string): PDFOptions {
       margin: { top: '0', right: '0', bottom: '0', left: '0' },
     };
   }
+  /* An uploaded page brings its own layout and maybe its own print CSS, so it
+     gets plain A4 and none of the doc footer chrome. */
+  if (mode === 'page') return { format: 'A4', printBackground: true };
   /* Headless Chrome implements no CSS Paged Media margin box, so `@bottom-center`
      never fires and the page number has to come from footerTemplate. Chrome
      renders that in its own document, hence the inline styles and no brand face. */

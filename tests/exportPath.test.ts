@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CACHE_VERSION, parseExportPath, resolveExport, explicitMode,
-  formatExt, derivedKey, sniffDeck,
+  formatExt, pageExt, derivedKey, sniffDeck,
 } from '../src/lib/exportPath';
 
 describe('parseExportPath', () => {
@@ -13,6 +13,9 @@ describe('parseExportPath', () => {
     expect(parseExportPath('deck.slides.pdf')).toEqual({ base: 'deck', format: 'slides-pdf' });
     expect(parseExportPath('deck.doc.pdf')).toEqual({ base: 'deck', format: 'doc-pdf' });
     expect(parseExportPath('deck.txt')).toEqual({ base: 'deck', format: 'txt' });
+    expect(parseExportPath('page.png')).toEqual({ base: 'page', format: 'png' });
+    expect(parseExportPath('page.full.png')).toEqual({ base: 'page', format: 'full-png' });
+    expect(parseExportPath('page.browser.png')).toEqual({ base: 'page', format: 'browser-png' });
   });
 
   it('takes the longest suffix, so .slides.html never reads as .html', () => {
@@ -20,6 +23,8 @@ describe('parseExportPath', () => {
     expect(parseExportPath('a.slides.pdf')?.format).toBe('slides-pdf');
     expect(parseExportPath('a.doc.html')?.format).toBe('doc-html');
     expect(parseExportPath('a.doc.pdf')?.format).toBe('doc-pdf');
+    expect(parseExportPath('a.full.png')?.format).toBe('full-png');
+    expect(parseExportPath('a.browser.png')?.format).toBe('browser-png');
   });
 
   it('keeps nested paths intact', () => {
@@ -29,7 +34,6 @@ describe('parseExportPath', () => {
   it('rejects a bare suffix and anything unsuffixed', () => {
     expect(parseExportPath('.pdf')).toBeNull();
     expect(parseExportPath('deck.md')).toBeNull();
-    expect(parseExportPath('shot.png')).toBeNull();
   });
 });
 
@@ -58,10 +62,33 @@ describe('resolveExport', () => {
     expect(resolveExport(['b.MD'], 'b.pdf')?.source).toBe('b.MD');
   });
 
-  it('refuses a base that was never uploaded as markdown', () => {
+  it('refuses a base that was never uploaded as a source', () => {
     expect(resolveExport(files, 'shot.pdf')).toBeNull();
     expect(resolveExport(files, 'shot.png.pdf')).toBeNull();
     expect(resolveExport(files, 'missing.pdf')).toBeNull();
+    // shot.png is a real upload, never an export of itself.
+    expect(resolveExport(files, 'shot.png')).toBeNull();
+  });
+
+  it('falls back to an .html source, which takes .pdf and the shots only', () => {
+    const page = ['page.html', 'shot.png'];
+    expect(resolveExport(page, 'page.pdf')).toEqual({ source: 'page.html', format: 'pdf' });
+    expect(resolveExport(page, 'page.png')).toEqual({ source: 'page.html', format: 'png' });
+    expect(resolveExport(page, 'page.full.png')).toEqual({ source: 'page.html', format: 'full-png' });
+    expect(resolveExport(page, 'page.browser.png')).toEqual({ source: 'page.html', format: 'browser-png' });
+    // Markdown's family stays markdown-only.
+    expect(resolveExport(page, 'page.txt')).toBeNull();
+    expect(resolveExport(page, 'page.slides.pdf')).toBeNull();
+    expect(resolveExport(page, 'page.doc.html')).toBeNull();
+    // `.html` beats `.htm` when one upload holds both spellings.
+    expect(resolveExport(['a.htm', 'a.html'], 'a.pdf')?.source).toBe('a.html');
+    expect(resolveExport(['a.htm'], 'a.pdf')?.source).toBe('a.htm');
+  });
+
+  it('markdown wins a contested base, so its .png stays a 404', () => {
+    const both = ['deck.md', 'deck.html'];
+    expect(resolveExport(both, 'deck.pdf')).toEqual({ source: 'deck.md', format: 'pdf' });
+    expect(resolveExport(both, 'deck.png')).toBeNull();
   });
 });
 
@@ -99,6 +126,15 @@ describe('derivedKey', () => {
     const explicit = derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'slides', 'pdf');
     expect(sniffed).toBe(explicit);
     expect(derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'doc', 'pdf')).not.toBe(sniffed);
+  });
+
+  it('page mode keys the three outputs, bare .png sharing the full shot', () => {
+    expect(pageExt('png')).toBe('full.png');
+    expect(pageExt('full-png')).toBe('full.png');
+    expect(pageExt('browser-png')).toBe('browser.png');
+    expect(pageExt('pdf')).toBe('pdf');
+    expect(derivedKey('acme', 'Xk92mQ7bTp01', 'page.html', 'page', 'full.png'))
+      .toBe(`acme/Xk92mQ7bTp01/d/v${CACHE_VERSION}/page.html.page.full.png`);
   });
 
   it('sits under d/, which no upload may claim', () => {

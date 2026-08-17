@@ -56,6 +56,22 @@ describe('GET /<space>/<hash>/status', () => {
     ]);
   });
 
+  it('html sources ride along; page renders count, check stays null', async () => {
+    const env = seededEnv({
+      [derivedKey(SPACE, HASH, 'page.html', 'page', 'pdf')]: 'PDFBYTES',
+      [derivedKey(SPACE, HASH, 'page.html', 'page', 'full.png')]: 'PNGBYTES',
+    }, [
+      { path: 'deck.md', size: 6, type: 'text/markdown' },
+      { path: 'page.html', size: 9, type: 'text/html' },
+    ]);
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const body = await (await adminStatus(statusReq(token), env, SPACE, HASH)).json<StatusBody>();
+    expect(body.sources).toEqual([
+      { path: 'deck.md', rendered: [], check: null },
+      { path: 'page.html', rendered: ['page.full.png', 'page.pdf'], check: null },
+    ]);
+  });
+
   it('an undecodable check answers null rather than failing the report', async () => {
     const env = seededEnv({
       [derivedKey(SPACE, HASH, 'deck.md', 'slides', 'pdf')]: 'PDFBYTES',

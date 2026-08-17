@@ -73,9 +73,10 @@ export async function adminStatus(request: Request, env: Env, space: string, has
   if (!meta || isExpired(meta, t)) return jsonResponse({ error: 'no such artifact' }, 404);
 
   // Every renderable source answers, so an empty `rendered` reads as pending.
+  // HTML sources ride along for the page exports; their check stays null.
   const sources = new Map<string, SourceStatus>();
   for (const f of meta.files) {
-    if (/\.(md|markdown)$/i.test(f.path)) {
+    if (/\.(md|markdown|html?)$/i.test(f.path)) {
       sources.set(f.path, { path: f.path, rendered: [], check: null });
     }
   }
@@ -84,7 +85,7 @@ export async function adminStatus(request: Request, env: Env, space: string, has
   const checkKeys: [SourceStatus, string][] = [];
   for (const { key } of (await env.BUCKET.list({ prefix })).objects) {
     const rest = key.slice(prefix.length);
-    const m = /^(.*)\.(check\.json|(?:slides|doc)\.(?:html|pdf))$/.exec(rest);
+    const m = /^(.*)\.(check\.json|(?:slides|doc)\.(?:html|pdf)|page\.(?:pdf|(?:browser|full)\.png))$/.exec(rest);
     const status = m && sources.get(m[1]);
     if (!status) continue;
     if (m[2] === 'check.json') checkKeys.push([status, key]);

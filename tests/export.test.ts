@@ -37,6 +37,38 @@ function get(path: string, accept = BROWSER): Request {
 const ask = (env: Env, path: string, accept?: string) =>
   serve(get(path, accept), env, DEFERRED, SPACE, HASH, null, path);
 
+describe('page exports (uploaded HTML)', () => {
+  const PAGE: MetaFile = { path: 'page.html', size: 9, type: 'text/html; charset=utf-8' };
+  const pageWorld = (extra: Record<string, string> = {}) =>
+    world({ [`${SPACE}/${HASH}/f/page.html`]: '<p>hi</p>', ...extra }, [PAGE]);
+
+  it('a cold .png or .pdf answers 202, never HTML at 200', async () => {
+    const env = pageWorld();
+    for (const path of ['page.png', 'page.pdf', 'page.browser.png']) {
+      const res = await ask(env, path);
+      expect(res.status).toBe(202);
+      expect(res.headers.get('retry-after')).toBe('5');
+    }
+  });
+
+  it('serves a cached shot; bare .png and .full.png share the object', async () => {
+    const env = pageWorld({ [derivedKey(SPACE, HASH, 'page.html', 'page', 'full.png')]: 'PNGBYTES' });
+    for (const path of ['page.png', 'page.full.png']) {
+      const res = await ask(env, path);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('image/png');
+      expect(await res.text()).toBe('PNGBYTES');
+    }
+  });
+
+  it('a real uploaded page.pdf wins its own name', async () => {
+    const env = world({
+      [`${SPACE}/${HASH}/f/page.pdf`]: 'REALPDF',
+    }, [PAGE, { path: 'page.pdf', size: 7, type: 'application/pdf' }]);
+    expect(await (await ask(env, 'page.pdf', '*/*')).text()).toBe('REALPDF');
+  });
+});
+
 describe('format suffixes', () => {
   it('serves a cached PDF, and the suffix outranks Accept', async () => {
     const key = derivedKey(SPACE, HASH, 'deck.md', 'slides', 'pdf');
