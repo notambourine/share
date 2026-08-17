@@ -434,6 +434,10 @@ switch (cmd) {
     console.log(textAt(made, 'signedUrl') ?? required(made, 'url'));
     const shortUrl = textAt(made, 'short');
     if (shortUrl) console.log(shortUrl);
+    // stderr, labeled: stdout is the links you hand over, so a pipe never
+    // grabs the write credential. `nt-share admin` re-opens it after 5 min.
+    const adminUrl = textAt(made, 'adminUrl');
+    if (adminUrl) console.error(`admin (5 min): ${adminUrl}`);
     break;
   }
   case 'sign':

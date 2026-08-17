@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Env } from '../src/lib/types';
 import { upload } from '../src/routes/upload';
 import { serve } from '../src/routes/serve';
+import { adminConfig } from '../src/routes/admin';
 import { mintSession, sha256hex } from '../src/lib/auth';
 import type { TestEnv } from './bindings';
 import { DEFERRED, testEnv } from './bindings';
@@ -80,5 +81,41 @@ describe('signed-tier upload mints its own link', () => {
     const body = await res.json<{ url: string; signedUrl?: string }>();
     expect(body.signedUrl).toBeUndefined();
     expect(body.url).not.toContain('/k/');
+  });
+});
+
+describe('put answers the admin link', () => {
+  it('mints a working admin link alongside the upload', async () => {
+    const env = await stubEnv();
+    const res = await put(env, await sessionBearer(), '');
+    const body = await res.json<{ hash: string; adminUrl: string; adminExp: number }>();
+    expect(body.adminExp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+
+    const admin = new URL(body.adminUrl);
+    expect(admin.pathname).toBe(`/${SPACE}/${body.hash}/`);
+    const c = admin.searchParams.get('c');
+
+    // Works, not just parses: the token authorizes the config write.
+    const write = await adminConfig(new Request(
+      `https://share.test/${SPACE}/${body.hash}/config?c=${c}`,
+      { method: 'POST', body: JSON.stringify({ ttl: '7d' }) },
+    ), env, SPACE, body.hash);
+    expect(write.status).toBe(200);
+  });
+
+  it('the plain-text answer stays the one hand-over URL', async () => {
+    const env = await stubEnv();
+    const res = await put(env, 'Bearer raw-token', '', 'text/plain');
+    const printed = (await res.text()).trim();
+    expect(printed).not.toContain('?c=');
+    expect(printed.split('\n')).toHaveLength(1);
+  });
+
+  it('missing signing keys drop the admin link, not the open upload', async () => {
+    const env = testEnv({ tokens: JSON.stringify({ tom: await sha256hex('raw-token') }) });
+    const res = await put(env, 'Bearer raw-token', '');
+    expect(res.status).toBe(201);
+    const body = await res.json<{ adminUrl?: string }>();
+    expect(body.adminUrl).toBeUndefined();
   });
 });

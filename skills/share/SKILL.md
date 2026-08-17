@@ -23,7 +23,10 @@ A `<dur>` is a number plus `m`, `h`, `d`, or `w`: `7d`, `12h`, `4w`. Defaults:
 its last access instead of at a fixed date.
 
 `put` prints the URL to hand over - the signed one when the tier is signed, so
-there is no second call. A folder keeps its relative paths, and one with an
+there is no second call. On stderr it adds `admin (5 min): <url>`, the sender's
+link to adjust the TTL or delete: it carries a write credential (`?c=`) and
+never goes to the recipient. `nt-share admin` re-opens it after the window.
+A folder keeps its relative paths, and one with an
 `index.html` serves as a real page. A folder holding exactly one file and no
 `index.html` links straight at that file rather than at a one-row index;
 anything else links the folder root. An empty folder is a 400.

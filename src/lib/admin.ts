@@ -24,6 +24,20 @@ export async function mintAdminToken(
   return mintToken(keys, scope(space, hash), exp);
 }
 
+export interface AdminLink {
+  url: string;
+  /** Epoch seconds. */
+  exp: number;
+}
+
+/** The full link, minted the same way at upload and on re-mint. */
+export async function mintAdminLink(
+  keys: SigningKeys, origin: string, space: string, hash: string, t: number,
+): Promise<AdminLink> {
+  const exp = t + ADMIN_SECS;
+  return { url: `${origin}/${space}/${hash}/?c=${await mintAdminToken(keys, space, hash, exp)}`, exp };
+}
+
 export async function verifyAdminToken(
   keys: SigningKeys, space: string, hash: string, token: string, now: number,
 ): Promise<VerifyResult> {

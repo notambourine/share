@@ -1,5 +1,5 @@
 import type { Env, Meta } from '../lib/types';
-import { ADMIN_SECS, mintAdminToken, verifyAdminToken } from '../lib/admin';
+import { ADMIN_SECS, mintAdminLink, mintAdminToken, verifyAdminToken } from '../lib/admin';
 import { authenticate, SESSION_SCOPE_MSG } from '../lib/auth';
 import { parseSigningKeys } from '../lib/sign';
 import { readMeta, readMetaTagged, writeMeta, isExpired } from '../lib/r2';
@@ -61,8 +61,5 @@ export async function adminRemint(request: Request, env: Env, space: string, has
 
   const keys = parseSigningKeys(env);
   if (!keys) return jsonResponse({ error: 'signing keys misconfigured' }, 500);
-  const exp = t + ADMIN_SECS;
-  const token = await mintAdminToken(keys, space, hash, exp);
-  const origin = new URL(request.url).origin;
-  return jsonResponse({ url: `${origin}/${space}/${hash}/?c=${token}`, exp });
+  return jsonResponse({ ...await mintAdminLink(keys, new URL(request.url).origin, space, hash, t) });
 }
