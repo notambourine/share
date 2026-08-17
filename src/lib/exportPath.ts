@@ -13,13 +13,16 @@
  */
 export const CACHE_VERSION = 2;
 
-export type ExportFormat = 'slides-html' | 'html' | 'doc-html' | 'pdf' | 'slides-pdf' | 'doc-pdf' | 'txt';
+export type ExportFormat =
+  | 'slides-html' | 'html' | 'doc-html' | 'pdf' | 'slides-pdf' | 'doc-pdf' | 'txt'
+  | 'png' | 'browser-png' | 'full-png';
 
 /** A rendered format; `txt` is the source's own bytes and never renders. */
 export type RenderFormat = Exclude<ExportFormat, 'txt'>;
 
-/** What the print HTML renders as. `slides` is one page per slide, `doc` is A4. */
-export type RenderMode = 'slides' | 'doc';
+/** What renders: `slides` one page per slide, `doc` A4 print HTML, `page` a
+    navigated upload (the uploaded HTML itself, loaded at its served URL). */
+export type RenderMode = 'slides' | 'doc' | 'page';
 
 /* Longest first: `.slides.html` must not lose its tail to `.html`. */
 const SUFFIXES: [string, ExportFormat][] = [
@@ -27,10 +30,18 @@ const SUFFIXES: [string, ExportFormat][] = [
   ['.slides.pdf', 'slides-pdf'],
   ['.doc.html', 'doc-html'],
   ['.doc.pdf', 'doc-pdf'],
+  ['.browser.png', 'browser-png'],
+  ['.full.png', 'full-png'],
   ['.html', 'html'],
   ['.pdf', 'pdf'],
   ['.txt', 'txt'],
+  ['.png', 'png'],
 ];
+
+/** What each source kind may become. PNG is HTML-only; markdown keeps its
+    family. A md base asked for `.png` 404s rather than inventing a render. */
+const MD_FORMATS = new Set<ExportFormat>(['slides-html', 'html', 'doc-html', 'pdf', 'slides-pdf', 'doc-pdf', 'txt']);
+const PAGE_FORMATS = new Set<ExportFormat>(['pdf', 'png', 'browser-png', 'full-png']);
 
 export interface ExportRequest {
   /** The uploaded markdown file the suffix resolved to. */
@@ -53,13 +64,25 @@ export function parseExportPath(path: string): ParsedExport | null {
   return null;
 }
 
-function sourceFor(paths: readonly string[], base: string): string | null {
+function claim(paths: readonly string[], base: string, ext: RegExp, tie: RegExp): string | null {
   const matches = paths.filter((p) => {
-    const m = /^(.*)\.(md|markdown)$/i.exec(p);
+    const m = ext.exec(p);
     return m !== null && m[1] === base;
   });
-  // `.md` beats `.markdown` when one upload holds both spellings (llms.txt).
-  return matches.find((p) => /\.md$/i.test(p)) ?? matches[0] ?? null;
+  return matches.find((p) => tie.test(p)) ?? matches[0] ?? null;
+}
+
+/** Markdown wins a contested base; `.html` falls back when no `.md` claims it.
+    `.md` beats `.markdown` (and `.html` beats `.htm`) when one upload holds
+    both spellings (llms.txt). */
+function sourceFor(paths: readonly string[], base: string): string | null {
+  return claim(paths, base, /^(.*)\.(md|markdown)$/i, /\.md$/i)
+    ?? claim(paths, base, /^(.*)\.html?$/i, /\.html$/i);
+}
+
+/** An HTML source renders as a navigated page rather than from print HTML. */
+export function isPageSource(source: string): boolean {
+  return /\.html?$/i.test(source);
 }
 
 /**
@@ -73,7 +96,9 @@ export function resolveExport(paths: readonly string[], requested: string): Expo
   const parsed = parseExportPath(requested);
   if (!parsed) return null;
   const source = sourceFor(paths, parsed.base);
-  return source ? { source, format: parsed.format } : null;
+  if (!source) return null;
+  const allowed = isPageSource(source) ? PAGE_FORMATS : MD_FORMATS;
+  return allowed.has(parsed.format) ? { source, format: parsed.format } : null;
 }
 
 /** null means the format carries no mode of its own and the content decides. */
@@ -87,10 +112,21 @@ export function formatExt(format: RenderFormat): 'html' | 'pdf' {
   return format === 'slides-html' || format === 'html' || format === 'doc-html' ? 'html' : 'pdf';
 }
 
+/** A page render's three outputs, one load. */
+export type PageExt = 'pdf' | 'browser.png' | 'full.png';
+
+/** Bare `.png` is the full shot's alias, the way bare `.pdf` aliases a
+    sniffed mode: both spellings share one cached object. */
+export function pageExt(format: RenderFormat): PageExt {
+  if (format === 'browser-png') return 'browser.png';
+  if (format === 'png' || format === 'full-png') return 'full.png';
+  return 'pdf';
+}
+
 /** Keyed by resolved mode, not by requested spelling, so `.pdf` and the
     explicit spelling it sniffs to share one cached object. */
 export function derivedKey(
-  space: string, hash: string, source: string, mode: RenderMode, ext: 'html' | 'pdf',
+  space: string, hash: string, source: string, mode: RenderMode, ext: 'html' | PageExt,
 ): string {
   return `${space}/${hash}/d/v${CACHE_VERSION}/${source}.${mode}.${ext}`;
 }

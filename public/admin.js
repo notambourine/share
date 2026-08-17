@@ -112,6 +112,10 @@
     });
   }
 
+  /* Click-to-generate tiles (uploaded HTML, nothing prerenders them): until
+     clicked they read "click to generate" and never hold the poll open. */
+  var requested = new Set();
+
   function paint(sources) {
     var byPath = new Map();
     sources.forEach(function (s) { byPath.set(s.path, s); });
@@ -134,6 +138,9 @@
       } else if (ready) {
         st.className = 'tstate';
         st.textContent = '';
+      } else if (tile.dataset.gen && !requested.has(tile)) {
+        st.className = 'tstate todo';
+        st.textContent = 'click to generate';
       } else {
         st.className = 'tstate gen';
         st.textContent = 'generating';
@@ -157,6 +164,19 @@
   }
 
   if (awaited.length) { pollTimer = setInterval(poll, 3000); poll(); }
+
+  /* The tab's own GET fires the render (the tile stays a real anchor); here
+     only mark it pending and wake the poll back up. */
+  awaited.forEach(function (tile) {
+    if (!tile.dataset.gen) return;
+    tile.addEventListener('click', function () {
+      requested.add(tile);
+      var st = tile.querySelector('.tstate');
+      if (st) { st.className = 'tstate gen'; st.textContent = 'generating'; }
+      polled = 0;
+      if (!pollTimer) pollTimer = setInterval(poll, 3000);
+    });
+  });
 
   /* Delete: the confirm replaces the whole action row, so copy is gone while
      it is armed. DELETE, never GET - link scanners prefetch. */
