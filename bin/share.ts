@@ -389,7 +389,8 @@ switch (cmd) {
     await writeFile(target, SH_WRAPPER, { mode: 0o755 });
     await chmod(target, 0o755);
     await writeFile(`${target}.cmd`, CMD_WRAPPER);
-    console.log(process.platform === 'win32' ? `${target}.cmd` : target);
+    // stderr, like the PATH warning: stdout stays the verbs' answer channel.
+    console.error(process.platform === 'win32' ? `${target}.cmd` : target);
     if (!(process.env.PATH ?? '').split(delimiter).includes(dir)) {
       console.error(`${dir} is not on PATH; call it by full path or add the dir`);
     }

@@ -45,14 +45,14 @@ unlock and proves nothing the verb does not.
 
 ## Setup
 
-`nt-share` ships with this plugin. Put it on PATH once per machine; the call is
-a no-op afterwards, so it is safe to prefix the first verb of a session with it:
+`nt-share` ships with this plugin. When `command -v nt-share` finds nothing,
+ask before installing - it writes to `~/.local/bin` - then run:
 
-    command -v nt-share >/dev/null || node "$(ls -d "$CLAUDE_PLUGIN_ROOT"/bin/share.ts \
-      ~/.claude/plugins/cache/*/nt-share/*/bin/share.* 2>/dev/null | head -1)" install
+    node "$(ls ~/.claude/plugins/cache/*/nt-share/*/bin/share.* 2>/dev/null | head -1)" install
 
-If that glob finds nothing, this doc was fetched without the plugin: use the
-HTTP API at https://share.notambourine.com/llms.txt instead.
+The install is a no-op to re-run and prints its target on stderr; stdout stays
+empty. If the glob finds nothing, this doc was fetched without the plugin: use
+the HTTP API at https://share.notambourine.com/llms.txt instead.
 
 ## Failures
 
