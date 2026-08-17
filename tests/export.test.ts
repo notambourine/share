@@ -77,11 +77,20 @@ describe('format suffixes', () => {
     expect(body).toContain('deck.md?raw');
   });
 
-  /* A missing PDF is a worse day than a broken one: with no browser binding
-     the request has to land on something a person can read. */
-  it('degrades to the live shell rather than 500 when no browser is reachable', async () => {
+  /* A .pdf URL never answers HTML at 200: `curl -o deck.pdf` would write HTML
+     into a .pdf and look like success. */
+  it('a cold .pdf answers 202 + Retry-After, never HTML at 200', async () => {
     const env = world();
     const res = await ask(env, 'deck.md.pdf');
+    expect(res.status).toBe(202);
+    expect(res.headers.get('retry-after')).toBe('5');
+    expect(res.headers.get('content-type')).not.toContain('text/html');
+  });
+
+  /* For .html a live shell is still a page a person can read. */
+  it('a cold .html degrades to the live shell', async () => {
+    const env = world();
+    const res = await ask(env, 'deck.md.html');
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(await res.text()).toContain('data-kind="slides"');

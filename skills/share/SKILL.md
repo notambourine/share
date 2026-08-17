@@ -90,4 +90,6 @@ guess a sniff, so send `.slides.pdf` or `.doc.pdf` when the mode matters.
 
 Attach `deck.md.pdf` to an email; send `deck.md.slides.html` when the recipient
 should click through the deck. The first PDF request after an upload can take a
-few seconds while the browser renders it.
+few seconds while the browser renders it; a 202 answer means it is still
+rendering and lands on its own. Hand the URL over as `put` printed it - never
+curl the suffixes to check they respond.
