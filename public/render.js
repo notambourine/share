@@ -42,12 +42,20 @@
     });
   }
 
+  /* A hand copy of splitFrontMatter in src/lib/exportPath.ts - this file has
+     no build step to import it. tests/frontmatter.test.ts holds them together. */
+  function stripFront(text) {
+    if (!/^---[ \t]*\r?\n/.test(text)) return text;
+    var end = /\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(text.slice(3));
+    return end ? text.slice(3 + end.index + end[0].length) : text;
+  }
+
   /* innerHTML is deliberate: uploads are Bearer-gated and raw HTML uploads
      already run on this origin, which holds no ambient credential. */
   if (kind === 'md') {
     withText(function (text) {
       var el = document.getElementById('content');
-      el.innerHTML = window.marked.parse(text);
+      el.innerHTML = window.marked.parse(stripFront(text));
       highlightAll(el);
     });
   }
