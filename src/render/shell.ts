@@ -201,6 +201,9 @@ interface Tile {
   sub: string;
   thumb: string;
   fmt?: string;
+  /** Derived render this tile waits on, keyed by source path; admin.js polls
+      the status route and paints the state. `html` means either mode's html. */
+  status?: { src: string; awaits: string };
 }
 
 function srcThumb(text: string): string {
@@ -216,10 +219,10 @@ function mdStem(path: string): string {
 function mdTiles(path: string, tag: string): Tile[] {
   const stem = encodeURI(mdStem(path));
   return [
-    { target: `${stem}.slides.html`, label: `${tag}deck`, sub: 'every slide, scroll through', thumb: THUMB_LAND },
-    { target: `${stem}.slides.pdf`, label: `${tag}deck pdf`, sub: 'for email attachments', thumb: THUMB_LAND, fmt: 'pdf' },
-    { target: `${stem}.doc.pdf`, label: `${tag}document pdf`, sub: 'same words, one page after another', thumb: THUMB_PORT, fmt: 'pdf' },
-    { target: `${stem}.html`, label: `${tag}offline copy`, sub: 'one file, fonts inside, no server', thumb: THUMB_LAND, fmt: 'html' },
+    { target: `${stem}.slides.html`, label: `${tag}deck`, sub: 'every slide, scroll through', thumb: THUMB_LAND, status: { src: path, awaits: 'slides.html' } },
+    { target: `${stem}.slides.pdf`, label: `${tag}deck pdf`, sub: 'for email attachments', thumb: THUMB_LAND, fmt: 'pdf', status: { src: path, awaits: 'slides.pdf' } },
+    { target: `${stem}.doc.pdf`, label: `${tag}document pdf`, sub: 'same words, one page after another', thumb: THUMB_PORT, fmt: 'pdf', status: { src: path, awaits: 'doc.pdf' } },
+    { target: `${stem}.html`, label: `${tag}offline copy`, sub: 'one file, fonts inside, no server', thumb: THUMB_LAND, fmt: 'html', status: { src: path, awaits: 'html' } },
     { target: `${stem}.txt`, label: `${tag}source`, sub: 'the markdown itself', thumb: srcThumb('---\nmarp: true\n---\n# the plan') },
   ];
 }
@@ -257,9 +260,10 @@ function tilesFor(meta: Meta): Tile[] {
 }
 
 function tileHtml(base: string, t: Tile): string {
-  return `<a class="tile" href="${base}${t.target}" target="_blank" rel="noopener">
+  const status = t.status ? ` data-src="${esc(t.status.src)}" data-await="${esc(t.status.awaits)}"` : '';
+  return `<a class="tile" href="${base}${t.target}" target="_blank" rel="noopener"${status}>
 <span class="thumb">${t.thumb}${t.fmt ? `<span class="fmt">${esc(t.fmt)}</span>` : ''}</span>
-<span class="tlabel"><span class="t">${esc(t.label)}</span><span class="s">${esc(t.sub)}</span></span>
+<span class="tlabel"><span class="t">${esc(t.label)}</span><span class="s">${esc(t.sub)}</span>${t.status ? '<span class="tstate"></span>' : ''}</span>
 <button class="copyicon" type="button" data-copy-href aria-label="copy link">${COPY_ICON}</button>
 </a>`;
 }

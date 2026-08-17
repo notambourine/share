@@ -306,6 +306,19 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     expect(html).not.toContain('data-ttl');
   });
 
+  it('markdown tiles carry the hooks the status poll paints', async () => {
+    const env = seededEnv();
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const html = await (await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '')).text();
+    expect(html).toContain('data-src="deck.md" data-await="slides.html"');
+    expect(html).toContain('data-src="deck.md" data-await="slides.pdf"');
+    expect(html).toContain('data-src="deck.md" data-await="doc.pdf"');
+    expect(html).toContain('data-src="deck.md" data-await="html"');
+    // The txt tile derives nothing, so it awaits nothing.
+    expect(html.match(/data-await/g)).toHaveLength(4);
+    expect(html.match(/class="tstate"/g)).toHaveLength(4);
+  });
+
   it('a folder with an index.html reads as one site tile', async () => {
     const env = seededEnv({
       files: [
