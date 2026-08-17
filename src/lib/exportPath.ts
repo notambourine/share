@@ -95,6 +95,12 @@ export function derivedKey(
   return `${space}/${hash}/d/v${CACHE_VERSION}/${source}.${mode}.${ext}`;
 }
 
+/** The slides render's overflow verdict. Under `d/v<N>/` beside the artifacts
+    it describes, so it versions and dies with them. */
+export function checkKey(space: string, hash: string, source: string): string {
+  return `${space}/${hash}/d/v${CACHE_VERSION}/${source}.check.json`;
+}
+
 interface FrontMatter {
   front: string;
   body: string;

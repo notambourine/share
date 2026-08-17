@@ -60,6 +60,17 @@ export function flagAt(record: JsonObject, key: string): boolean {
   return record[key] === true;
 }
 
+export function numbersAt(record: JsonObject, key: string): number[] | null {
+  const value = record[key];
+  if (!Array.isArray(value)) return null;
+  const out: number[] = [];
+  for (const item of value) {
+    if (!isNumber(item)) return null;
+    out.push(item);
+  }
+  return out;
+}
+
 export function recordsAt(record: JsonObject, key: string): JsonObject[] | null {
   const value = record[key];
   if (!Array.isArray(value)) return null;

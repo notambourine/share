@@ -7,7 +7,7 @@ import { upload } from './routes/upload';
 import { mint } from './routes/mint';
 import { listSpace } from './routes/list';
 import { del } from './routes/del';
-import { adminConfig, adminRemint } from './routes/admin';
+import { adminConfig, adminRemint, adminStatus } from './routes/admin';
 import { short } from './routes/short';
 import { session } from './routes/session';
 import { skillDoc } from './skill';
@@ -126,6 +126,11 @@ export default {
     if (request.method === 'POST' && segs.length === 3) {
       if (segs[2] === 'config') return adminConfig(request, env, space, hash);
       if (segs[2] === 'admin') return adminRemint(request, env, space, hash);
+    }
+    /* GET, but only with `?c=` attached: without the credential the path falls
+       through to serve, so an uploaded file named `status` keeps its GET. */
+    if (request.method === 'GET' && segs.length === 3 && segs[2] === 'status' && url.searchParams.has('c')) {
+      return adminStatus(request, env, space, hash);
     }
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return textResponse('GET only\n', 405);
