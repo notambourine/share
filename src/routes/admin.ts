@@ -6,6 +6,8 @@ import { readMeta, readMetaTagged, writeMeta, isExpired } from '../lib/r2';
 import { parseDuration } from '../lib/keys';
 import { parseObject, textAt } from '../lib/json';
 import { jsonResponse, now } from '../lib/http';
+import { CACHE_VERSION } from '../lib/exportPath';
+import { type SlideCheck, decodeSlideCheck } from '../lib/pdf';
 
 /**
  * POST /<space>/<hash>/config?c=<token>: the admin page's one write, `{ttl}`.
@@ -43,6 +45,59 @@ export async function adminConfig(request: Request, env: Env, space: string, has
     }
   }
   return jsonResponse({ error: 'write conflict; retry' }, 409);
+}
+
+interface SourceStatus {
+  path: string;
+  /** `<mode>.<ext>` pairs whose render has landed, e.g. `slides.pdf`. */
+  rendered: string[];
+  check: SlideCheck | null;
+}
+
+/**
+ * GET /<space>/<hash>/status?c=<token>: readiness of the derived formats plus
+ * the overflow verdict, for the admin page's poll and the model's check. Pure
+ * reads - hitting this can never spend a browser minute. Admin credential
+ * because which slides clip is sender-only material.
+ */
+export async function adminStatus(request: Request, env: Env, space: string, hash: string): Promise<Response> {
+  const keys = parseSigningKeys(env);
+  if (!keys) return jsonResponse({ error: 'signing keys misconfigured' }, 500);
+  const t = now();
+  const c = new URL(request.url).searchParams.get('c');
+  if (!c || !(await verifyAdminToken(keys, space, hash, c, t)).ok) {
+    return jsonResponse({ error: `admin link missing or expired; re-open: nt-share admin ${space}/${hash}` }, 401);
+  }
+
+  const meta = await readMeta(env, space, hash);
+  if (!meta || isExpired(meta, t)) return jsonResponse({ error: 'no such artifact' }, 404);
+
+  // Every renderable source answers, so an empty `rendered` reads as pending.
+  const sources = new Map<string, SourceStatus>();
+  for (const f of meta.files) {
+    if (/\.(md|markdown)$/i.test(f.path)) {
+      sources.set(f.path, { path: f.path, rendered: [], check: null });
+    }
+  }
+
+  const prefix = `${space}/${hash}/d/v${CACHE_VERSION}/`;
+  const checkKeys: [SourceStatus, string][] = [];
+  for (const { key } of (await env.BUCKET.list({ prefix })).objects) {
+    const rest = key.slice(prefix.length);
+    const m = /^(.*)\.(check\.json|(?:slides|doc)\.(?:html|pdf))$/.exec(rest);
+    const status = m && sources.get(m[1]);
+    if (!status) continue;
+    if (m[2] === 'check.json') checkKeys.push([status, key]);
+    else status.rendered.push(m[2]);
+  }
+  for (const [status, key] of checkKeys) {
+    const obj = await env.BUCKET.get(key);
+    if (obj) status.check = decodeSlideCheck(await obj.text());
+  }
+
+  return jsonResponse({
+    sources: [...sources.values()].map(({ path, rendered, check }) => ({ path, rendered: rendered.sort(), check })),
+  });
 }
 
 /**

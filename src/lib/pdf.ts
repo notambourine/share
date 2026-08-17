@@ -12,6 +12,7 @@
  */
 
 import puppeteer, { type Browser, type PDFOptions } from '@cloudflare/puppeteer';
+import { numbersAt, numberAt, parseObject } from './json';
 
 /**
  * Cloudflare allows one new browser every 20 seconds. A session that outlives
@@ -23,10 +24,40 @@ const KEEP_ALIVE_MS = 30_000;
 /** A cold browser plus Marpit plus font loading. Past this, degrade. */
 const RENDER_TIMEOUT_MS = 20_000;
 
+/* A string, not a function: the Worker's tsconfig carries no DOM lib, and the
+   browser's answer comes back through the JSON decoder like any boundary. The
+   page is open anyway, so the fit question costs no browser budget. The +1
+   forgives sub-pixel rounding, not real clipping. */
+const MEASURE_SLIDES = `(() => {
+  const sections = Array.from(document.querySelectorAll('svg[data-marpit-svg] foreignObject > section'));
+  return JSON.stringify({
+    slides: sections.length,
+    overflow: sections.flatMap((s, i) => (s.scrollHeight > s.clientHeight + 1 ? [i + 1] : [])),
+  });
+})()`;
+
+/** A slide box is fixed; content taller than it is silently clipped, and only
+    a laid-out page knows. `overflow` holds the 1-indexed slides that clip. */
+export type SlideCheck = {
+  slides: number;
+  overflow: number[];
+};
+
+/** The stored check.json crossing back in. */
+export function decodeSlideCheck(text: string): SlideCheck | null {
+  const record = parseObject(text);
+  if (!record) return null;
+  const slides = numberAt(record, 'slides');
+  const overflow = numbersAt(record, 'overflow');
+  return slides !== null && overflow !== null ? { slides, overflow } : null;
+}
+
 export interface Artifacts {
   /** The rendered DOM, self-contained: fonts inlined, scripts removed. */
   html: string;
   pdf: Uint8Array;
+  /** Slides renders only; null on doc renders or when the measure failed. */
+  check: SlideCheck | null;
 }
 
 async function acquire(binding: Fetcher): Promise<Browser | null> {
@@ -62,7 +93,9 @@ async function acquire(binding: Fetcher): Promise<Browser | null> {
  * `page.pdf()` is the `.pdf`; rendering twice would double the only budget
  * that binds.
  */
-export async function render(binding: Fetcher, html: string, pdfOptions: PDFOptions): Promise<Artifacts | null> {
+export async function render(
+  binding: Fetcher, html: string, pdfOptions: PDFOptions, measureSlides = false,
+): Promise<Artifacts | null> {
   const browser = await acquire(binding);
   if (!browser) return null;
 
@@ -73,9 +106,18 @@ export async function render(binding: Fetcher, html: string, pdfOptions: PDFOpti
     /* The print HTML flags itself once Marpit, highlight.js, and the fonts
        have all landed. Waiting on a load event would catch none of them. */
     await page.waitForSelector('html[data-ready="1"]', { timeout: RENDER_TIMEOUT_MS });
+    let check: SlideCheck | null = null;
+    if (measureSlides) {
+      try {
+        const raw: unknown = await page.evaluate(MEASURE_SLIDES);
+        check = decodeSlideCheck(String(raw));
+      } catch (err) {
+        console.log(`pdf: overflow measure failed: ${err}`);
+      }
+    }
     const out = await page.content();
     const pdf = await page.pdf(pdfOptions);
-    return { html: out, pdf: new Uint8Array(pdf) };
+    return { html: out, pdf: new Uint8Array(pdf), check };
   } catch (err) {
     console.log(`pdf: render failed: ${err}`);
     return null;

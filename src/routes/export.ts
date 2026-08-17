@@ -9,7 +9,7 @@
 import type { Env, Meta } from '../lib/types';
 import {
   type ExportFormat, type RenderMode,
-  explicitMode, formatExt, derivedKey, sniffDeck,
+  explicitMode, formatExt, derivedKey, checkKey, sniffDeck,
 } from '../lib/exportPath';
 import { render, type Artifacts } from '../lib/pdf';
 import { printHtml, pdfOptionsFor } from '../render/export';
@@ -54,6 +54,9 @@ async function store(env: Env, space: string, hash: string, source: string, mode
     env.BUCKET.put(derivedKey(space, hash, source, mode, 'pdf'), out.pdf, {
       httpMetadata: { contentType: 'application/pdf' },
     }),
+    ...(out.check ? [env.BUCKET.put(checkKey(space, hash, source), JSON.stringify(out.check), {
+      httpMetadata: { contentType: 'application/json' },
+    })] : []),
   ]);
 }
 
@@ -81,7 +84,7 @@ async function produce(
     console.log(`export: print HTML failed: ${err}`);
     return null;
   }
-  const out = await render(env.BROWSER, html, pdfOptionsFor(mode, title));
+  const out = await render(env.BROWSER, html, pdfOptionsFor(mode, title), mode === 'slides');
   if (out) await store(env, space, hash, source, mode, out);
   return out;
 }
