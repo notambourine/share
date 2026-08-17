@@ -71,6 +71,11 @@ export async function serve(
 
   const file = meta.files.find((f) => f.path === filePath);
   if (!file) {
+    /* A poster is not a row of its own, so it resolves off the parent that
+       owns it - and always as bytes, because og:image is what asks. */
+    if (meta.files.some((f) => f.poster === filePath)) {
+      return rawBytes(request, env, `${space}/${hash}/f/${filePath}`, filePath, false);
+    }
     /* Exact match first, then the format suffixes, so a file uploaded as
        `notes.pdf` serves its own bytes instead of re-rendering `notes`. */
     const wanted = resolveExport(meta.files.map((f) => f.path), filePath);
@@ -82,16 +87,29 @@ export async function serve(
     });
   }
 
-  const mode = viewModeFor(filePath, request.headers.get('accept'), url.searchParams);
+  const mode = viewModeFor(
+    filePath, request.headers.get('accept'), url.searchParams, request.headers.get('user-agent'),
+  );
   const rawHref = `${url.origin}${url.pathname}${url.pathname.endsWith('/') ? 'index.html' : ''}?raw`;
+  /* Built from the segments rather than sliced off the pathname: the poster is
+     a sibling of the file, not of the URL, and a request under a subdirectory
+     would otherwise hang it off the wrong base. */
+  const root = `${url.origin}/${space}/${hash}/${token ? `k/${token}/` : ''}`;
+  const opts = {
+    path: filePath,
+    rawHref,
+    size: file.size,
+    pageHref: `${url.origin}${url.pathname}`,
+    ...(file.poster && { posterHref: `${root}${encodeURI(file.poster)}?raw` }),
+  };
 
   switch (mode) {
-    case 'shell-image': return htmlResponse(fileShell('image', filePath, rawHref, file.size));
-    case 'shell-video': return htmlResponse(fileShell('video', filePath, rawHref, file.size));
-    case 'shell-svg': return htmlResponse(fileShell('svg', filePath, rawHref, file.size));
-    case 'shell-code': return htmlResponse(fileShell('code', filePath, rawHref, file.size));
-    case 'shell-md': return htmlResponse(fileShell('md', filePath, rawHref, file.size));
-    case 'shell-download': return htmlResponse(fileShell('download', filePath, rawHref, file.size));
+    case 'shell-image': return htmlResponse(fileShell('image', opts));
+    case 'shell-video': return htmlResponse(fileShell('video', opts));
+    case 'shell-svg': return htmlResponse(fileShell('svg', opts));
+    case 'shell-code': return htmlResponse(fileShell('code', opts));
+    case 'shell-md': return htmlResponse(fileShell('md', opts));
+    case 'shell-download': return htmlResponse(fileShell('download', opts));
     default:
       return rawBytes(request, env, `${space}/${hash}/f/${filePath}`, filePath, mode === 'attachment');
   }

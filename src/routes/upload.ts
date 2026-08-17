@@ -1,6 +1,7 @@
 import type { Deferrals, Env, Meta, MetaFile, Tier } from '../lib/types';
 import { DEFAULT_ARTIFACT_DAYS, DEFAULT_LINK_DAYS } from '../lib/types';
 import { genSlug, normalizeUploadPath, contentTypeFor, isValidSpace, parseDuration } from '../lib/keys';
+import { posterParent } from '../lib/poster';
 import { authenticate, SESSION_EXPIRED_MSG } from '../lib/auth';
 import type { SigningKeys } from '../lib/sign';
 import { parseSigningKeys } from '../lib/sign';
@@ -95,14 +96,29 @@ export async function upload(
   if (entries.length > MAX_FILES) return textResponse(`too many files (max ${MAX_FILES})\n`, 400);
 
   const hash = genSlug(12);
-  const files: MetaFile[] = [];
-  for (const { path, blob } of entries) {
-    const type = contentTypeFor(path);
-    await env.BUCKET.put(`${space}/${hash}/f/${path}`, blob, {
-      httpMetadata: { contentType: type },
-    });
-    files.push({ path, size: blob.size, type });
+  /* A poster only counts as one when the file it names rode along; otherwise
+     someone uploaded a picture that happens to be called that, and it keeps its
+     own row. Bytes land either way - only the meta record differs. */
+  const posters = new Map<string, string>();
+  const payload: UploadEntry[] = [];
+  for (const e of entries) {
+    const parent = posterParent(e.path);
+    if (parent !== null && seen.has(parent)) posters.set(parent, e.path);
+    else payload.push(e);
   }
+
+  for (const { path, blob } of entries) {
+    await env.BUCKET.put(`${space}/${hash}/f/${path}`, blob, {
+      httpMetadata: { contentType: contentTypeFor(path) },
+    });
+  }
+  const files: MetaFile[] = payload.map(({ path, blob }) => {
+    const poster = posters.get(path);
+    return {
+      path, size: blob.size, type: contentTypeFor(path),
+      ...(poster && { poster }),
+    };
+  });
 
   const meta: Meta = {
     space, hash, tier, uploader,

@@ -24,13 +24,17 @@
    Node runs this .ts directly (type stripping, 22.18+), so keep the syntax
    erasable: no enum, no namespace, no parameter properties.
 */
-import { readFile, readdir, stat, writeFile, mkdir, chmod } from 'node:fs/promises';
+import { readFile, readdir, stat, writeFile, mkdir, mkdtemp, rm, chmod } from 'node:fs/promises';
 import { join, relative, basename, sep, delimiter } from 'node:path';
 import { Buffer } from 'node:buffer';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
+/* The installed shim imports this file where it lies rather than copying it,
+   so reaching into src/ resolves at runtime too. The poster suffix is a
+   contract with the Worker; both ends read it from the one declaration. */
+import { posterPath } from '../src/lib/poster.ts';
 
 const BASE = (process.env.SHARE_URL ?? 'https://share.notambourine.com').replace(/\/$/, '');
 const REF = process.env.SHARE_TOKEN_REF ?? 'op://Employee/share-token/credential';
@@ -185,6 +189,46 @@ async function walk(root: string): Promise<{ abs: string; rel: string }[]> {
     out.push({ abs, rel });
   }
   return out;
+}
+
+/* Poster frames. Slack builds an unfurl card from og: tags and needs a real
+   picture; a video URL carries neither, so the frame is cut here and uploaded
+   as a sibling. Worker-side is not an option - Browser Rendering drives a page,
+   not a decoder. Suffix and record live in src/lib/poster.ts. */
+const VIDEO_EXT = /\.(mp4|mov|m4v|webm)$/i;
+const POSTER_MAX = 1280;
+
+function ran(cmd: string, args: string[]): boolean {
+  const r = spawnSync(cmd, args, { encoding: 'buffer' });
+  return !r.error && r.status === 0;
+}
+
+/**
+ * ffmpeg first: a frame one second in beats the black opener most screen
+ * recordings start on. qlmanage is the macOS fallback and picks its own frame.
+ * Neither present means no poster and a text-only card, never a failed upload -
+ * the video is what the user asked to share.
+ */
+async function posterFrame(abs: string): Promise<Buffer<ArrayBuffer> | null> {
+  const dir = await mkdtemp(join(tmpdir(), 'nt-poster-'));
+  const jpg = join(dir, 'poster.jpg');
+  try {
+    if (ran('ffmpeg', [
+      '-v', 'error', '-y', '-ss', '1', '-i', abs, '-frames:v', '1',
+      '-vf', `scale='min(${POSTER_MAX},iw)':-2`, '-q:v', '4', jpg,
+    ])) return await readFile(jpg);
+
+    if (process.platform === 'darwin'
+      && ran('qlmanage', ['-t', '-s', String(POSTER_MAX), '-o', dir, abs])
+      && ran('sips', ['-s', 'format', 'jpeg', join(dir, `${basename(abs)}.png`), '--out', jpg])
+    ) return await readFile(jpg);
+
+    return null;
+  } catch {
+    return null;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 /* Clipboard, one shell-out per platform, bytes back over stdout rather than a
@@ -419,6 +463,9 @@ switch (cmd) {
       for (const { abs, rel } of await walk(p)) {
         form.append('f', new Blob([await readFile(abs)]), rel);
         count++;
+        if (!VIDEO_EXT.test(rel)) continue;
+        const poster = await posterFrame(abs);
+        if (poster) form.append('f', new Blob([poster]), posterPath(rel));
       }
     }
     if (count === 0) die('nothing to upload');

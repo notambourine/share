@@ -5,7 +5,7 @@
  */
 
 import type { Meta, MetaFile } from '../lib/types';
-import { kindOf } from '../lib/keys';
+import { kindOf, extOf } from '../lib/keys';
 import { fileSuffix } from '../lib/link';
 import { LOCKUP } from '../brand';
 
@@ -83,15 +83,57 @@ function fileName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1) || path;
 }
 
-/** rawHref is the same pathname plus ?raw, so signed /k/ segments ride along. */
-export function fileShell(kind: string, path: string, rawHref: string, size?: number): string {
+export interface ShellOpts {
+  path: string;
+  /** The same pathname plus ?raw, so signed /k/ segments ride along. */
+  rawHref: string;
+  size?: number;
+  /** Absolute URL of this page, for og:url. */
+  pageHref?: string;
+  /** Absolute bytes of the poster frame, when the upload carried one. */
+  posterHref?: string;
+}
+
+/**
+ * The unfurl card. An artifact URL is the whole story a crawler gets - there is
+ * no page around it to scrape - so the tags carry the filename, the type, and
+ * the size, and the image is a frame rather than the lockup, because a card
+ * that shows every artifact identically tells the reader nothing.
+ */
+function ogTags(o: ShellOpts, image: string | undefined): string {
+  const ext = extOf(o.path).toUpperCase();
+  const desc = [ext, o.size ? fmtSize(o.size) : '', 'shared via NoTambourine']
+    .filter(Boolean).join(' · ');
+  const tags = [
+    '<meta property="og:type" content="website">',
+    '<meta property="og:site_name" content="NoTambourine">',
+    `<meta property="og:title" content="${esc(fileName(o.path))}">`,
+    `<meta property="og:description" content="${esc(desc)}">`,
+  ];
+  if (o.pageHref) tags.push(`<meta property="og:url" content="${esc(o.pageHref)}">`);
+  /* summary_large_image only when a real picture backs it: Slack renders the
+     bare `summary` card as text, which beats a card with a broken image well. */
+  tags.push(`<meta name="twitter:card" content="${image ? 'summary_large_image' : 'summary'}">`);
+  if (image) {
+    tags.push(
+      `<meta property="og:image" content="${esc(image)}">`,
+      `<meta name="twitter:image" content="${esc(image)}">`,
+    );
+  }
+  return tags.join('\n');
+}
+
+export function fileShell(kind: string, o: ShellOpts): string {
+  const { path, rawHref, size } = o;
   const name = fileName(path);
   const attrs = ` data-kind="${esc(kind)}" data-raw="${esc(rawHref)}"`;
+  // An image is its own poster; everything else shows a frame or nothing.
+  const og = ogTags(o, kind === 'image' ? rawHref : o.posterHref);
   switch (kind) {
     case 'image':
       return layout({
         title: name,
-        head: `<meta property="og:image" content="${esc(rawHref)}">`,
+        head: og,
         bodyAttrs: attrs,
         body: `<figure class="media"><img src="${esc(rawHref)}" alt="${esc(name)}"></figure>
 <p class="caption">${esc(name)}${size ? ` · ${fmtSize(size)}` : ''}</p>`,
@@ -99,14 +141,18 @@ export function fileShell(kind: string, path: string, rawHref: string, size?: nu
     case 'video':
       return layout({
         title: name,
+        head: og,
         bodyAttrs: attrs,
-        body: `<figure class="media"><video controls src="${esc(rawHref)}"></video></figure>
+        // The same frame the card shows: it paints before the first byte of
+        // video arrives, so the page is never a black rectangle.
+        body: `<figure class="media"><video controls${o.posterHref ? ` poster="${esc(o.posterHref)}"` : ''} src="${esc(rawHref)}"></video></figure>
 <p class="caption">${esc(name)}${size ? ` · ${fmtSize(size)}` : ''}</p>`,
       });
     case 'svg':
       // Never an inline svg navigation: the image element sandboxes any script.
       return layout({
         title: name,
+        head: og,
         bodyAttrs: attrs,
         body: `<figure class="media"><img src="${esc(rawHref)}" alt="${esc(name)}"></figure>
 <p class="caption">${esc(name)}${size ? ` · ${fmtSize(size)}` : ''}</p>`,
@@ -114,7 +160,7 @@ export function fileShell(kind: string, path: string, rawHref: string, size?: nu
     case 'code':
       return layout({
         title: name,
-        head: HLJS_CSS + HLJS_JS,
+        head: og + HLJS_CSS + HLJS_JS,
         bodyAttrs: attrs,
         body: `<div class="doc code"><p class="caption">${esc(name)}${size ? ` · ${fmtSize(size)}` : ''}</p>
 <pre><code id="content">loading…</code></pre></div>`,
@@ -122,14 +168,14 @@ export function fileShell(kind: string, path: string, rawHref: string, size?: nu
     case 'md':
       return layout({
         title: name,
-        head: HLJS_CSS + HLJS_JS + MARKED_JS,
+        head: og + HLJS_CSS + HLJS_JS + MARKED_JS,
         bodyAttrs: attrs,
         body: `<article class="doc prose" id="content"><p class="caption">loading…</p></article>`,
       });
     case 'slides':
       return layout({
         title: name,
-        head: HLJS_CSS + HLJS_JS + MARP_JS,
+        head: og + HLJS_CSS + HLJS_JS + MARP_JS,
         bodyAttrs: attrs,
         body: `<div class="deck" id="content"></div>
 <nav class="deck-nav" hidden>
@@ -141,6 +187,7 @@ export function fileShell(kind: string, path: string, rawHref: string, size?: nu
     default:
       return layout({
         title: name,
+        head: og,
         bodyAttrs: attrs,
         body: `<div class="card download">
 <p class="eyebrow">artifact</p>

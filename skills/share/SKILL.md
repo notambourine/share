@@ -6,7 +6,9 @@ description: Share a generated artifact (report, code sample, deck, screenshot, 
 # share.notambourine.com
 
 Upload an artifact, get one URL, hand it to one person. Browsers see a branded
-render; curl, `<img src>`, and Slack unfurls get raw bytes from the same URL.
+render; curl and `<img src>` get raw bytes from the same URL. Pasted in Slack,
+an image previews on its own and everything else draws a card - a video shows
+the frame the CLI cut at upload.
 
 ## Verbs
 
