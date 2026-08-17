@@ -80,7 +80,7 @@ interface FrontMatter {
   body: string;
 }
 
-function splitFrontMatter(markdown: string): FrontMatter {
+export function splitFrontMatter(markdown: string): FrontMatter {
   if (!/^---[ \t]*\r?\n/.test(markdown)) return { front: '', body: markdown };
   const end = /\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(markdown.slice(3));
   if (!end) return { front: '', body: markdown };
