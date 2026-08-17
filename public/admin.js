@@ -8,6 +8,7 @@
 
   function lock() {
     document.body.classList.add('locked');
+    stopPoll();
   }
 
   if (!c || !actions) { lock(); return; }
@@ -91,6 +92,71 @@
       });
     });
   });
+
+  /* Status poll: the route is pure reads, so polling can never spend a
+     browser minute. 3s while any awaited render is missing; stops when
+     everything landed and each slides source has its check, on 401, or at
+     2 minutes. Ready is silent - only generating and overflow get chrome. */
+  var awaited = document.querySelectorAll('[data-await]');
+  var pollTimer = null;
+  var polled = 0;
+
+  function stopPoll() {
+    if (!pollTimer) return;
+    clearInterval(pollTimer);
+    pollTimer = null;
+    // A spinner that outlives the poll would lie; leave the overflow chips.
+    document.querySelectorAll('.tstate.gen').forEach(function (st) {
+      st.className = 'tstate';
+      st.textContent = '';
+    });
+  }
+
+  function paint(sources) {
+    var byPath = new Map();
+    sources.forEach(function (s) { byPath.set(s.path, s); });
+    var settled = true;
+    awaited.forEach(function (tile) {
+      var s = byPath.get(tile.dataset.src);
+      var st = tile.querySelector('.tstate');
+      if (!s || !st) return;
+      var key = tile.dataset.await;
+      var ready = key === 'html'
+        ? s.rendered.some(function (r) { return r.slice(-5) === '.html'; })
+        : s.rendered.indexOf(key) !== -1;
+      var slides = key.indexOf('slides.') === 0;
+      if (slides && s.check && s.check.overflow.length) {
+        var n = s.check.overflow;
+        st.className = 'tstate err';
+        st.textContent = n.length === 1
+          ? 'slide ' + n[0] + ' overflows'
+          : 'slides ' + n.join(', ') + ' overflow';
+      } else if (ready) {
+        st.className = 'tstate';
+        st.textContent = '';
+      } else {
+        st.className = 'tstate gen';
+        st.textContent = 'generating';
+        settled = false;
+      }
+      if (slides && !s.check) settled = false;
+    });
+    return settled;
+  }
+
+  function poll() {
+    fetch(location.pathname + 'status?c=' + c).then(function (r) {
+      if (r.status === 401) { lock(); return null; }
+      return r.ok ? r.json() : null;
+    }).then(function (out) {
+      // pollTimer gone = capped or settled while this answer was in flight.
+      if (out && pollTimer && paint(out.sources)) stopPoll();
+    }).catch(function () {});
+    polled += 3000;
+    if (polled > 120000) stopPoll();
+  }
+
+  if (awaited.length) { pollTimer = setInterval(poll, 3000); poll(); }
 
   /* Delete: the confirm replaces the whole action row, so copy is gone while
      it is armed. DELETE, never GET - link scanners prefetch. */

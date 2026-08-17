@@ -233,6 +233,17 @@ body.locked .locked-only { display: block; }
   font-weight: var(--fw-semibold); color: var(--fg1); }
 .tlabel .s { font-size: var(--fs-caption); color: var(--fg3); }
 
+/* Tile state, painted by admin.js from the status poll. Ready is silent;
+   only generating (spinner) and overflow (the brand's error pink) show. */
+.tstate { display: none; font-size: var(--fs-caption); align-items: center; gap: var(--sp-2); }
+.tstate.gen { display: inline-flex; color: var(--fg3); }
+.tstate.gen::before { content: ''; width: 10px; height: 10px;
+  border-radius: var(--r-pill); border: 2px solid var(--line);
+  border-top-color: var(--accent); animation: tstate-spin 0.9s linear infinite; }
+.tstate.err { display: inline-flex; color: var(--accent-fg); }
+@keyframes tstate-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tstate.gen::before { animation: none; } }
+
 .copyicon { position: absolute; top: var(--sp-3); right: var(--sp-3);
   display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: var(--r-pill);
