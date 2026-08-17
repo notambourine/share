@@ -35,11 +35,18 @@ export interface MemoryStore extends Store {
 export function memoryStore(seed: Record<string, string> = {}): MemoryStore {
   const objects = new Map(Object.entries(seed));
 
+  /* Content-derived, not size-derived: a conditional put must see the etag
+     change when a same-length field flips (one epoch second to another). */
+  const etagOf = (text: string): string => {
+    let h = 5381;
+    for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+    return `"${h.toString(16)}"`;
+  };
+
   const headOf = (key: string): StoredHead | null => {
     const text = objects.get(key);
     if (text === undefined) return null;
-    const size = enc.encode(text).byteLength;
-    return { size, httpEtag: `"${size}"` };
+    return { size: enc.encode(text).byteLength, httpEtag: etagOf(text) };
   };
 
   return {
@@ -63,7 +70,9 @@ export function memoryStore(seed: Record<string, string> = {}): MemoryStore {
       return headOf(key);
     },
 
-    async put(key, value) {
+    async put(key, value, options) {
+      const match = options?.onlyIf?.etagMatches;
+      if (match !== undefined && headOf(key)?.httpEtag !== match) return null;
       objects.set(key, await textOf(value));
       return headOf(key);
     },

@@ -5,6 +5,7 @@ import { authenticate, SESSION_EXPIRED_MSG } from '../lib/auth';
 import type { SigningKeys } from '../lib/sign';
 import { parseSigningKeys } from '../lib/sign';
 import { mintArtifactLink, publicUrl } from '../lib/link';
+import { writeMeta } from '../lib/r2';
 import { prerender } from './export';
 import { decodeNumberMap } from '../lib/json';
 import { jsonResponse, textResponse, wantsJson, now } from '../lib/http';
@@ -104,9 +105,7 @@ export async function upload(
     space, hash, tier, uploader,
     createdAt: t, expiresAt, idleTtl, lastAccess: t, files,
   };
-  await env.BUCKET.put(`${space}/${hash}/meta.json`, JSON.stringify(meta), {
-    httpMetadata: { contentType: 'application/json' },
-  });
+  await writeMeta(env, meta);
 
   /* Warm the export cache off the response path. The browser budget is the
      scarce resource, so this runs after meta.json lands and never blocks. */

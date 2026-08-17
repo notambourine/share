@@ -56,6 +56,33 @@ export async function readMeta(env: Env, space: string, hash: string): Promise<M
   return decodeMeta(await obj.text());
 }
 
+export interface TaggedMeta {
+  meta: Meta;
+  etag: string;
+}
+
+/** For read-modify-write: the etag feeds a conditional `writeMeta`. */
+export async function readMetaTagged(env: Env, space: string, hash: string): Promise<TaggedMeta | null> {
+  const obj = await env.BUCKET.get(`${space}/${hash}/meta.json`);
+  if (!obj) return null;
+  const meta = decodeMeta(await obj.text());
+  return meta && { meta, etag: obj.httpEtag };
+}
+
+/**
+ * With `etag`, the write lands only if meta.json is still the object that was
+ * read - two whole-object rewrites (a lastAccess touch, a TTL edit) would
+ * otherwise silently clobber each other. False = lost the race; caller decides
+ * whether that matters.
+ */
+export async function writeMeta(env: Env, meta: Meta, etag?: string): Promise<boolean> {
+  const head = await env.BUCKET.put(`${meta.space}/${meta.hash}/meta.json`, JSON.stringify(meta), {
+    httpMetadata: { contentType: 'application/json' },
+    ...(etag && { onlyIf: { etagMatches: etag } }),
+  });
+  return head !== null;
+}
+
 export function isExpired(meta: Meta, nowSecs: number): boolean {
   if (meta.expiresAt !== null && nowSecs > meta.expiresAt) return true;
   if (meta.idleTtl !== null && nowSecs > meta.lastAccess + meta.idleTtl) return true;

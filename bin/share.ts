@@ -12,6 +12,7 @@
    nt-share put <space> --clip [--name shot.png]        (the image on the clipboard)
    nt-share sign <space>/<hash> [--ttl 30d] [--short]   (re-sign an older artifact)
    nt-share short <space>/<hash> [--ttl 30d]
+   nt-share admin <space>/<hash>                        (re-open the 5-minute admin link)
    nt-share ls <space>
    nt-share rm <space>/<hash>
    nt-share session [--ttl 5m] [--print]  (optional pre-mint, max 1h; --print echoes the token for curl)
@@ -449,6 +450,13 @@ switch (cmd) {
     if (alsoShort) console.log(alsoShort);
     break;
   }
+  case 'admin': {
+    const [path] = rest;
+    if (!path?.includes('/')) die('usage: nt-share admin <space>/<hash>');
+    const made = fields(await api(`/${path.replace(/\/$/, '')}/admin`, { method: 'POST' }, vaultToken()));
+    console.log(required(made, 'url'));
+    break;
+  }
   case 'ls': {
     const [space] = rest;
     if (!space) die('usage: nt-share ls <space>');
@@ -463,5 +471,5 @@ switch (cmd) {
     break;
   }
   default:
-    die('commands: install, put, sign, short, ls, rm, session; see https://share.notambourine.com/llms.txt');
+    die('commands: install, put, sign, short, admin, ls, rm, session; see https://share.notambourine.com/llms.txt');
 }

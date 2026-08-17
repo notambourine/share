@@ -68,6 +68,24 @@ signedExp, and short, alongside url and hash.
 Returns {url, exp, short?}. ttl defaults to 30d; "forever" never expires.
 short:true also mints a /z/<id> shortlink that 302s to the signed URL.
 
+## Admin link
+
+    curl -sS -X POST -H "Authorization: Bearer $SHARE_TOKEN" \
+      https://share.notambourine.com/<space>/<hash>/admin
+
+Returns {url, exp}: the artifact's admin link, live for 5 minutes. The url
+carries ?c=<token>, a credential scoped to exactly this artifact's config and
+delete routes - it is not a view token and never belongs in a link you hand
+over. It authorizes two writes:
+
+    POST /<space>/<hash>/config?c=<token>    {"ttl":"30d"} or {"ttl":"forever"}
+    DELETE /<space>/<hash>/?c=<token>        same soft delete as Revoke below
+
+The config write answers {c, expiresAt}: a fresh 5-minute token (each edit
+restarts the clock; adopt the new c) and the expiry it committed. The ttl
+counts from upload and takes over expiry entirely, clearing any idle rule; a
+ttl the artifact has already outlived counts from the write instead.
+
 ## List a space
 
     curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \

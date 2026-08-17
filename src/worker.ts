@@ -7,6 +7,7 @@ import { upload } from './routes/upload';
 import { mint } from './routes/mint';
 import { listSpace } from './routes/list';
 import { del } from './routes/del';
+import { adminConfig, adminRemint } from './routes/admin';
 import { short } from './routes/short';
 import { session } from './routes/session';
 import { skillDoc } from './skill';
@@ -120,6 +121,11 @@ export default {
     if (request.method === 'DELETE') {
       if (segs.length !== 2) return textResponse('DELETE /<space>/<hash>/\n', 400);
       return del(request, env, space, hash);
+    }
+    /* POST only, so an uploaded file named `config` or `admin` keeps its GET. */
+    if (request.method === 'POST' && segs.length === 3) {
+      if (segs[2] === 'config') return adminConfig(request, env, space, hash);
+      if (segs[2] === 'admin') return adminRemint(request, env, space, hash);
     }
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return textResponse('GET only\n', 405);

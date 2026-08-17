@@ -1,5 +1,5 @@
-import type { Deferrals, Env, Meta } from '../lib/types';
-import { readMeta, isExpired } from '../lib/r2';
+import type { Deferrals, Env } from '../lib/types';
+import { readMetaTagged, writeMeta, isExpired } from '../lib/r2';
 import { parseSigningKeys, verifyToken } from '../lib/sign';
 import { viewModeFor } from '../lib/negotiate';
 import { resolveExport } from '../lib/exportPath';
@@ -19,9 +19,10 @@ export async function serve(
   token: string | null,
   rest: string,
 ): Promise<Response> {
-  const meta = await readMeta(env, space, hash);
+  const tagged = await readMetaTagged(env, space, hash);
   const t = now();
-  if (!meta || isExpired(meta, t)) return htmlResponse(errorShell(404), 404);
+  if (!tagged || isExpired(tagged.meta, t)) return htmlResponse(errorShell(404), 404);
+  const { meta, etag } = tagged;
 
   if (meta.tier === 'signed') {
     if (!token) return htmlResponse(errorShell(401), 401);
@@ -32,13 +33,10 @@ export async function serve(
   }
 
   // Idle-TTL uploads pay the bookkeeping: at most one meta rewrite per day.
+  // Conditional on the etag read above, so it can never clobber an admin TTL
+  // edit that landed in between; losing a day's touch to that race is nothing.
   if (meta.idleTtl !== null && t - meta.lastAccess > DAY) {
-    const updated: Meta = { ...meta, lastAccess: t };
-    ctx.waitUntil(
-      env.BUCKET.put(`${space}/${hash}/meta.json`, JSON.stringify(updated), {
-        httpMetadata: { contentType: 'application/json' },
-      }),
-    );
+    ctx.waitUntil(writeMeta(env, { ...meta, lastAccess: t }, etag));
   }
 
   const url = new URL(request.url);

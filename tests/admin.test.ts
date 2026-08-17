@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ADMIN_SECS, mintAdminToken, verifyAdminToken } from '../src/lib/admin';
 import { mintToken, verifyToken } from '../src/lib/sign';
+import { sha256hex, mintSession } from '../src/lib/auth';
+import { decodeMeta } from '../src/lib/r2';
+import { adminConfig, adminRemint } from '../src/routes/admin';
 import { del } from '../src/routes/del';
 import { serve } from '../src/routes/serve';
 import type { TestEnv } from './bindings';
@@ -12,20 +15,35 @@ const HASH = 'Ab3dEf6hIj9k';
 const VIEW_PREFIX = `${SPACE}/${HASH}`;
 const NOW = Math.floor(Date.now() / 1000);
 const EXP = NOW + ADMIN_SECS;
+const DAY = 86400;
 
-function seededEnv(tier: 'open' | 'signed' = 'open'): TestEnv {
+interface SeedOptions {
+  tier?: 'open' | 'signed';
+  createdAt?: number;
+  idleTtl?: number | null;
+  tokens?: string;
+}
+
+function seededEnv({ tier = 'open', createdAt = NOW, idleTtl = null, tokens }: SeedOptions = {}): TestEnv {
   const meta = JSON.stringify({
     space: SPACE, hash: HASH, tier, uploader: 'tom',
-    createdAt: NOW, expiresAt: null, idleTtl: null, lastAccess: NOW,
+    createdAt, expiresAt: null, idleTtl, lastAccess: NOW,
     files: [{ path: 'deck.md', size: 6, type: 'text/markdown' }],
   });
   return testEnv({
     signingKeys: JSON.stringify(KEYS),
+    tokens,
     objects: {
       [`${VIEW_PREFIX}/meta.json`]: meta,
       [`${VIEW_PREFIX}/f/deck.md`]: '# deck',
     },
   });
+}
+
+function storedMeta(env: TestEnv) {
+  const text = env.BUCKET.objects.get(`${VIEW_PREFIX}/meta.json`);
+  const meta = text === undefined ? null : decodeMeta(text);
+  return meta ?? expect.fail('meta.json missing or undecodable');
 }
 
 function delReq(c: string | null): Request {
@@ -102,9 +120,126 @@ describe('DELETE with ?c=', () => {
   });
 });
 
+function configReq(c: string | null, body: string): Request {
+  const query = c === null ? '' : `?c=${c}`;
+  return new Request(`https://share.example/${SPACE}/${HASH}/config${query}`, { method: 'POST', body });
+}
+
+describe('POST /<space>/<hash>/config', () => {
+  it('writes the ttl, owns expiry outright, and answers a fresh token', async () => {
+    const env = seededEnv({ idleTtl: 7 * DAY });
+    // Minted a minute ago: the slide shows as a later exp on the answer. The
+    // token is a deterministic HMAC, so same-second bytes would be identical.
+    const sent = await mintAdminToken(KEYS, SPACE, HASH, NOW + ADMIN_SECS - 60);
+    const res = await adminConfig(configReq(sent, '{"ttl":"30d"}'), env, SPACE, HASH);
+    expect(res.status).toBe(200);
+    const body = await res.json<{ c: string; expiresAt: number }>();
+    expect(body.expiresAt).toBe(NOW + 30 * DAY);
+    expect(Number(body.c.split('.')[1])).toBeGreaterThan(Number(sent.split('.')[1]));
+    expect((await verifyAdminToken(KEYS, SPACE, HASH, body.c, NOW)).ok).toBe(true);
+    const meta = storedMeta(env);
+    expect(meta.expiresAt).toBe(NOW + 30 * DAY);
+    expect(meta.idleTtl).toBeNull();
+  });
+
+  it('forever clears the expiry', async () => {
+    const env = seededEnv({ idleTtl: 7 * DAY });
+    const sent = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const res = await adminConfig(configReq(sent, '{"ttl":"forever"}'), env, SPACE, HASH);
+    expect(res.status).toBe(200);
+    const meta = storedMeta(env);
+    expect(meta.expiresAt).toBeNull();
+    expect(meta.idleTtl).toBeNull();
+  });
+
+  it('a ttl the artifact has outlived counts from the write, not from upload', async () => {
+    const env = seededEnv({ createdAt: NOW - 10 * DAY });
+    const sent = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const res = await adminConfig(configReq(sent, '{"ttl":"7d"}'), env, SPACE, HASH);
+    expect(res.status).toBe(200);
+    const body = await res.json<{ expiresAt: number }>();
+    expect(body.expiresAt).toBeGreaterThanOrEqual(NOW + 7 * DAY);
+  });
+
+  it('refuses a missing, view, or expired token and names the re-open verb', async () => {
+    const env = seededEnv();
+    expect((await adminConfig(configReq(null, '{"ttl":"30d"}'), env, SPACE, HASH)).status).toBe(401);
+    const view = await mintToken(KEYS, VIEW_PREFIX, EXP);
+    expect((await adminConfig(configReq(view, '{"ttl":"30d"}'), env, SPACE, HASH)).status).toBe(401);
+    const stale = await mintAdminToken(KEYS, SPACE, HASH, NOW - 1);
+    const res = await adminConfig(configReq(stale, '{"ttl":"30d"}'), env, SPACE, HASH);
+    expect(res.status).toBe(401);
+    expect(await res.text()).toContain(`nt-share admin ${SPACE}/${HASH}`);
+    expect(storedMeta(env).expiresAt).toBeNull();
+  });
+
+  it('rejects a body without a parseable ttl', async () => {
+    const env = seededEnv();
+    const sent = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    expect((await adminConfig(configReq(sent, 'not json'), env, SPACE, HASH)).status).toBe(400);
+    expect((await adminConfig(configReq(sent, '{"ttl":"soon"}'), env, SPACE, HASH)).status).toBe(400);
+  });
+
+  it('survives losing the meta write race once', async () => {
+    const env = seededEnv({ idleTtl: 7 * DAY });
+    const sent = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const realPut = env.BUCKET.put.bind(env.BUCKET);
+    let raced = false;
+    env.BUCKET.put = async (key, value, options) => {
+      // First conditional attempt: a lastAccess touch sneaks in ahead of it.
+      if (!raced && options?.onlyIf) {
+        raced = true;
+        const touched = { ...storedMeta(env), lastAccess: NOW + 1 };
+        await realPut(key, JSON.stringify(touched), {});
+      }
+      return realPut(key, value, options);
+    };
+    const res = await adminConfig(configReq(sent, '{"ttl":"30d"}'), env, SPACE, HASH);
+    expect(res.status).toBe(200);
+    const meta = storedMeta(env);
+    expect(meta.expiresAt).toBe(NOW + 30 * DAY);
+    expect(meta.lastAccess).toBe(NOW + 1); // the retry re-read, so the touch survived too
+  });
+});
+
+describe('POST /<space>/<hash>/admin', () => {
+  const TOKENS = async () => JSON.stringify({ tom: await sha256hex('raw-token') });
+
+  function remintReq(auth: string | null): Request {
+    return new Request(`https://share.example/${SPACE}/${HASH}/admin`, {
+      method: 'POST', headers: auth ? { authorization: auth } : {},
+    });
+  }
+
+  it('a vault token mints the admin url', async () => {
+    const env = seededEnv({ tokens: await TOKENS() });
+    const res = await adminRemint(remintReq('Bearer raw-token'), env, SPACE, HASH);
+    expect(res.status).toBe(200);
+    const body = await res.json<{ url: string; exp: number }>();
+    expect(body.exp).toBeGreaterThan(NOW);
+    const c = new URL(body.url).searchParams.get('c');
+    expect(body.url.startsWith(`https://share.example/${SPACE}/${HASH}/?c=`)).toBe(true);
+    expect(c && (await verifyAdminToken(KEYS, SPACE, HASH, c, NOW)).ok).toBe(true);
+  });
+
+  it('refuses sessions and anonymous callers', async () => {
+    const env = seededEnv({ tokens: await TOKENS() });
+    expect((await adminRemint(remintReq(null), env, SPACE, HASH)).status).toBe(401);
+    const sess = await mintSession(KEYS, 'tom', NOW + 600);
+    const res = await adminRemint(remintReq(`Bearer ${sess}`), env, SPACE, HASH);
+    expect(res.status).toBe(401);
+    expect(await res.text()).toContain('only authorizes /up');
+  });
+
+  it('404s on a missing artifact', async () => {
+    const env = testEnv({ signingKeys: JSON.stringify(KEYS), tokens: await TOKENS() });
+    expect((await adminRemint(remintReq('Bearer raw-token'), env, SPACE, HASH)).status).toBe(404);
+  });
+});
+
 describe('view routes with an admin token', () => {
   it('the /k/ slot refuses an admin token where a view token works', async () => {
-    const env = seededEnv('signed');
+    const env = seededEnv({ tier: 'signed' });
     const req = new Request(`https://share.example/${SPACE}/${HASH}/deck.md`);
     const admin = await mintAdminToken(KEYS, SPACE, HASH, EXP);
     expect((await serve(req, env, DEFERRED, SPACE, HASH, admin, 'deck.md')).status).toBe(401);
