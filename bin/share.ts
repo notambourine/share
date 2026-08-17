@@ -7,8 +7,8 @@
    and never crosses a shell, so no `op run` prefix and nothing to echo.
 
    nt-share install                                     (put nt-share on PATH)
-   nt-share put <space> <file|dir ...> [--tier signed] [--ttl 90d|forever]
-                                       [--ttl-idle 7d] [--sign-ttl 30d] [--short]
+   nt-share put <space> <file|dir ...> [--tier signed] [--ttl <dur>|forever]
+                                       [--ttl-idle <dur>] [--sign-ttl <dur>] [--short]
    nt-share put <space> --clip [--name shot.png]        (the image on the clipboard)
    nt-share sign <space>/<hash> [--ttl 30d] [--short]   (re-sign an older artifact)
    nt-share short <space>/<hash> [--ttl 30d]

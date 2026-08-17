@@ -73,7 +73,9 @@ short:true also mints a /z/<id> shortlink that 302s to the signed URL.
     curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
       https://share.notambourine.com/<space>/
 
-JSON, newest first. Without the Bearer header this path returns 404.
+JSON array, newest first: hash, url, tier, uploader, createdAt, expiresAt,
+idleTtl, expired, files (count), bytes. Times are epoch seconds; expiresAt
+null means no fixed expiry. Without the Bearer header this path returns 404.
 
 ## Revoke
 

@@ -10,16 +10,26 @@ render; curl, `<img src>`, and Slack unfurls get raw bytes from the same URL.
 
 ## Verbs
 
-    nt-share put <space> <file|dir ...> [--tier signed] [--ttl 90d|forever]
-                                        [--ttl-idle 14d] [--sign-ttl 30d] [--short]
+    nt-share put <space> <file|dir ...> [--tier signed] [--ttl <dur>|forever]
+                                        [--ttl-idle <dur>] [--sign-ttl <dur>] [--short]
     nt-share put <space> --clip [--name shot.png]        # the image on the clipboard
-    nt-share sign <space>/<hash> [--ttl 30d] [--short]   # re-sign an older artifact
+    nt-share sign <space>/<hash> [--ttl <dur>] [--short] # re-sign an older artifact
     nt-share ls <space>
     nt-share rm <space>/<hash>                           # revoke; lands within 10 min
 
+A `<dur>` is a number plus `m`, `h`, `d`, or `w`: `7d`, `12h`, `4w`. Defaults:
+`--ttl 90d`, `--sign-ttl 30d`. `--ttl-idle` expires the share that long after
+its last access instead of at a fixed date.
+
 `put` prints the URL to hand over - the signed one when the tier is signed, so
 there is no second call. A folder keeps its relative paths, and one with an
-`index.html` serves as a real page.
+`index.html` serves as a real page. A folder holding exactly one file and no
+`index.html` links straight at that file rather than at a one-row index;
+anything else links the folder root. An empty folder is a 400.
+
+`ls` prints JSON, newest first, one row per artifact: `hash`, `url`, `tier`,
+`uploader`, `createdAt`, `expiresAt`, `idleTtl`, `expired`, `files` (count),
+`bytes`. Read `expiresAt` there to confirm a TTL; do not curl the artifact.
 
 `--clip` uploads the image sitting on the OS clipboard as a PNG, no file on
 disk: use it when someone says "share this screenshot" and names no path. It
