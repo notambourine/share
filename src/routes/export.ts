@@ -15,7 +15,7 @@ import { render, type Artifacts } from '../lib/pdf';
 import { printHtml, pdfOptionsFor } from '../render/export';
 import { rawBytes } from '../lib/bytes';
 import { fileShell, errorShell } from '../render/shell';
-import { htmlResponse, SNAPSHOT_CSP } from '../lib/http';
+import { htmlResponse, ROBOTS, SNAPSHOT_CSP } from '../lib/http';
 
 /** Pre-rendering the whole upload could spend the daily browser budget on one
     push, so the rest waits for someone to ask for it. */
@@ -86,13 +86,25 @@ async function produce(
   return out;
 }
 
-/** Rate limit hit, budget spent, or no binding: hand back the live client-side
-    shell. A missing PDF is a worse day than a broken one. */
-function degrade(target: ExportTarget, mode: RenderMode): Response {
+/** Rate limit hit, budget spent, or no binding. `.html` keeps the live
+    client-side shell; a `.pdf` URL must never answer HTML at 200 - a curl -o
+    would write HTML into a .pdf - so it gets a 202 and the caller retries. */
+function degrade(target: ExportTarget, mode: RenderMode, ext: 'html' | 'pdf'): Response {
   const { url, source, size } = target;
+  console.log(`export: render unavailable for ${url.pathname}`);
+  if (ext === 'pdf') {
+    return new Response('Rendering. Retry in a few seconds.\n', {
+      status: 202,
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'retry-after': '5',
+        'cache-control': 'no-store',
+        'x-robots-tag': ROBOTS,
+      },
+    });
+  }
   const dir = url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1);
   const rawHref = `${url.origin}${dir}${encodeURI(source)}?raw`;
-  console.log(`export: render unavailable, serving the live shell for ${url.pathname}`);
   return htmlResponse(fileShell(mode === 'slides' ? 'slides' : 'md', source, rawHref, size));
 }
 
@@ -126,7 +138,7 @@ export async function exportArtifact(
   if (markdown === null) return htmlResponse(errorShell(404), 404);
 
   const out = await produce(env, space, hash, source, mode, markdown, url);
-  if (!out) return degrade(target, mode);
+  if (!out) return degrade(target, mode, ext);
 
   return serveDerived(request, env, key, name, ext);
 }

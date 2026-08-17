@@ -112,8 +112,9 @@ Bare .pdf and .html read the content to choose: `marp: true` front matter or
 .slides.pdf or .doc.pdf when you want to decide instead of guessing.
 
 PDFs render in a headless browser and then cache, so the first request after an
-upload can take a few seconds. When the daily browser budget is spent the URL
-serves the browser-rendered shell rather than an error.
+upload can take a few seconds. A .pdf URL that is not rendered yet answers
+202 with Retry-After: 5 - wait that long and re-request. A cold .html serves
+the live browser-rendered shell instead.
 
 ## Skill
 
