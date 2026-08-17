@@ -41,7 +41,7 @@ describe('format suffixes', () => {
   it('serves a cached PDF, and the suffix outranks Accept', async () => {
     const key = derivedKey(SPACE, HASH, 'deck.md', 'slides', 'pdf');
     const env = world({ [key]: 'PDFBYTES' });
-    const res = await ask(env, 'deck.md.pdf');
+    const res = await ask(env, 'deck.pdf');
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/pdf');
     expect(await res.text()).toBe('PDFBYTES');
@@ -50,38 +50,44 @@ describe('format suffixes', () => {
   it('sniffs deck content to the slides mode on a bare .pdf', async () => {
     const env = world({ [derivedKey(SPACE, HASH, 'deck.md', 'doc', 'pdf')]: 'DOC' });
     // Only the doc object exists, and the sniff wants the slides one.
-    const res = await ask(env, 'deck.md.pdf');
+    const res = await ask(env, 'deck.pdf');
     expect(res.headers.get('content-type')).not.toBe('application/pdf');
   });
 
   it('an explicit spelling beats the sniff', async () => {
     const env = world({ [derivedKey(SPACE, HASH, 'deck.md', 'doc', 'pdf')]: 'DOC' });
-    const res = await ask(env, 'deck.md.doc.pdf');
+    const res = await ask(env, 'deck.doc.pdf');
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('DOC');
   });
 
   it('the snapshot carries its own CSP, so data: fonts load', async () => {
     const env = world({ [derivedKey(SPACE, HASH, 'deck.md', 'slides', 'html')]: '<!doctype html>' });
-    const res = await ask(env, 'deck.md.html');
+    const res = await ask(env, 'deck.html');
     expect(res.headers.get('content-security-policy')).toContain('font-src data:');
   });
 
-  it('.slides.html is the live deck: no cache, no browser', async () => {
-    const env = world();
-    const res = await ask(env, 'deck.md.slides.html');
+  it('.slides.html serves the cached snapshot, same as every other export', async () => {
+    const env = world({ [derivedKey(SPACE, HASH, 'deck.md', 'slides', 'html')]: '<!doctype html>SNAP' });
+    const res = await ask(env, 'deck.slides.html');
     expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
-    const body = await res.text();
-    expect(body).toContain('data-kind="slides"');
-    expect(body).toContain('deck.md?raw');
+    expect(await res.text()).toContain('SNAP');
+    expect(res.headers.get('content-security-policy')).toContain('font-src data:');
+  });
+
+  it('.txt is the source bytes as text/plain, always', async () => {
+    const env = world();
+    const res = await ask(env, 'deck.txt');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/plain');
+    expect(await res.text()).toBe(DECK);
   });
 
   /* A .pdf URL never answers HTML at 200: `curl -o deck.pdf` would write HTML
      into a .pdf and look like success. */
   it('a cold .pdf answers 202 + Retry-After, never HTML at 200', async () => {
     const env = world();
-    const res = await ask(env, 'deck.md.pdf');
+    const res = await ask(env, 'deck.pdf');
     expect(res.status).toBe(202);
     expect(res.headers.get('retry-after')).toBe('5');
     expect(res.headers.get('content-type')).not.toContain('text/html');
@@ -90,22 +96,23 @@ describe('format suffixes', () => {
   /* For .html a live shell is still a page a person can read. */
   it('a cold .html degrades to the live shell', async () => {
     const env = world();
-    const res = await ask(env, 'deck.md.html');
+    const res = await ask(env, 'deck.html');
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(await res.text()).toContain('data-kind="slides"');
   });
 
   it('a real uploaded file wins its own name', async () => {
-    const files = [MD_FILE, { path: 'deck.md.pdf', size: 6, type: 'application/pdf' }];
-    const env = world({ [`${SPACE}/${HASH}/f/deck.md.pdf`]: 'REAL' }, files);
-    const res = await ask(env, 'deck.md.pdf', '*/*');
+    const files = [MD_FILE, { path: 'deck.pdf', size: 6, type: 'application/pdf' }];
+    const env = world({ [`${SPACE}/${HASH}/f/deck.pdf`]: 'REAL' }, files);
+    const res = await ask(env, 'deck.pdf', '*/*');
     expect(await res.text()).toBe('REAL');
   });
 
-  it('404s a suffix whose source was never uploaded', async () => {
+  it('404s a suffix whose source was never uploaded, the legacy spelling included', async () => {
     const env = world();
-    expect((await ask(env, 'missing.md.pdf')).status).toBe(404);
-    expect((await ask(env, 'deck.md.docx')).status).toBe(404);
+    expect((await ask(env, 'missing.pdf')).status).toBe(404);
+    expect((await ask(env, 'deck.docx')).status).toBe(404);
+    expect((await ask(env, 'deck.md.pdf')).status).toBe(404);
   });
 });
