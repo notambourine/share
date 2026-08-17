@@ -40,7 +40,11 @@ export type StoredValue = string | Blob | ReadableStream | Uint8Array | null;
 export interface Store {
   get(key: string, options?: { range?: StoredRange }): Promise<StoredObject | null>;
   head(key: string): Promise<StoredHead | null>;
-  put(key: string, value: StoredValue, options?: { httpMetadata?: StoredMetadata }): Promise<StoredHead | null>;
+  /** With `onlyIf`, a failed precondition resolves null and writes nothing. */
+  put(key: string, value: StoredValue, options?: {
+    httpMetadata?: StoredMetadata;
+    onlyIf?: { etagMatches: string };
+  }): Promise<StoredHead | null>;
   list(options: { prefix: string; delimiter?: string; cursor?: string }): Promise<StoredPage>;
   delete(keys: string[]): Promise<void>;
 }

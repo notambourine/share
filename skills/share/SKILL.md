@@ -14,6 +14,7 @@ render; curl, `<img src>`, and Slack unfurls get raw bytes from the same URL.
                                         [--ttl-idle <dur>] [--sign-ttl <dur>] [--short]
     nt-share put <space> --clip [--name shot.png]        # the image on the clipboard
     nt-share sign <space>/<hash> [--ttl <dur>] [--short] # re-sign an older artifact
+    nt-share admin <space>/<hash>                        # re-open the 5-minute admin link
     nt-share ls <space>
     nt-share rm <space>/<hash>                           # revoke; lands within 10 min
 
