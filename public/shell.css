@@ -157,3 +157,117 @@ body {
   color: var(--fg3); background: var(--bg-card); border: 1px solid var(--line);
   border-radius: var(--r-pill); padding: var(--sp-2) var(--sp-5); cursor: pointer; }
 .deck-nav button:hover { color: var(--fg1); border-color: var(--accent); }
+
+/* ---- admin page (src/render/shell.ts adminShell) ---- */
+
+/* Taller than a viewport, so the stage's centering would push the head out
+   of reach; this page reads top-down. */
+body.admin .stage { justify-content: flex-start; }
+.admin-wrap { width: 100%; max-width: 960px; align-self: center; }
+
+.pill { font-family: var(--font-accent); font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold); color: var(--fg2);
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  padding: var(--sp-1) var(--sp-3); }
+.pill-admin { background: var(--accent); border-color: var(--accent);
+  color: var(--fg-on-pink); }
+
+/* Two page states: the countdown hitting zero (or a 401 on a write) swaps the
+   admin controls for the plain fs-index. public/admin.js flips the class. */
+.locked-only { display: none; }
+body.locked .admin-only { display: none; }
+body.locked .locked-only { display: block; }
+
+.filehead { display: flex; align-items: baseline; gap: var(--sp-3);
+  margin-top: var(--sp-4); flex-wrap: wrap; }
+.filehead h1 { margin: 0; font-size: var(--fs-h2); }
+.filehead .path { color: var(--fg3); font-size: var(--fs-caption); }
+
+.actions { display: flex; align-items: center; gap: var(--sp-3);
+  margin-top: var(--sp-5); flex-wrap: wrap; }
+.actions .confirmtext { display: none; font-size: var(--fs-caption);
+  color: var(--fg2); flex-basis: 100%; margin: 0 0 var(--sp-2); }
+.arm-only { display: none; }
+.actions.arming .arm-only { display: inline-flex; }
+.actions.arming .confirmtext { display: block; }
+.actions.arming .idle-only { display: none; }
+
+.abtn { font-family: var(--font-accent); font-weight: var(--fw-semibold);
+  font-size: var(--fs-small); border-radius: var(--r-pill);
+  padding: var(--sp-3) var(--sp-6); border: 1px solid transparent; cursor: pointer; }
+.abtn:active { transform: scale(0.97); }
+.abtn-primary { background: var(--accent); color: var(--fg-on-pink); }
+.abtn-primary:hover { background: var(--accent-press); }
+.abtn-ghost { background: var(--bg-card); color: var(--fg2); border-color: var(--line); }
+.abtn-ghost:hover { background: var(--nt-surface-3); color: var(--fg1); }
+.abtn.did { border-color: var(--support); }
+
+/* Tiles: click to open in a new tab; the thumb says what it is. */
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-4);
+  margin-top: var(--sp-6); }
+@media (max-width: 760px) { .tiles { grid-template-columns: 1fr; } }
+.tile { position: relative; display: flex; flex-direction: column; gap: var(--sp-3);
+  padding: var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--bg-card); text-decoration: none;
+  border-bottom: 1px solid var(--line); }
+.tile:hover { background: var(--bg-raised); box-shadow: var(--shadow-2);
+  border-bottom-color: var(--line); }
+.thumb { border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--bg);
+  height: 96px; position: relative; display: flex; align-items: center;
+  justify-content: center; }
+.thumb .page { background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: 3px; display: flex; flex-direction: column; gap: 5px; padding: 8px; }
+.thumb .page.land { width: 104px; height: 62px; }
+.thumb .page.port { width: 52px; height: 72px; }
+.thumb .b { border-radius: 2px; background: var(--fg3); height: 4px; }
+.thumb .b.accent { background: var(--accent); width: 30%; height: 5px; }
+.thumb .b.title { background: var(--fg1); width: 75%; height: 7px; }
+.thumb .b.t1 { width: 90%; } .thumb .b.t2 { width: 70%; } .thumb .b.t3 { width: 80%; }
+.thumb .fmt { position: absolute; right: 8px; bottom: 6px;
+  font-family: var(--font-accent); font-size: 10px; font-weight: var(--fw-semibold);
+  letter-spacing: 0.08em; color: var(--fg3); text-transform: uppercase; }
+.thumb .srctext { font-family: var(--font-mono); font-size: 10px; color: var(--fg3);
+  line-height: 1.6; text-align: left; white-space: pre-line; }
+.tlabel { display: flex; flex-direction: column; gap: 2px; }
+.tlabel .t { font-family: var(--font-accent); font-size: 14px;
+  font-weight: var(--fw-semibold); color: var(--fg1); }
+.tlabel .s { font-size: var(--fs-caption); color: var(--fg3); }
+
+.copyicon { position: absolute; top: var(--sp-3); right: var(--sp-3);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: var(--r-pill);
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg3);
+  cursor: pointer; }
+.copyicon:hover { color: var(--accent); border-color: var(--accent); }
+.copyicon svg { width: 15px; height: 15px; }
+.copyicon.did { color: var(--support); border-color: var(--support); }
+
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6);
+  margin-top: var(--sp-6); }
+@media (max-width: 700px) { .cols { grid-template-columns: 1fr; } }
+.panel { background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: var(--sp-6); }
+.cardlabel { font-family: var(--font-accent); font-size: 13px;
+  font-weight: var(--fw-semibold); letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--fg3); margin: 0 0 var(--sp-4); }
+.note { color: var(--fg3); font-size: var(--fs-caption); margin: var(--sp-3) 0 0; }
+
+.chiprow { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.chip { font-family: var(--font-accent); font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold); color: var(--fg2); background: var(--bg-card);
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  padding: var(--sp-2) var(--sp-4); cursor: pointer; }
+.chip:hover { color: var(--fg1); border-color: var(--accent); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent);
+  color: var(--fg-on-pink); }
+
+code.cmd { display: block; margin-top: var(--sp-2); padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line); border-radius: var(--r-xs);
+  background: var(--bg-raised); font-size: 13px; }
+
+.index-table { width: 100%; border-collapse: collapse;
+  font-family: var(--font-mono); font-size: 13px; }
+.index-table td { padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line); }
+.index-table td:last-child { text-align: right; color: var(--fg3); }
+.index-table a { color: var(--fg1); }

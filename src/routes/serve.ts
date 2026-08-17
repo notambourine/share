@@ -1,11 +1,13 @@
 import type { Deferrals, Env } from '../lib/types';
+import { DEFAULT_LINK_DAYS } from '../lib/types';
 import { readMetaTagged, writeMeta, isExpired } from '../lib/r2';
-import { parseSigningKeys, verifyToken } from '../lib/sign';
+import { mintToken, parseSigningKeys, verifyToken } from '../lib/sign';
+import { verifyAdminToken } from '../lib/admin';
 import { viewModeFor } from '../lib/negotiate';
 import { resolveExport } from '../lib/exportPath';
 import { exportArtifact } from './export';
 import { rawBytes } from '../lib/bytes';
-import { fileShell, dirShell, errorShell } from '../render/shell';
+import { fileShell, dirShell, errorShell, adminShell } from '../render/shell';
 import { htmlResponse, now } from '../lib/http';
 
 const DAY = 86400;
@@ -24,6 +26,25 @@ export async function serve(
   if (!tagged || isExpired(tagged.meta, t)) return htmlResponse(errorShell(404), 404);
   const { meta, etag } = tagged;
 
+  const url = new URL(request.url);
+
+  /* A live `?c=` wins the artifact root, checked ahead of the signed-tier 401:
+     admin implies view. Invalid, absent, or expired falls through to today's
+     view, never a 401 of its own. Root only - a file path ignores c=. */
+  if (rest === '') {
+    const c = url.searchParams.get('c');
+    const keys = c && parseSigningKeys(env);
+    if (c && keys && (await verifyAdminToken(keys, space, hash, c, t)).ok) {
+      /* The page's links must travel, so on the signed tier they ride a fresh
+         view token at the /sign default life - the admin holder is the
+         uploader, and handing out links is the page's job. */
+      const kSeg = meta.tier === 'signed'
+        ? `k/${await mintToken(keys, `${space}/${hash}`, t + DEFAULT_LINK_DAYS * 86400)}/`
+        : '';
+      return htmlResponse(adminShell({ meta, origin: url.origin, kSeg, now: t }));
+    }
+  }
+
   if (meta.tier === 'signed') {
     if (!token) return htmlResponse(errorShell(401), 401);
     const keys = parseSigningKeys(env);
@@ -38,8 +59,6 @@ export async function serve(
   if (meta.idleTtl !== null && t - meta.lastAccess > DAY) {
     ctx.waitUntil(writeMeta(env, { ...meta, lastAccess: t }, etag));
   }
-
-  const url = new URL(request.url);
 
   let filePath = rest;
   if (filePath === '') {

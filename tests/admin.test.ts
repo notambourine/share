@@ -22,13 +22,17 @@ interface SeedOptions {
   createdAt?: number;
   idleTtl?: number | null;
   tokens?: string;
+  files?: { path: string; size: number; type: string }[];
 }
 
-function seededEnv({ tier = 'open', createdAt = NOW, idleTtl = null, tokens }: SeedOptions = {}): TestEnv {
+function seededEnv({
+  tier = 'open', createdAt = NOW, idleTtl = null, tokens,
+  files = [{ path: 'deck.md', size: 6, type: 'text/markdown' }],
+}: SeedOptions = {}): TestEnv {
   const meta = JSON.stringify({
     space: SPACE, hash: HASH, tier, uploader: 'tom',
     createdAt, expiresAt: null, idleTtl, lastAccess: NOW,
-    files: [{ path: 'deck.md', size: 6, type: 'text/markdown' }],
+    files,
   });
   return testEnv({
     signingKeys: JSON.stringify(KEYS),
@@ -234,6 +238,87 @@ describe('POST /<space>/<hash>/admin', () => {
   it('404s on a missing artifact', async () => {
     const env = testEnv({ signingKeys: JSON.stringify(KEYS), tokens: await TOKENS() });
     expect((await adminRemint(remintReq('Bearer raw-token'), env, SPACE, HASH)).status).toBe(404);
+  });
+});
+
+describe('GET /<space>/<hash>/?c= - the admin page', () => {
+  function pageReq(c: string | null): Request {
+    const query = c === null ? '' : `?c=${c}`;
+    return new Request(`https://share.example/${SPACE}/${HASH}/${query}`, {
+      headers: { accept: 'text/html' },
+    });
+  }
+
+  it('a live token serves the page, and the token leaks into no link', async () => {
+    const env = seededEnv();
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const res = await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    // The mock's five tiles for a single markdown upload.
+    expect(html).toContain('deck.slides.html');
+    expect(html).toContain('deck.slides.pdf');
+    expect(html).toContain('deck.doc.pdf');
+    expect(html).toContain('deck.html');
+    expect(html).toContain('deck.txt');
+    // The re-open verb, the page script, the TTL chips.
+    expect(html).toContain(`nt-share admin ${SPACE}/${HASH}`);
+    expect(html).toContain('/admin.js');
+    expect(html).toContain('data-ttl="forever"');
+    // The credential lives in the address bar only.
+    expect(html).not.toContain(token);
+    expect(html).not.toContain('?c=');
+  });
+
+  it('missing, expired, or view token falls through to today\'s view', async () => {
+    const env = seededEnv();
+    const bare = await (await serve(pageReq(null), env, DEFERRED, SPACE, HASH, null, '')).text();
+    expect(bare).not.toContain('data-ttl');
+    const stale = await mintAdminToken(KEYS, SPACE, HASH, NOW - 1);
+    const staleRes = await serve(pageReq(stale), env, DEFERRED, SPACE, HASH, null, '');
+    expect(staleRes.status).toBe(200);
+    expect(await staleRes.text()).toBe(bare);
+    const view = await mintToken(KEYS, VIEW_PREFIX, EXP);
+    expect(await (await serve(pageReq(view), env, DEFERRED, SPACE, HASH, null, '')).text()).toBe(bare);
+  });
+
+  it('signed tier: a live c= wins the 401 and the links ride a fresh /k/', async () => {
+    const env = seededEnv({ tier: 'signed' });
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const res = await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    const k = /\/k\/(v1\.\d+\.[A-Za-z0-9_-]{22})\/deck\.slides\.html/.exec(html);
+    expect(k).not.toBeNull();
+    expect((await verifyToken(KEYS, VIEW_PREFIX, k![1], NOW)).ok).toBe(true);
+    // Expired c= falls through to the tier's own answer.
+    const stale = await mintAdminToken(KEYS, SPACE, HASH, NOW - 1);
+    expect((await serve(pageReq(stale), env, DEFERRED, SPACE, HASH, null, '')).status).toBe(401);
+  });
+
+  it('c= never wins a file path, only the artifact root', async () => {
+    const env = seededEnv();
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const req = new Request(`https://share.example/${SPACE}/${HASH}/deck.md?c=${token}`, {
+      headers: { accept: 'text/html' },
+    });
+    const html = await (await serve(req, env, DEFERRED, SPACE, HASH, null, 'deck.md')).text();
+    expect(html).not.toContain('data-ttl');
+  });
+
+  it('a folder with an index.html reads as one site tile', async () => {
+    const env = seededEnv({
+      files: [
+        { path: 'index.html', size: 100, type: 'text/html; charset=utf-8' },
+        { path: 'style.css', size: 40, type: 'text/css; charset=utf-8' },
+        { path: 'hero.png', size: 900, type: 'image/png' },
+      ],
+    });
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const html = await (await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '')).text();
+    expect(html).toContain('>site<');
+    expect(html).not.toContain('hotlink'); // never a tile per asset
+    expect(html).toContain('index.html'); // the plain file list still names them
   });
 });
 
