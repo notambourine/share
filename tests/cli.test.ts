@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,6 +7,10 @@ import { join } from 'node:path';
 /* Spawns the real CLI, so the Windows CI leg proves the cache path and the
    path handling work off-POSIX, not just that they parse.
    PATH='' is how a case proves a code path never shells out to `op`. */
+
+/* Each case spawns a node process, and windows-latest has crossed vitest's 5s
+   default. spawnSync's own 15s timeout below stays the real hang stop. */
+vi.setConfig({ testTimeout: 20_000 });
 
 const BIN = join(process.cwd(), 'bin', 'share.ts');
 const DEAD = 'http://127.0.0.1:9'; // unroutable: reaching a fetch error means the token resolved
