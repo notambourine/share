@@ -1,0 +1,137 @@
+name: brand pin
+
+# Dependabot's gitsubmodule updater stopped opening bump PRs when the submodule
+# was repointed in #23 and never said why: its run log prints "no PRs affected"
+# whether it found nothing or broke. The pin then sat two commits behind for two
+# days. This job replaces that block. A poll that cannot fail loudly is worse
+# than no poll, so this one turns red, keeps its log in Actions, and carries a
+# manual trigger you can hit to test.
+
+concurrency:
+  group: brand-pin
+  cancel-in-progress: false
+
+on:
+  schedule:
+    # 09:00 America/Chicago, which is what the Dependabot block asked for. Actions
+    # cron is UTC and does not follow DST, so this lands at 08:00 local in winter.
+    - cron: '0 14 * * *'
+  # Fired by notambourine/brand-kit once that side has a cross-repo credential.
+  # Inert until then, and the receiving end never needs a secret of its own.
+  repository_dispatch:
+    types: [brand-kit-updated]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          # Unlike ci.yml, this job pushes a branch, so the token has to survive.
+          persist-credentials: true
+
+      - id: pin
+        run: |
+          set -euo pipefail
+          before=$(git -C upstream/brand-kit rev-parse --short HEAD)
+          git submodule update --remote upstream/brand-kit
+          after=$(git -C upstream/brand-kit rev-parse --short HEAD)
+
+          if git diff --quiet -- upstream/brand-kit; then
+            echo "pin is current at $after"
+            echo "moved=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "moved=true"
+            echo "before=$before"
+            echo "after=$after"
+          } >> "$GITHUB_OUTPUT"
+          git -C upstream/brand-kit log --oneline "$before..$after" | sed 's/^/  /'
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.pin.outputs.moved == 'true'
+        with:
+          node-version: 24
+          cache: npm
+
+      - if: steps.pin.outputs.moved == 'true'
+        run: npm ci --ignore-scripts
+
+      # The gates report here, they do not decide. A bump that breaks the brand
+      # contract is precisely the bump a human has to see - #57 was one, where a
+      # reworked neutral ramp orphaned a hex literal in the PDF footer - so a red
+      # gate still opens the PR. Withholding it would rebuild the silent failure
+      # this workflow exists to kill. The run goes red at the end instead.
+      - id: gates
+        if: steps.pin.outputs.moved == 'true'
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          : > "$RUNNER_TEMP/gates.md"
+          failed=0
+          for gate in brand oxlint test types build:client; do
+            if npm run "$gate"; then
+              echo "- \`npm run $gate\`: pass" >> "$RUNNER_TEMP/gates.md"
+            else
+              echo "- \`npm run $gate\`: **FAIL**" >> "$RUNNER_TEMP/gates.md"
+              failed=1
+            fi
+          done
+          exit $failed
+
+      - if: steps.pin.outputs.moved == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ steps.pin.outputs.before }}
+          AFTER: ${{ steps.pin.outputs.after }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # A fixed branch, force-pushed: a second bump before the first merges
+          # should move that PR rather than stack another one behind it.
+          git checkout -B brand-kit-bump
+          git add upstream/brand-kit
+          git commit -m "build(brand): bump the golden set to $AFTER"
+          git push --force origin brand-kit-bump
+
+          {
+            echo "\`upstream/brand-kit\` moves $BEFORE -> $AFTER."
+            echo
+            git -C upstream/brand-kit log --format='- %s' "$BEFORE..$AFTER"
+            echo
+            echo "Gates, from [this run]($RUN):"
+            echo
+            cat "$RUNNER_TEMP/gates.md"
+            echo
+            echo "A PR opened by \`GITHUB_TOKEN\` starts no workflows, so CI shows"
+            echo "no checks here. Close and reopen it to get them, or read the run."
+          } > "$RUNNER_TEMP/body.md"
+
+          open=$(gh pr list --head brand-kit-bump --state open --json number --jq '.[].number')
+          if [ -z "$open" ]; then
+            gh pr create --draft --head brand-kit-bump \
+              --title "build(brand): bump the golden set to $AFTER" \
+              --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr edit "$open" \
+              --title "build(brand): bump the golden set to $AFTER" \
+              --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+      # Last, so the PR is already open when the run goes red.
+      - if: steps.gates.outcome == 'failure'
+        run: |
+          echo "::error::the bump breaks a gate - the PR is open, and it needs a code change"
+          exit 1
