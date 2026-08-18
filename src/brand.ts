@@ -28,6 +28,20 @@ import { ROBOTS } from './lib/http';
     export inlines the same string the browser gets. */
 export const TOKENS = [FONTS, VARS, ELEMENTS].join('\n');
 
+/* First declaration wins: the raw palette sits at the top of vars.css and the
+   `.theme-light` remaps below it only ever redefine semantic tokens. */
+const TOKEN_VALUES = new Map<string, string>();
+for (const [, name, value] of VARS.matchAll(/^\s*(--[\w-]+):\s*([^;]+);/gm)) {
+  if (!TOKEN_VALUES.has(name)) TOKEN_VALUES.set(name, value.trim());
+}
+
+/** Read a token's literal value, for the few places a `var()` cannot reach. */
+export function token(name: string): string {
+  const value = TOKEN_VALUES.get(name);
+  if (value === undefined) throw new Error(`brand: ${name} is not a token the golden set declares`);
+  return value;
+}
+
 /** The wordmark, outlined, so no page has to load Nunito to render it. */
 export { LOCKUP };
 
