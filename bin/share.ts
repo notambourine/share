@@ -326,6 +326,9 @@ async function api(path: string, init: RequestInit, token: string): Promise<stri
   });
   const text = await res.text();
   if (res.status === 401) {
+    /* The phrase is the Worker's `SESSION_EXPIRED_PHRASE`, pinned from both
+       ends by tests/auth.test.ts: auth.ts cannot be imported here, because the
+       bin project resolves node16 and src/ imports carry no extensions. */
     if (text.includes('session expired')) throw EXPIRED;
     die(`401 ${text.trim()}\nThe server rejects this token. The Worker TOKENS map has drifted from the vault: re-run scripts/add-employee.sh --map and re-paste it (rotate first if the token ever leaked).`);
   }

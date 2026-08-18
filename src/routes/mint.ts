@@ -1,8 +1,7 @@
 import type { Env, Tier } from '../lib/types';
 import { DEFAULT_LINK_DAYS } from '../lib/types';
-import { authenticate, SESSION_SCOPE_MSG } from '../lib/auth';
+import { authorize } from '../lib/auth';
 import { readMeta, isExpired } from '../lib/r2';
-import { parseSigningKeys } from '../lib/sign';
 import { mintArtifactLink, publicUrl } from '../lib/link';
 import { isValidSpace, isValidHash, parseDuration } from '../lib/keys';
 import { parseObject, textAt } from '../lib/json';
@@ -49,11 +48,8 @@ export function parseArtifactPath(raw: string): [string, string] | null {
  * holding an expired link issue themselves a fresh one.
  */
 export async function mint(request: Request, env: Env): Promise<Response> {
-  const auth = await authenticate(request, env);
-  // A live-or-expired session proved itself with a valid signature, so the
-  // scope refusal leaks nothing; sign stays raw-only to cap an exfil at /up.
-  if (auth.session || auth.expired) return jsonResponse({ error: SESSION_SCOPE_MSG.trim() }, 401);
-  if (!auth.name) return jsonResponse({ error: 'unauthorized' }, 401);
+  const gate = await authorize(request, env, { need: 'vault', flavor: 'json', keys: 'required' });
+  if (gate instanceof Response) return gate;
 
   const body = decodeSignBody(await request.text());
   if (!body) return jsonResponse({ error: 'expected JSON body {path, ttl?}' }, 400);
@@ -69,11 +65,8 @@ export async function mint(request: Request, env: Env): Promise<Response> {
   if (ttlSecs === null) return jsonResponse({ error: 'bad ttl' }, 400);
   const exp = ttlSecs === 0 ? 0 : t + ttlSecs;
 
-  const keys = parseSigningKeys(env);
-  if (!keys) return jsonResponse({ error: 'signing keys misconfigured' }, 500);
-
   const origin = new URL(request.url).origin;
-  const link = await mintArtifactLink(keys, origin, meta, exp);
+  const link = await mintArtifactLink(gate.keys, origin, meta, exp);
 
   const out: MintResponse = { ...link, tier: meta.tier };
   if (meta.tier !== 'open') return jsonResponse(out);

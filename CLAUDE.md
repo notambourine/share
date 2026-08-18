@@ -72,6 +72,11 @@
 - `skills/` is the published plugin surface, and this repo holds no other
   skills. Never vendor a third-party skill tree here; that machinery lives in
   its own repo.
+- `authorize()` in `src/lib/auth.ts` is the one Bearer gate: it owns which
+  credential a verb takes (a session token only uploads), the `SIGNING_KEYS`
+  500, and whether a refusal speaks JSON or text. A route calls it and returns
+  the `Response` it may hand back; never re-derive that policy from
+  `authenticate()`'s tri-state at a call site.
 - Never generate or echo a raw bearer token in a session; that is terminal-only
   work via `scripts/add-employee.sh`.
 - Never put Cloudflare Access on this hostname. Uploaded JS runs here, and an

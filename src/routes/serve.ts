@@ -53,13 +53,15 @@ export async function serve(
   if (!meta || isExpired(meta, t)) return htmlResponse(errorShell(404), 404);
 
   const url = new URL(request.url);
+  /* Both credentials this route reads are URL-borne, not Bearer, so neither
+     goes through `authorize`; they only share the key set, read once here. */
+  const keys = parseSigningKeys(env);
 
   /* A live `?c=` wins the artifact root, checked ahead of the signed-tier 401:
      admin implies view. Invalid, absent, or expired falls through to today's
      view, never a 401 of its own. Root only - a file path ignores c=. */
   if (rest === '') {
     const c = url.searchParams.get('c');
-    const keys = c ? parseSigningKeys(env) : null;
     const v = c && keys ? await verifyAdminToken(keys, space, hash, c, t) : null;
     if (v?.ok && keys) {
       /* The page's links must travel, so on the signed tier they ride a fresh
@@ -73,9 +75,9 @@ export async function serve(
   }
 
   if (meta.tier === 'signed') {
-    if (!token) return htmlResponse(errorShell(401), 401);
-    const keys = parseSigningKeys(env);
-    if (!keys) return htmlResponse(errorShell(401), 401);
+    // Misconfigured keys read as an unverifiable token: a 401, never a 500 that
+    // would tell a stranger the artifact is there.
+    if (!token || !keys) return htmlResponse(errorShell(401), 401);
     const v = await verifyToken(keys, `${space}/${hash}`, token, t);
     if (!v.ok) return htmlResponse(errorShell(401), 401);
   }

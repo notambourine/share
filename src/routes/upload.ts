@@ -2,9 +2,7 @@ import type { Env, Meta, MetaFile, Tier } from '../lib/types';
 import { DEFAULT_ARTIFACT_DAYS, DEFAULT_LINK_DAYS } from '../lib/types';
 import { genSlug, normalizeUploadPath, contentTypeFor, isValidSpace, parseDuration } from '../lib/keys';
 import { posterParent } from '../lib/poster';
-import { authenticate, SESSION_EXPIRED_MSG } from '../lib/auth';
-import type { SigningKeys } from '../lib/sign';
-import { parseSigningKeys } from '../lib/sign';
+import { authorize } from '../lib/auth';
 import { mintArtifactLink, publicUrl } from '../lib/link';
 import { mintAdminLink } from '../lib/admin';
 import { payloadKey, writeMeta } from '../lib/r2';
@@ -21,9 +19,14 @@ interface UploadEntry {
 export async function upload(
   request: Request, env: Env, space: string,
 ): Promise<Response> {
-  const auth = await authenticate(request, env);
-  if (!auth.name) return textResponse(auth.expired ? SESSION_EXPIRED_MSG : 'unauthorized\n', 401);
-  const uploader = auth.name;
+  /* Signing your own fresh upload spends no authority the upload did not, so a
+     session token covers both and the signed tier costs one 1Password unlock.
+     Keys ride along for every tier: the admin link mints from the same set, and
+     missing keys only block the signed tier below - an open upload still lands,
+     just without its admin link. */
+  const gate = await authorize(request, env, { need: 'upload', flavor: 'text' });
+  if (gate instanceof Response) return gate;
+  const { name: uploader, keys } = gate;
   if (!isValidSpace(space)) return textResponse('invalid space name\n', 400);
 
   const url = new URL(request.url);
@@ -44,13 +47,7 @@ export async function upload(
     return textResponse('transform unavailable: no AI binding\n', 503);
   }
 
-  /* Signing your own fresh upload spends no authority the upload did not, so a
-     session token covers both and the signed tier costs one 1Password unlock.
-     Keys parse for every tier: the admin link mints from the same set. Missing
-     keys only block the signed tier - an open upload still lands, just without
-     its admin link. */
   let linkExp = 0;
-  const keys: SigningKeys | null = parseSigningKeys(env);
   if (tier === 'signed') {
     const signParam = url.searchParams.get('sign');
     const secs = signParam ? parseDuration(signParam) : DEFAULT_LINK_DAYS * 86400;
