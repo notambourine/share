@@ -78,11 +78,13 @@ describe('the unfurl card', () => {
     const card = await get(env, made.hash, 'clip.mp4', SLACK);
     const html = await card.text();
     expect(card.headers.get('content-type')).toContain('text/html');
-    expect(html).toContain('<meta property="og:title" content="clip.mp4">');
+    /* The JSX serializer self-closes void elements and gives a valueless
+       attribute the value `""`, so these carry `/>` and `controls=""`. */
+    expect(html).toContain('<meta property="og:title" content="clip.mp4"/>');
     expect(html).toContain('content="summary_large_image"');
     expect(html).toContain(`og:image" content="https://share.test/${SPACE}/${made.hash}/${posterPath('clip.mp4')}?raw"`);
     // The human page paints the same frame instead of a black rectangle.
-    expect(html).toContain('<video controls poster=');
+    expect(html).toContain('<video controls="" poster=');
   });
 
   it('falls back to a text card when no frame rode along', async () => {

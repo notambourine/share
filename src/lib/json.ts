@@ -60,6 +60,18 @@ export function flagAt(record: JsonObject, key: string): boolean {
   return record[key] === true;
 }
 
+/** Skips a non-string entry rather than rejecting the array: the one caller is
+    the admin poll, which paints what the answer does carry. */
+export function textsAt(record: JsonObject, key: string): string[] {
+  const value = record[key];
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const item of value) {
+    if (isText(item)) out.push(item);
+  }
+  return out;
+}
+
 export function numbersAt(record: JsonObject, key: string): number[] | null {
   const value = record[key];
   if (!Array.isArray(value)) return null;

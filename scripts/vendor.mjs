@@ -1,10 +1,11 @@
 /* Copies pinned renderer builds out of node_modules into public/vendor/, and
    the brand's fonts and logo out of the `upstream/brand-kit` submodule.
 
-   Run after bumping a pinned version in package.json or the submodule. The
-   output is committed, because Workers Builds deploys the tree as it stands and
-   runs no build step. That is also why deploys never reach a CDN: client
-   material deserves no third-party runtime script.
+   Run after bumping a pinned version in package.json or the submodule. This
+   output is committed, because it is copied from a pinned dependency and changes
+   only when that pin does. The browser code in src/client/ is the opposite case
+   and is built at deploy time by scripts/client.mjs, never committed. Neither
+   deploy reaches a CDN: client material deserves no third-party runtime script.
 
    tokens.css and the deck theme are deliberately absent. src/brand.ts imports
    those from the submodule and the Worker serves them out of the bundle, so

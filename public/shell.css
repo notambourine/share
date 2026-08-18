@@ -191,6 +191,8 @@ body.locked .locked-only { display: block; }
 .arm-only { display: none; }
 .actions.arming .arm-only { display: inline-flex; }
 .actions.arming .confirmtext { display: block; }
+/* The delete confirmation replaces the whole row, so it shows without `arming`. */
+.actions .confirmtext.trashed { display: block; }
 .actions.arming .idle-only { display: none; }
 
 .abtn { font-family: var(--font-accent); font-weight: var(--fw-semibold);

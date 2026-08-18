@@ -4,8 +4,18 @@
   Do not add vet/guarddog/socket-tree jobs to CI; their lights are silenced
   in `.claude/settings.json`.
 - Deploys ride Cloudflare Workers Builds on push to `main`. Never run
-  `wrangler deploy` or `wrangler dev`; verify with `npm run oxlint`, `npm test`,
-  and `npm run types`. CI runs the same three.
+  `wrangler deploy` or `wrangler dev`; verify with `npm run brand`,
+  `npm run oxlint`, `npm test`, and `npm run types`. CI runs the same four.
+- The deploy runs `npm run build:client`, which bundles `src/client/` into
+  `public/render.js`, `public/admin.js`, and `public/print.js`. Those three are
+  gitignored, so a deploy that skips the build serves 404 for every page script.
+  CI runs the same build as a fifth gate, which works under `--ignore-scripts`
+  because esbuild's native binary ships inside its platform package instead of
+  being fetched by a postinstall.
+- `src/client/` is browser code and carries the DOM lib, never
+  `@cloudflare/workers-types`; `tsconfig.client.json` owns it and `npm run types`
+  checks all three projects. It may import from `src/lib/` - that is the point,
+  and it is why no client file restates `splitFrontMatter` or a JSON decoder.
 - One-time dashboard setup: README.md "Setup from zero". Token add, rotate,
   offboard, and delivery: `scripts/add-employee.sh` (its header is the runbook).
 - This repo is public. Client names never enter it; per-space retention lives
@@ -24,9 +34,17 @@
 - Never typeset the brand name as display type. `src/brand.ts` exports `LOCKUP`
   and every header inlines it, sized in CSS with `fill: currentColor`. That
   covers the shells and the PDF, so nothing here loads Nunito.
-- Every HTML page comes from `layout()` in `src/render/shell.ts`, the landing
+- Every HTML page comes from `layout()` in `src/render/shell.tsx`, the landing
   page included. Never add a second page under `public/`; it would carry a
   second copy of the header.
+- The render layer is `hono/jsx`, so JSX escapes every filename it prints and no
+  call site escapes by hand. `raw()` is the only opt-out and belongs to values
+  that are already markup: the lockup, the inlined stylesheet, the bootstrap
+  script. Never reach for it to silence a `&amp;` that looks wrong.
+- The Worker keeps its own router. Precedence in `src/worker.ts` is the security
+  model - an uploaded file named `config`, `admin`, or `status` keeps its GET -
+  so never move that dispatch into a route matcher. Responses keep coming from
+  `htmlResponse()` in `src/lib/http.ts`, which owns the CSP and `Vary`.
 - Every color in this repo must be one the golden set defines, including inside
   a `var()` fallback, and every `var(--x)` must read a token it still declares.
   `npm run brand` is the gate and CI runs it.

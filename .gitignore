@@ -11,3 +11,9 @@ node_modules/
 !.claude/
 .claude/*
 !.claude/settings.json
+
+# Built from src/client/ by `npm run build:client`, which Workers Builds runs
+# before it deploys. Committing them would give this code two sources of truth.
+/public/render.js
+/public/admin.js
+/public/print.js

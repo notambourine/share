@@ -64,6 +64,12 @@ jobs:
 
       - run: npm run types
 
+      # The deploy runs this too, and the bundles are gitignored, so a break here
+      # would otherwise surface as 404s on the page scripts after a merge. Works
+      # under --ignore-scripts: esbuild's native binary ships inside its
+      # platform package rather than being fetched by a postinstall.
+      - run: npm run build:client
+
   # Claude Code keys a plugin's cache dir by the `version` string in
   # .claude-plugin/plugin.json, not by commit SHA (that fallback applies only to
   # a manifest with no version). An installed 0.1.0 therefore never re-clones
