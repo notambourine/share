@@ -24,9 +24,17 @@
 - Never typeset the brand name as display type. `src/brand.ts` exports `LOCKUP`
   and every header inlines it, sized in CSS with `fill: currentColor`. That
   covers the shells and the PDF, so nothing here loads Nunito.
-- Every HTML page comes from `layout()` in `src/render/shell.ts`, the landing
+- Every HTML page comes from `layout()` in `src/render/shell.tsx`, the landing
   page included. Never add a second page under `public/`; it would carry a
   second copy of the header.
+- The render layer is `hono/jsx`, so JSX escapes every filename it prints and no
+  call site escapes by hand. `raw()` is the only opt-out and belongs to values
+  that are already markup: the lockup, the inlined stylesheet, the bootstrap
+  script. Never reach for it to silence a `&amp;` that looks wrong.
+- The Worker keeps its own router. Precedence in `src/worker.ts` is the security
+  model - an uploaded file named `config`, `admin`, or `status` keeps its GET -
+  so never move that dispatch into a route matcher. Responses keep coming from
+  `htmlResponse()` in `src/lib/http.ts`, which owns the CSP and `Vary`.
 - Every color in this repo must be one the golden set defines, including inside
   a `var()` fallback, and every `var(--x)` must read a token it still declares.
   `npm run brand` is the gate and CI runs it.

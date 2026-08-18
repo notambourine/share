@@ -31,5 +31,8 @@
   },
   "overrides": {
     "@puppeteer/browsers": "^3.2.0"
+  },
+  "dependencies": {
+    "hono": "^4.13.2"
   }
 }

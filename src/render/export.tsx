@@ -6,13 +6,18 @@
  * A deck PDF is a different document from the live deck shell: render.js shows
  * one slide at a time behind a `.current` class, so printing the live shell
  * yields a one-page PDF. Here every slide is visible, one per page.
+ *
+ * Unlike the shells, most of this document is payload rather than markup: the
+ * inlined stylesheet, the render script, and the lockup are already-built
+ * strings and every one goes through `raw()`. JSX still owns the attributes and
+ * the title, which is where a filename could otherwise break out.
  */
 
 import type { PDFOptions } from '@cloudflare/puppeteer';
+import { raw } from 'hono/html';
 import type { Env } from '../lib/types';
 import type { RenderMode } from '../lib/exportPath';
 import { DECK_THEME, TOKENS, LOCKUP } from '../brand';
-import { esc } from './shell';
 
 /** 1152x648 is 16:9 at the same aspect as Marpit's 1280x720 slide box. */
 const DECK_PAGE = { width: '1152px', height: '648px' };
@@ -39,8 +44,11 @@ export function pdfOptionsFor(mode: RenderMode, title: string): PDFOptions {
     margin: DOC_MARGIN,
     displayHeaderFooter: true,
     headerTemplate: '<span></span>',
-    footerTemplate: `<div style="width:100%;padding:0 16mm;font-size:7pt;font-family:sans-serif;color:#7A7A7A;display:flex;justify-content:space-between;">
-<span>${esc(title)}</span><span class="pageNumber"></span></div>`,
+    footerTemplate: `${
+      <div style="width:100%;padding:0 16mm;font-size:7pt;font-family:sans-serif;color:#7A7A7A;display:flex;justify-content:space-between;">
+        <span>{title}</span><span class="pageNumber"></span>
+      </div>
+    }`,
   };
 }
 
@@ -167,26 +175,27 @@ export async function printHtml(env: Env, opts: PrintOpts): Promise<string> {
   /* On `html`, not `body`: tokens.css paints the dark canvas on `html`, and a
      `.theme-light` below it leaves that background on the paper. */
   const rootClass = mode === 'slides' ? 'print-deck' : 'print-doc theme-light';
-  const mark = mode === 'slides' ? '' : `<header class="print-mark">${LOCKUP}</header>\n`;
   const scripts = mode === 'slides' ? [HLJS, MARPIT] : [HLJS, MARKED];
 
-  return `<!doctype html>
-<html lang="en" class="${rootClass}">
-<head>
-<meta charset="utf-8">
-<meta name="robots" content="noindex, nofollow, noarchive, noimageindex">
-<base href="${esc(baseHref)}">
-<title>${esc(title)} · NoTambourine</title>
-<style>${style}${page}</style>
-</head>
-<body>
-${mark}<main id="content"></main>
-${scripts.map((s) => `<script data-transient src="${origin}${s}"></script>`).join('\n')}
-<script data-transient>
-var MD=${jsLiteral(markdown)};
+  const bootstrap = `var MD=${jsLiteral(markdown)};
 var THEME=${jsLiteral(theme)};
-${renderScript(mode)}
-</script>
-</body>
-</html>`;
+${renderScript(mode)}`;
+
+  return `<!doctype html>\n${
+    <html lang="en" class={rootClass}>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="robots" content="noindex, nofollow, noarchive, noimageindex" />
+        <base href={baseHref} />
+        <title>{`${title} · NoTambourine`}</title>
+        <style>{raw(style)}{raw(page)}</style>
+      </head>
+      <body>
+        {mode === 'slides' ? null : <header class="print-mark">{raw(LOCKUP)}</header>}
+        <main id="content"></main>
+        {scripts.map((s) => <script data-transient="" src={`${origin}${s}`}></script>)}
+        <script data-transient="">{raw(bootstrap)}</script>
+      </body>
+    </html>
+  }`;
 }
