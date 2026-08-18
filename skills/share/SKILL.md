@@ -108,6 +108,10 @@ Bare `.pdf` and `.html` read the content to choose: `marp: true` front matter
 or `---` slide separators mean deck, anything else means document. You cannot
 guess a sniff, so send `.slides.*` or `.doc.*` when the mode matters.
 
+The deck theme is `deck.css` from the brand kit, the same bytes `nt-brand:system`
+hands a local `marp` run, so a deck shared here and one built by hand come out
+the same. Upload the markdown; do not render it first.
+
 Attach `deck.pdf` to an email; send `deck.slides.html` when the recipient
 should click through the deck. The first PDF request after an upload can take a
 few seconds while the browser renders it; a 202 answer means it is still
