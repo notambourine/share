@@ -1,5 +1,6 @@
 ---
 name: share
+version: 0.14.1
 description: Share a generated artifact (report, code sample, deck, screenshot, folder, HTML prototype) as a branded unguessable link on share.notambourine.com. Use when the user asks to "share", "send", or "get a link for" a file or directory, or to list or revoke existing shares.
 ---
 
