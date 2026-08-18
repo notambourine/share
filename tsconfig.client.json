@@ -1,0 +1,12 @@
+/* The browser bundles. Separate from tsconfig.json because @cloudflare/workers-types
+   and the DOM lib both declare fetch, Request, and Response: combine them and the
+   Worker's types win, so `document` typechecks inside a Worker file. Keeping them
+   apart is what stops client code and Worker code from borrowing each other's globals. */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "types": []
+  },
+  "include": ["src/client/**/*.ts", "tests/client/**/*.ts"]
+}

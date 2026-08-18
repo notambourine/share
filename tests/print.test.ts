@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import type { AssetServer } from '../src/lib/types';
 import { printHtml, pdfOptionsFor } from '../src/render/export';
 import { LOCKUP } from '../src/brand';
+import { parseObject, textAt } from '../src/lib/json';
 import { testEnv } from './bindings';
 
 /* Every character the JSX escape would rewrite, inside real CSS syntax. */
@@ -51,30 +52,73 @@ describe('the inlined stylesheet survives verbatim', () => {
   });
 });
 
-describe('the bootstrap script survives verbatim', () => {
-  it('hands the markdown to JS as a JS literal, not as escaped HTML', async () => {
-    const html = await print('doc');
-    /* jsLiteral turns `<` into `<` so a `</script>` cannot close the tag.
-       If JSX had escaped the block instead, this would read `&lt;em&gt;`. */
-    expect(html).toContain('\\u003cem>inline\\u003c/em>');
-    expect(html).not.toContain('&lt;em&gt;');
-    // A quote in the markdown stays a JS string escape, never `&quot;`.
-    expect(html).toContain('\\"ampersand\\"');
-    expect(html).not.toContain('&quot;ampersand&quot;');
+interface PrintData {
+  markdown: string;
+  theme: string;
+  mode: string;
+}
+
+/** The data block as the browser reads it: the text of #print-data, decoded the
+    same way src/client/print.ts decodes it. */
+function printData(html: string): PrintData {
+  const m = /<script type="application\/json" id="print-data"[^>]*>([\s\S]*?)<\/script>/.exec(html);
+  if (!m) throw new Error('no #print-data block');
+  const record = parseObject(m[1]);
+  if (!record) throw new Error('#print-data is not JSON');
+  const markdown = textAt(record, 'markdown');
+  const theme = textAt(record, 'theme');
+  const mode = textAt(record, 'mode');
+  if (markdown === null || theme === null || mode === null) throw new Error('#print-data is the wrong shape');
+  return { markdown, theme, mode };
+}
+
+describe('the markdown reaches the page as data, not as source', () => {
+  it('round-trips the markdown through the JSON block', async () => {
+    const data = printData(await print('doc'));
+    expect(data.markdown).toBe(MARKDOWN);
+    expect(data.mode).toBe('doc');
   });
 
-  it('keeps the render call each mode needs', async () => {
-    expect(await print('slides')).toContain('new Marpit.Marpit(');
-    expect(await print('doc')).toContain('marked.parse(MD)');
+  /* The reason this block exists rather than a `var MD=` literal: the escape is
+     one rule (`<`), and JSON.parse undoes it, so no U+2028 handling is needed. */
+  it('survives a closing script tag inside the markdown', async () => {
+    const hostile = 'text </script><script>alert(1)</script> more\u2028and a separator\n';
+    const html = await printHtml(env, {
+      origin: 'https://share.test',
+      baseHref: 'https://share.test/a/',
+      title: 'x',
+      markdown: hostile,
+      mode: 'doc',
+    });
+    // Nothing closed the block early, so exactly one script tag opened per source.
+    expect(html).not.toContain('</script><script>alert(1)');
+    expect(printData(html).markdown).toBe(hostile);
   });
 
-  it('marks both script tags transient, which is what makes it a snapshot', async () => {
+  it('carries the deck theme only where a deck needs it', async () => {
+    expect(printData(await print('slides')).theme).toContain('@theme');
+    expect(printData(await print('doc')).theme).toBe('');
+  });
+});
+
+describe('the page loads the shared pipeline, not its own copy', () => {
+  it('gives each mode its renderer plus print.js', async () => {
+    const slides = await print('slides');
+    expect(slides).toContain('src="https://share.test/vendor/marp/marpit.js"');
+    expect(slides).toContain('src="https://share.test/print.js"');
+    expect(slides).not.toContain('marked.min.js');
+
+    const doc = await print('doc');
+    expect(doc).toContain('src="https://share.test/vendor/marked/marked.min.js"');
+    expect(doc).toContain('src="https://share.test/print.js"');
+    expect(doc).not.toContain('marpit.js');
+  });
+
+  /* src/client/print.ts strips every `[data-transient]` node, the data block
+     included, and that is what leaves a snapshot rather than a live page. */
+  it('marks the data block and all three scripts transient', async () => {
     const html = await print('doc');
-    /* Two vendor tags plus the bootstrap. Counting the opening tag rather than
-       the bare word, because the removal selector inside the script says
-       `script[data-transient]` and would otherwise count as a fourth. */
-    expect(html.match(/<script data-transient=""/g)?.length).toBe(3);
-    expect(html).toContain(`document.querySelectorAll('script[data-transient]')`);
+    expect(html.match(/data-transient=""/g)?.length).toBe(4);
   });
 });
 

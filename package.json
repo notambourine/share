@@ -13,7 +13,8 @@
     "vendor": "node scripts/vendor.mjs",
     "brand": "node scripts/brand-audit.mjs",
     "oxlint": "oxlint --deny-warnings",
-    "types": "tsc --noEmit && tsc -p tsconfig.bin.json --noEmit"
+    "types": "tsc --noEmit && tsc -p tsconfig.bin.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "build:client": "node scripts/client.mjs"
   },
   "devDependencies": {
     "@cloudflare/puppeteer": "^1.3.0",
@@ -23,6 +24,7 @@
     "@oxlint/plugins": "^1.78.0",
     "@types/node": "^26.2.0",
     "esbuild": "^0.28.2",
+    "happy-dom": "^20.11.2",
     "marked": "18.0.9",
     "oxlint": "^1.78.0",
     "typescript": "^7.0.2",

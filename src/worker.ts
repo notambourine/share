@@ -22,7 +22,7 @@ import { sweep } from './sweep';
    shell.css and print.css are this repo's own chrome and stay static. */
 const STATIC = new Set([
   '/robots.txt', '/llms.txt',
-  '/shell.css', '/print.css', '/render.js', '/admin.js',
+  '/shell.css', '/print.css', '/render.js', '/admin.js', '/print.js',
 ]);
 
 /* A space slug can never collide with these: isValidSpace rejects a leading

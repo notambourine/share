@@ -4,8 +4,18 @@
   Do not add vet/guarddog/socket-tree jobs to CI; their lights are silenced
   in `.claude/settings.json`.
 - Deploys ride Cloudflare Workers Builds on push to `main`. Never run
-  `wrangler deploy` or `wrangler dev`; verify with `npm run oxlint`, `npm test`,
-  and `npm run types`. CI runs the same three.
+  `wrangler deploy` or `wrangler dev`; verify with `npm run brand`,
+  `npm run oxlint`, `npm test`, and `npm run types`. CI runs the same four.
+- The deploy runs `npm run build:client`, which bundles `src/client/` into
+  `public/render.js`, `public/admin.js`, and `public/print.js`. Those three are
+  gitignored, so a deploy that skips the build serves 404 for every page script.
+  CI runs the same build as a fifth gate, which works under `--ignore-scripts`
+  because esbuild's native binary ships inside its platform package instead of
+  being fetched by a postinstall.
+- `src/client/` is browser code and carries the DOM lib, never
+  `@cloudflare/workers-types`; `tsconfig.client.json` owns it and `npm run types`
+  checks all three projects. It may import from `src/lib/` - that is the point,
+  and it is why no client file restates `splitFrontMatter` or a JSON decoder.
 - One-time dashboard setup: README.md "Setup from zero". Token add, rotate,
   offboard, and delivery: `scripts/add-employee.sh` (its header is the runbook).
 - This repo is public. Client names never enter it; per-space retention lives

@@ -13,5 +13,18 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx"]
+  /* Listed per directory rather than `src/**` minus an exclude: src/client/ is
+     the browser bundle and carries the DOM lib instead of workers-types, and an
+     `exclude` here collides with the one tsconfig.client.json needs. */
+  "include": [
+    "src/*.ts",
+    "src/lib/**/*.ts",
+    "src/render/**/*.ts",
+    "src/render/**/*.tsx",
+    "src/routes/**/*.ts",
+    /* Top level only: tests/client/ exercises the browser bundle and belongs to
+       tsconfig.client.json, which carries the DOM lib instead of workers-types. */
+    "tests/*.ts",
+    "tests/*.tsx"
+  ]
 }

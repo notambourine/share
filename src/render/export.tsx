@@ -118,39 +118,18 @@ export async function inlineStyle(env: Env, origin: string): Promise<string> {
   return styleCache;
 }
 
-/* Built from a string because U+2028 and U+2029 are line terminators in JS
-   source, so they cannot appear inside a regex literal. */
-const LINE_SEP = new RegExp('[\\u2028\\u2029]', 'g');
-
-/** JSON is valid JS. Escaping `<` stops a `</script>` inside the markdown from
-    closing the tag it rides in; the line separators are legal JSON but not JS. */
-function jsLiteral(s: string): string {
-  return JSON.stringify(s)
-    .replace(/</g, '\\u003c')
-    .replace(LINE_SEP, (c) => (c.charCodeAt(0) === 0x2028 ? '\\u2028' : '\\u2029'));
+/** The markdown reaches the page as JSON, not as JS source, so `<` is the
+    only escape it needs: it keeps a `</script>` in the markdown from closing the
+    block, and `JSON.parse` turns it back into `<`. U+2028 and U+2029 need no
+    handling here, unlike a JS literal, because nothing evaluates this as source. */
+function jsonBlock(data: Record<string, string>): string {
+  return JSON.stringify(data).replace(/</g, '\\u003c');
 }
 
 const HLJS = '/vendor/highlight/highlight.min.js';
 const MARKED = '/vendor/marked/marked.min.js';
 const MARPIT = '/vendor/marp/marpit.js';
-
-function renderScript(mode: RenderMode): string {
-  const body = mode === 'slides'
-    ? `var m=new Marpit.Marpit({inlineSVG:true,markdown:['default',{html:true,linkify:true}]});
-try{m.themeSet.default=m.themeSet.add(THEME);}catch(e){}
-var out=m.render(MD);
-var s=document.createElement('style');s.textContent=out.css;document.head.appendChild(s);
-el.innerHTML=out.html;`
-    : `el.innerHTML=marked.parse(MD);`;
-
-  /* Removing the transient scripts is what makes page.content() a snapshot
-     rather than a page that re-renders itself against a live origin. */
-  return `var el=document.getElementById('content');
-${body}
-el.querySelectorAll('pre code').forEach(function(c){try{hljs.highlightElement(c);}catch(e){}});
-document.querySelectorAll('script[data-transient]').forEach(function(t){t.remove();});
-document.fonts.ready.then(function(){document.documentElement.dataset.ready='1';});`;
-}
+const PRINT = '/print.js';
 
 export interface PrintOpts {
   origin: string;
@@ -175,11 +154,7 @@ export async function printHtml(env: Env, opts: PrintOpts): Promise<string> {
   /* On `html`, not `body`: tokens.css paints the dark canvas on `html`, and a
      `.theme-light` below it leaves that background on the paper. */
   const rootClass = mode === 'slides' ? 'print-deck' : 'print-doc theme-light';
-  const scripts = mode === 'slides' ? [HLJS, MARPIT] : [HLJS, MARKED];
-
-  const bootstrap = `var MD=${jsLiteral(markdown)};
-var THEME=${jsLiteral(theme)};
-${renderScript(mode)}`;
+  const scripts = mode === 'slides' ? [HLJS, MARPIT, PRINT] : [HLJS, MARKED, PRINT];
 
   return `<!doctype html>\n${
     <html lang="en" class={rootClass}>
@@ -193,8 +168,12 @@ ${renderScript(mode)}`;
       <body>
         {mode === 'slides' ? null : <header class="print-mark">{raw(LOCKUP)}</header>}
         <main id="content"></main>
+        {/* src/client/print.ts reads this, then strips every data-transient node
+            including this one, which is what leaves a snapshot behind. */}
+        <script type="application/json" id="print-data" data-transient="">
+          {raw(jsonBlock({ markdown, theme, mode }))}
+        </script>
         {scripts.map((s) => <script data-transient="" src={`${origin}${s}`}></script>)}
-        <script data-transient="">{raw(bootstrap)}</script>
       </body>
     </html>
   }`;

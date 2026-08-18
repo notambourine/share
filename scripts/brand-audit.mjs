@@ -32,7 +32,10 @@ import { root, BRAND, brandCopies } from './brand.mjs';
    the audit compares against is declared in vars.css. */
 const TOKENS = `${BRAND}/vars.css`;
 const SCAN = [
-  'public/*.css', 'public/vendor/**/*.css', 'public/*.svg', 'public/logo/*.svg', 'src/**/*.ts',
+  'public/*.css', 'public/vendor/**/*.css', 'public/*.svg', 'public/logo/*.svg',
+  /* .tsx as well as .ts: the render layer is JSX, and a glob that missed it
+     would leave every shell's colors ungated. */
+  'src/**/*.ts', 'src/**/*.tsx',
 ];
 
 const HEX = /#([0-9a-fA-F]{3,8})\b/g;
