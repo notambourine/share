@@ -1,55 +1,28 @@
 /**
- * The print page's bootstrap, loaded by the headless browser for the PDF and
- * snapshot exports. It runs the same pipeline the live shell runs, which is the
- * point: this used to be a JavaScript program written inside a template literal
- * in src/render/export.tsx, so the render it performed only resembled the one a
- * viewer got.
+ * The print page's one job, loaded by the headless browser for the PDF exports:
+ * say when the page is safe to typeset.
  *
- * The markdown arrives in a JSON script block rather than spliced into this
- * file's source, so nothing here has to hand-escape a `</script>` sequence.
+ * It used to render the markdown too. That moved to the Worker, so the document
+ * this runs in is already laid out and the only thing left to wait for is the
+ * webfonts - `page.pdf()` before the swap would measure every line against the
+ * fallback face.
  */
 
-import { renderMarkdown, renderDeck } from './pipeline';
-import { parseObject, textAt } from '../lib/json';
-
-interface PrintData {
-  markdown: string;
-  theme: string;
-  mode: string;
-}
-
-/** The Worker writes this block; a shape it does not recognise renders nothing
-    rather than throwing, so a bad export is a blank page and not a hung one. */
-function readData(): PrintData | null {
-  const el = document.getElementById('print-data');
-  if (!el) return null;
-  const record = parseObject(el.textContent ?? '');
-  if (!record) return null;
-  const markdown = textAt(record, 'markdown');
-  const theme = textAt(record, 'theme');
-  const mode = textAt(record, 'mode');
-  if (markdown === null || theme === null || mode === null) return null;
-  return { markdown, theme, mode };
-}
-
-/* Removing the transient scripts is what makes page.content() a snapshot rather
-   than a page that re-renders itself against a live origin. */
+/* Removing itself is what leaves a document with no JavaScript in it, so a PDF
+   can never depend on a script having run against a live origin. */
 function stripTransient(): void {
   for (const el of document.querySelectorAll('[data-transient]')) el.remove();
 }
 
-const data = readData();
-const host = document.getElementById('content');
-
-if (data && host) {
-  if (data.mode === 'slides') renderDeck(host, data.markdown, data.theme);
-  else renderMarkdown(host, data.markdown);
-}
-
 stripTransient();
 
-/* The exporter waits on this flag, so it has to be set even when the render bailed:
-   a blank page that reports ready beats a browser minute spent on a timeout. */
+/* The exporter waits on this flag, so it has to be set even if a face never
+   arrives: a page typeset in the fallback beats a browser minute spent on a
+   timeout. `fonts.ready` resolves either way. */
 void document.fonts.ready.then(() => {
   document.documentElement.dataset.ready = '1';
 });
+
+/* Nothing to export, but tests/client/print.test.ts imports this for its side
+   effects and a script with no import or export is not a module. */
+export {};

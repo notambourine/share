@@ -4,7 +4,7 @@ import { del } from '../src/routes/del';
 import { upload } from '../src/routes/upload';
 import { authenticate, mintSession, sha256hex } from '../src/lib/auth';
 import type { Env } from '../src/lib/types';
-import { DEFERRED, testEnv } from './bindings';
+import { testEnv } from './bindings';
 
 const KEYS = { v1: 'unit-test-signing-secret' };
 
@@ -64,7 +64,7 @@ describe('session scope and expiry messages', () => {
     const r = new Request('https://share.example/up/acme', {
       method: 'POST', headers: { authorization: await bearer(t - 60) },
     });
-    const res = await upload(r, env, DEFERRED, 'acme');
+    const res = await upload(r, env, 'acme');
     expect(res.status).toBe(401);
     expect(await res.text()).toContain('session expired');
   });

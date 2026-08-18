@@ -49,7 +49,8 @@ export async function adminConfig(request: Request, env: Env, space: string, has
 
 interface SourceStatus {
   path: string;
-  /** `<mode>.<ext>` pairs whose render has landed, e.g. `slides.pdf`. */
+  /** `<mode>.<ext>` pairs whose render has landed, e.g. `slides.pdf`. Binary
+      formats only: the html views render per request and never land anywhere. */
   rendered: string[];
   check: SlideCheck | null;
 }
@@ -85,7 +86,7 @@ export async function adminStatus(request: Request, env: Env, space: string, has
   const checkKeys: [SourceStatus, string][] = [];
   for (const { key } of (await env.BUCKET.list({ prefix })).objects) {
     const rest = key.slice(prefix.length);
-    const m = /^(.*)\.(check\.json|(?:slides|doc)\.(?:html|pdf)|page\.(?:pdf|(?:browser|full)\.png))$/.exec(rest);
+    const m = /^(.*)\.(check\.json|(?:slides|doc)\.pdf|page\.(?:pdf|(?:browser|full)\.png))$/.exec(rest);
     const status = m && sources.get(m[1]);
     if (!status) continue;
     if (m[2] === 'check.json') checkKeys.push([status, key]);

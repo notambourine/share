@@ -81,8 +81,10 @@ vault token into the conversation.
 - Space = client or person slug, lowercase (`acme`, `sara`). The space is
   visible in the URL, so pick the name you'd show the recipient.
 - Client-facing material takes `--tier signed`; internal scratch stays open.
-- Markdown renders as a document; swap the extension for `.slides.html` for a
-  deck. Decks run through Marp, so `---` splits slides and Marp directives work:
+- Markdown renders as a deck when the content says so - `marp: true` or `---`
+  separators - and as a document otherwise; `.doc.html` and `.slides.html` pin
+  it either way. Decks run through Marp, so `---` splits slides and Marp
+  directives work:
   `<!-- _class: lead -->` for a title slide, `<!-- paginate: true -->` for
   slide numbers.
 - Full HTTP API: https://share.notambourine.com/llms.txt
@@ -95,26 +97,29 @@ file uploaded under the suffixed name wins.
 
 | URL | Output |
 | --- | --- |
-| `deck.md` | branded document, rendered in the browser |
+| `deck.md` | branded page, deck or document from the content |
 | `deck.txt` | the source, `text/plain`, always |
-| `deck.html` | self-contained page, fonts inlined, opens offline; deck or document from the content |
-| `deck.slides.html` | self-contained deck |
-| `deck.doc.html` | self-contained document |
+| `deck.html` | the same page, at a URL that carries an extension |
+| `deck.slides.html` | branded page, always a deck |
+| `deck.doc.html` | branded page, always a document |
 | `deck.pdf` | PDF, deck or document decided from the content |
 | `deck.slides.pdf` | PDF, always a deck |
 | `deck.doc.pdf` | PDF, always a document |
 
-Bare `.pdf` and `.html` read the content to choose: `marp: true` front matter
-or `---` slide separators mean deck, anything else means document. You cannot
-guess a sniff, so send `.slides.*` or `.doc.*` when the mode matters.
+Bare `.md`, `.pdf`, and `.html` read the content to choose: `marp: true` front
+matter or `---` slide separators mean deck, anything else means document. You
+cannot guess a sniff, so send `.slides.*` or `.doc.*` when the mode matters.
+
+The `.html` spellings answer immediately - the Worker renders them per request.
+Only the PDFs go through a browser.
 
 The deck theme is `deck.css` from the brand kit, the same bytes `nt-brand:system`
 hands a local `marp` run, so a deck shared here and one built by hand come out
 the same. Upload the markdown; do not render it first.
 
 Attach `deck.pdf` to an email; send `deck.slides.html` when the recipient
-should click through the deck. The first PDF request after an upload can take a
-few seconds while the browser renders it; a 202 answer means it is still
+should click through the deck. A PDF is rendered by the first request that asks
+for it, so that one can take a few seconds; a 202 answer means it is still
 rendering and lands on its own. Hand the URL over as `put` printed it - never
 curl the suffixes to check they respond.
 

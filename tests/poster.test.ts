@@ -24,7 +24,7 @@ async function putFiles(env: Env, names: string[]) {
     headers: { authorization: AUTH, accept: 'application/json' },
     body: form,
   });
-  const res = await upload(req, env, DEFERRED, SPACE);
+  const res = await upload(req, env, SPACE);
   return res.json<{ hash: string; files: string[] }>();
 }
 

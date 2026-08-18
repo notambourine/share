@@ -255,11 +255,11 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     const res = await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '');
     expect(res.status).toBe(200);
     const html = await res.text();
-    // The mock's five tiles for a single markdown upload.
+    // Five tiles for a single markdown upload: two live views, two PDFs, the source.
     expect(html).toContain('deck.slides.html');
+    expect(html).toContain('deck.doc.html');
     expect(html).toContain('deck.slides.pdf');
     expect(html).toContain('deck.doc.pdf');
-    expect(html).toContain('deck.html');
     expect(html).toContain('deck.txt');
     // The re-open verb, the page script, the TTL chips.
     expect(html).toContain(`nt-share admin ${SPACE}/${HASH}`);
@@ -310,13 +310,14 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     const env = seededEnv();
     const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
     const html = await (await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '')).text();
-    expect(html).toContain('data-src="deck.md" data-await="slides.html"');
     expect(html).toContain('data-src="deck.md" data-await="slides.pdf"');
     expect(html).toContain('data-src="deck.md" data-await="doc.pdf"');
-    expect(html).toContain('data-src="deck.md" data-await="html"');
-    // The txt tile derives nothing, so it awaits nothing.
-    expect(html.match(/data-await/g)).toHaveLength(4);
-    expect(html.match(/class="tstate"/g)).toHaveLength(4);
+    /* Only the PDFs wait on a browser. The two html tiles render per request, so
+       they are ready on arrival and have no state to paint; the txt tile derives
+       nothing at all. */
+    expect(html.match(/data-await/g)).toHaveLength(2);
+    expect(html.match(/class="tstate"/g)).toHaveLength(2);
+    expect(html.match(/data-gen="1"/g)).toHaveLength(2);
   });
 
   it('an uploaded page gets its click-to-generate export tiles', async () => {

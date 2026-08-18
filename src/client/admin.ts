@@ -131,8 +131,8 @@ if (!c || !actions) {
   const awaited = document.querySelectorAll('[data-await]');
   let polled = 0;
 
-  /* Click-to-generate tiles (uploaded HTML, nothing prerenders them): until
-     clicked they read "click to generate" and never hold the poll open. */
+  /* Nothing prerenders, so every awaited tile is click-to-generate: until clicked
+     it reads "click to generate" and never holds the poll open. */
   const requested = new Set<Element>();
 
   interface Source {
@@ -165,9 +165,7 @@ if (!c || !actions) {
       const st = tile.querySelector('.tstate');
       const key = tile.dataset.await;
       if (!s || !st || !key) continue;
-      const ready = key === 'html'
-        ? s.rendered.some((r) => r.slice(-5) === '.html')
-        : s.rendered.includes(key);
+      const ready = s.rendered.includes(key);
       const slides = key.startsWith('slides.');
       if (slides && s.overflow !== null && s.overflow.length) {
         const n = s.overflow;

@@ -16,6 +16,15 @@
   `@cloudflare/workers-types`; `tsconfig.client.json` owns it and `npm run types`
   checks all three projects. It may import from `src/lib/` - that is the point,
   and it is why no client file restates `splitFrontMatter` or a JSON decoder.
+- Markdown, decks, and highlighting render in the Worker, in
+  `src/render/markdown.ts`, which the live shells and the print page both call.
+  Never add a parser under `public/` or a second render path: a page arrives as
+  markup, and `src/client/` holds interaction only - the deck nav and the copy
+  button. Never reintroduce a `?raw` fetch to fill a shell.
+- Nothing renders at upload. An html view is rendered by the request that asks
+  for it and stores nothing, so a brand edit reaches every link ever made with
+  nothing to invalidate. Only `.pdf` and `.png` reach the `BROWSER` binding, and
+  only they cache under `d/v<N>/` behind a hand-bumped `CACHE_VERSION`.
 - One-time dashboard setup: README.md "Setup from zero". Token add, rotate,
   offboard, and delivery: `scripts/add-employee.sh` (its header is the runbook).
 - This repo is public. Client names never enter it; per-space retention lives
@@ -39,8 +48,8 @@
   second copy of the header.
 - The render layer is `hono/jsx`, so JSX escapes every filename it prints and no
   call site escapes by hand. `raw()` is the only opt-out and belongs to values
-  that are already markup: the lockup, the inlined stylesheet, the bootstrap
-  script. Never reach for it to silence a `&amp;` that looks wrong.
+  that are already markup: the lockup, the inlined stylesheet, the rendered
+  document or deck. Never reach for it to silence a `&amp;` that looks wrong.
 - The Worker keeps its own router. Precedence in `src/worker.ts` is the security
   model - an uploaded file named `config`, `admin`, or `status` keeps its GET -
   so never move that dispatch into a route matcher. Responses keep coming from

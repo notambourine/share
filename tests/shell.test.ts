@@ -73,13 +73,13 @@ describe('the shells still render what the client scripts select on', () => {
       expect(admin).toContain(attr);
     }
     // The poll needs both halves on the same tile, and the value, not just the key.
-    expect(admin).toContain('data-src="deck.md" data-await="slides.html"');
+    expect(admin).toContain('data-src="deck.md" data-await="slides.pdf"');
   });
 
-  it('keeps data-kind and data-raw on the body, which render.js reads first', () => {
+  it('keeps data-kind on the body, and no data-raw, because nothing fetches', () => {
     const out = fileShell('slides', { path: 'deck.md', rawHref: '/acme/h/deck.md?raw' });
     expect(out).toContain('data-kind="slides"');
-    expect(out).toContain('data-raw="/acme/h/deck.md?raw"');
+    expect(out).not.toContain('data-raw');
   });
 
   it('gives the deck nav its prev, next, and count hooks', () => {
