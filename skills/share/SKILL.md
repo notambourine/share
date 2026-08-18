@@ -17,6 +17,7 @@ the frame the CLI cut at upload.
     nt-share put <space> --clip [--name shot.png]        # the image on the clipboard
     nt-share sign <space>/<hash> [--ttl <dur>] [--short] # re-sign an older artifact
     nt-share admin <space>/<hash>                        # re-open the 5-minute admin link
+    nt-share check <space>/<hash> [--json]               # renders landed, and whether a slide clips
     nt-share ls <space>
     nt-share rm <space>/<hash>                           # revoke; lands within 10 min
 
@@ -112,3 +113,8 @@ should click through the deck. The first PDF request after an upload can take a
 few seconds while the browser renders it; a 202 answer means it is still
 rendering and lands on its own. Hand the URL over as `put` printed it - never
 curl the suffixes to check they respond.
+
+Run `nt-share check <space>/<hash>` after sharing a deck: it names the slides
+whose content clips and exits 1 when any does. Fix the source, then `rm` the
+artifact and `put` a fresh one - a share is immutable, so there is no edit in
+place, and the URL changes. Rerun `check` if a render still reads `(pending)`.

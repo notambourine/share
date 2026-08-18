@@ -13,6 +13,7 @@
    nt-share sign <space>/<hash> [--ttl 30d] [--short]   (re-sign an older artifact)
    nt-share short <space>/<hash> [--ttl 30d]
    nt-share admin <space>/<hash>                        (re-open the 5-minute admin link)
+   nt-share check <space>/<hash> [--json]               (renders landed, and whether a slide clips)
    nt-share ls <space>
    nt-share rm <space>/<hash>
    nt-share session [--ttl 5m] [--print]  (optional pre-mint, max 1h; --print echoes the token for curl)
@@ -98,6 +99,42 @@ function required(record: { [key: string]: Json }, key: string): string {
   return textAt(record, key) ?? die(`the server answered without a ${key}`);
 }
 
+/** One status row, narrowed. `check` is null on anything that is not a deck. */
+interface SourceStatus {
+  path: string;
+  rendered: string[];
+  slides: number;
+  overflow: number[] | null;
+}
+
+function decodeStatus(body: string): SourceStatus[] {
+  const sources = fields(body).sources;
+  if (!Array.isArray(sources)) die(`the server answered without sources:\n${body.trim()}`);
+  return sources.filter(isRecord).map((row) => {
+    const check = row.check;
+    const clip = isRecord(check) ? check : null;
+    const slides = clip && isNumber(clip.slides) ? clip.slides : 0;
+    const overflow = clip && Array.isArray(clip.overflow) ? clip.overflow.filter(isNumber) : null;
+    return {
+      path: required(row, 'path'),
+      rendered: Array.isArray(row.rendered) ? row.rendered.filter(isText) : [],
+      slides,
+      overflow,
+    };
+  });
+}
+
+/** Nothing rendered yet reads as pending; a deck says whether it clips. */
+function verdict(s: SourceStatus): string {
+  if (s.rendered.length === 0) return '(pending)';
+  const formats = s.rendered.join(' ');
+  if (!s.overflow) return formats;
+  const clip = s.overflow.length === 0
+    ? 'ok'
+    : `overflow on ${s.overflow.join(', ')}`;
+  return `${formats}   ${s.slides} slides, ${clip}`;
+}
+
 /** null rather than a die: a stale cache file is a re-mint, not an error. */
 function decodeSession(body: string): Session | null {
   const record = decode(body);
@@ -110,7 +147,7 @@ function decodeSession(body: string): Session | null {
 }
 
 /** A flag that takes no value; anything else here would eat the next argument. */
-const BARE = new Set(['short', 'print', 'clip']);
+const BARE = new Set(['short', 'print', 'clip', 'json']);
 
 /** Boolean flags land as "1", so every value is a string. */
 function parseArgs(argv: string[]) {
@@ -508,6 +545,34 @@ switch (cmd) {
     console.log(required(made, 'url'));
     break;
   }
+  /* The verify verb. Mints its own admin credential rather than asking for a
+     link, so a model can run it without a human pasting one; the status route
+     is pure reads, so checking never costs a browser minute. One GET - a
+     pending render reads as pending and the caller reruns. */
+  case 'check': {
+    const [path] = rest;
+    if (!path?.includes('/')) die('usage: nt-share check <space>/<hash> [--json]');
+    const artifact = path.replace(/\/$/, '');
+    const token = vaultToken();
+    const link = fields(await api(`/${artifact}/admin`, { method: 'POST' }, token));
+    const c = new URL(required(link, 'url')).searchParams.get('c')
+      ?? die('the admin link carried no ?c=');
+    const body = await api(`/${artifact}/status?c=${encodeURIComponent(c)}`, {}, token);
+    if (flags.json) {
+      console.log(body.trim());
+      break;
+    }
+    const sources = decodeStatus(body);
+    if (sources.length === 0) console.error('no renderable source in this artifact');
+    const width = Math.max(0, ...sources.map((s) => s.path.length));
+    for (const s of sources) console.log(`${s.path.padEnd(width)}  ${verdict(s)}`);
+    // Exit 1 so a loop can branch on a clipped deck without parsing the report.
+    if (sources.some((s) => s.overflow && s.overflow.length > 0)) {
+      console.error('a slide clips: fix the source, then rm and put a fresh deck - never edit in place');
+      process.exit(1);
+    }
+    break;
+  }
   case 'ls': {
     const [space] = rest;
     if (!space) die('usage: nt-share ls <space>');
@@ -522,5 +587,5 @@ switch (cmd) {
     break;
   }
   default:
-    die('commands: install, put, sign, short, admin, ls, rm, session; see https://share.notambourine.com/llms.txt');
+    die('commands: install, put, sign, short, admin, check, ls, rm, session; see https://share.notambourine.com/llms.txt');
 }

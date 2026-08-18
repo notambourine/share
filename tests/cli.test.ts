@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -166,5 +168,105 @@ describe('install', () => {
     // The whole reason this resolver is not a shell pipeline: every string sort
     // ranks 0.9.0 over 0.10.0, and `sort -V` has no cmd.exe equivalent.
     expect(resolve(pluginHome('0.9.0', '0.10.0'))).toContain('CLI 0.10.0');
+  });
+});
+
+/* A stub Worker, because `check` is two calls whose second depends on the
+   first: the report is only right if the CLI pulls `?c=` out of the minted
+   admin link and spends it on the status route. spawn, not spawnSync, since a
+   blocked event loop could never answer the request under test. */
+describe('check', () => {
+  /** The status route's answer, as the stub hands it back. */
+  interface StubStatus {
+    sources: {
+      path: string;
+      rendered: string[];
+      check: { slides: number; overflow: number[] } | null;
+    }[];
+  }
+
+  function stub(status: StubStatus) {
+    const asked: string[] = [];
+    const server = createServer((req, res) => {
+      asked.push(`${req.method} ${req.url}`);
+      res.setHeader('content-type', 'application/json');
+      if (req.url?.endsWith('/admin')) {
+        res.end(JSON.stringify({ url: 'https://share.example/qa/abc/?c=minted.1.tok', exp: 0 }));
+        return;
+      }
+      res.end(JSON.stringify(status));
+    });
+    return { server, asked };
+  }
+
+  async function check(status: StubStatus, args: string[] = []) {
+    const { server, asked } = stub(status);
+    await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
+    /* SAFETY: address() is a string only for a unix socket; this one listened
+       on a TCP port, and it is listening because the callback above fired. */
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const child = spawn(process.execPath, [BIN, 'check', 'qa/abc', ...args], {
+        env: {
+          ...process.env,
+          SHARE_URL: `http://127.0.0.1:${port}`,
+          SHARE_TOKEN: 'raw-token',
+          XDG_CACHE_HOME: cacheDir(),
+          PATH: '',
+        },
+      });
+      let out = '';
+      child.stdout.on('data', (c: Buffer) => { out += c.toString(); });
+      child.stderr.on('data', (c: Buffer) => { out += c.toString(); });
+      const code = await new Promise<number | null>((ok) => child.on('close', ok));
+      return { code, out, asked };
+    } finally {
+      server.close();
+    }
+  }
+
+  const deck = {
+    sources: [
+      { path: 'deck.md', rendered: ['slides.html', 'slides.pdf'], check: { slides: 12, overflow: [7] } },
+      { path: 'notes.md', rendered: ['doc.html', 'doc.pdf'], check: null },
+      { path: 'page.html', rendered: [], check: null },
+    ],
+  };
+
+  it('spends the minted ?c= on the status route and reports each source', async () => {
+    const { code, out, asked } = await check(deck);
+    expect(asked[0]).toBe('POST /qa/abc/admin');
+    expect(asked[1]).toBe('GET /qa/abc/status?c=minted.1.tok');
+    expect(out).toContain('12 slides, overflow on 7');
+    expect(out).toContain('page.html  (pending)');
+    expect(out).toContain('deck.md    slides.html'); // padded to the longest path
+    expect(code).toBe(1); // a clipped slide is a failure a loop can branch on
+    expect(out).toContain('rm and put a fresh deck');
+  });
+
+  it('exits 0 when nothing clips', async () => {
+    const clean = {
+      sources: [{ path: 'deck.md', rendered: ['slides.pdf'], check: { slides: 3, overflow: [] } }],
+    };
+    const { code, out } = await check(clean);
+    expect(out).toContain('3 slides, ok');
+    expect(code).toBe(0);
+  });
+
+  it('a render still pending is not a failure', async () => {
+    const { code } = await check({ sources: [{ path: 'deck.md', rendered: [], check: null }] });
+    expect(code).toBe(0);
+  });
+
+  it('--json prints the server body and never the report', async () => {
+    const { code, out } = await check(deck, ['--json']);
+    expect(JSON.parse(out)).toEqual(deck);
+    expect(code).toBe(0); // the caller reads the verdict itself
+  });
+
+  it('needs a <space>/<hash>, not a bare space', () => {
+    const { code, out } = run(['check', 'qa'], { XDG_CACHE_HOME: cacheDir(), PATH: '' });
+    expect(code).toBe(1);
+    expect(out).toContain('usage: nt-share check <space>/<hash>');
   });
 });
