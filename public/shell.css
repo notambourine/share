@@ -18,16 +18,17 @@ body {
 }
 
 /* The golden set's lockup, inlined by src/render/shell.ts. `currentColor`
-   beats the svg's own fill attribute, so the hover reads as it did in type. */
+   beats the svg's own fill attribute, so `color` drives it. Pink, like the
+   PDF's `.print-mark`; the hover lifts to the lighter pink text token. */
 .wordmark {
   display: block;
-  color: var(--fg1);
+  color: var(--accent);
   border-bottom: none;
 }
 /* 36px, not the 20px the wordmark ran at as type: the lockup's box is mostly
    crescent, so the letters land at about a third of whatever height it takes. */
 .wordmark svg { display: block; height: 36px; width: auto; fill: currentColor; }
-.wordmark:hover { border-bottom: none; color: var(--nt-pink); }
+.wordmark:hover { border-bottom: none; color: var(--accent-fg); }
 
 .spacer { flex: 1; }
 
