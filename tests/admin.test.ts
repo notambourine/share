@@ -140,7 +140,10 @@ describe('POST /<space>/<hash>/config', () => {
     expect(body.expiresAt).toBe(NOW + 30 * DAY);
     // The page prints this rather than re-deriving it from expiresAt.
     expect(body.expiry).toBe('expires in 30d');
-    expect(body.exp).toBe(EXP);
+    // A whole fresh window, not the sent token's. The route reads its own
+    // clock, so a tick past this file's NOW is the only slack allowed.
+    expect(body.exp).toBeGreaterThanOrEqual(EXP);
+    expect(body.exp).toBeLessThan(EXP + 60);
     expect(Number(body.c.split('.')[1])).toBeGreaterThan(Number(sent.split('.')[1]));
     expect((await verifyAdminToken(KEYS, SPACE, HASH, body.c, NOW)).ok).toBe(true);
     expect(storedMeta(env).expiresAt).toBe(NOW + 30 * DAY);
