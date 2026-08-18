@@ -7,7 +7,11 @@ function decodeFile(record: JsonObject): MetaFile | null {
   const path = textAt(record, 'path');
   const size = numberAt(record, 'size');
   const type = textAt(record, 'type');
-  return path !== null && size !== null && type !== null ? { path, size, type } : null;
+  if (path === null || size === null || type === null) return null;
+  // Absent on every upload that predates posters, and on every kind that has
+  // no frame to cut, so a missing one is the norm rather than a bad record.
+  const poster = textAt(record, 'poster');
+  return { path, size, type, ...(poster !== null && { poster }) };
 }
 
 /**

@@ -9,10 +9,17 @@ curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
 ```
 
 The same URL renders a branded page in a browser and serves raw bytes to
-everything else: `<img src>`, Slack unfurls, curl. Markdown renders as a
-document (`?slides` makes it a deck), code gets syntax highlighting, and a
-folder upload with an `index.html` serves as a real page with its relative
-assets intact.
+`<img src>` and curl. Markdown renders as a document (`?slides` makes it a
+deck), code gets syntax highlighting, and a folder upload with an `index.html`
+serves as a real page with its relative assets intact.
+
+An unfurl crawler is the third answer, split off by User-Agent because Slack
+asks exactly like curl. It gets the shell for its `og:`/`twitter:` tags, so a
+link draws a card instead of nothing. An image is the exception and keeps the
+bytes: Slack renders those into the message on its own. A video has no frame a
+Worker could cut, so `nt-share put` cuts one at upload (ffmpeg, or `qlmanage` on
+macOS) and sends it alongside - see `src/lib/poster.ts`. Without either tool the
+upload still lands and the card is text only.
 
 A markdown URL also takes a format suffix: `deck.md.pdf` for a branded PDF,
 `deck.md.html` for a self-contained page that opens from a mail attachment,

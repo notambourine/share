@@ -97,6 +97,9 @@ export interface MetaFile {
   path: string;
   size: number;
   type: string;
+  /** Path of the frame the unfurl card shows, when the upload carried one.
+      Never its own row in `files` - see src/lib/poster.ts. */
+  poster?: string;
 }
 
 export interface Meta {

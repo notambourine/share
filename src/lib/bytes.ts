@@ -4,7 +4,7 @@
 import type { Env } from './types';
 import { contentTypeFor } from './keys';
 import { errorShell } from '../render/shell';
-import { htmlResponse, ROBOTS, CACHE } from './http';
+import { htmlResponse, ROBOTS, CACHE, VARY } from './http';
 
 /** Single-range support so <video> seeking works; anything malformed falls back to a full 200. */
 export function parseRange(header: string | null, size: number): { offset: number; length: number } | null {
@@ -33,7 +33,7 @@ export async function rawBytes(
     'content-type': contentTypeFor(filePath),
     'x-robots-tag': ROBOTS,
     'cache-control': CACHE,
-    'vary': 'Accept',
+    'vary': VARY,
     'cross-origin-resource-policy': 'cross-origin',
     'accept-ranges': 'bytes',
   });

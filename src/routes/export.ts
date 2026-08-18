@@ -111,7 +111,7 @@ function degrade(target: ExportTarget, mode: RenderMode, ext: 'html' | 'pdf'): R
   if (ext === 'pdf') return rendering202();
   const dir = url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1);
   const rawHref = `${url.origin}${dir}${encodeURI(source)}?raw`;
-  return htmlResponse(fileShell(mode === 'slides' ? 'slides' : 'md', source, rawHref, size));
+  return htmlResponse(fileShell(mode === 'slides' ? 'slides' : 'md', { path: source, rawHref, size }));
 }
 
 /** No prerender for a page (decision 9): the first GET - the admin tile's
