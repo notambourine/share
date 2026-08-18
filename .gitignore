@@ -21,3 +21,6 @@ node_modules/
 /public/print.js
 /public/fonts/
 /public/logo/
+
+# Live-model eval outputs, kept local for eyeballing (evals/transforms/README.md).
+/evals/transforms/out/

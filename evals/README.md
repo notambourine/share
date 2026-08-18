@@ -6,3 +6,6 @@ the QA run's "test the skill" framing, each graded on invoking
 `Skill(nt-share:share)` and on not reading `SKILL.md` off the plugin cache
 path. `allowed_tools: []` on every case, so an eval agent can never upload or
 raise a 1Password prompt; the invoke-or-not decision it grades happens first.
+
+`transforms/` is a different suite: live-model evals for `src/transforms/`,
+run by hand with `npm run eval:transforms` - its README has the how.

@@ -1,0 +1,14 @@
+{
+  "release-notes.txt": {
+    "keep": ["2.4.0", "2026-08-12", "typeahead", "1.7s", "https://help.acme.example/bulk-price"],
+    "drop": []
+  },
+  "meeting-notes.md": {
+    "keep": ["2026-08-20", "roadmap", "billing", "https://docs.acme.example/q3-roadmap"],
+    "drop": ["BANANAS"]
+  },
+  "quarter-recap.md": {
+    "keep": ["2.9%", "$8,500", "gift cards", "2026-09-15"],
+    "drop": []
+  }
+}

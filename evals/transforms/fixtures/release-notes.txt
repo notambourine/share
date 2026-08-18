@@ -1,0 +1,16 @@
+acme release notes dump - raw, do not send as-is
+
+deploy window 2026-08-12, v2.4.0
+repo: acme-storefront
+
+f31c2aa fix(checkout): double-submit on slow 3DS confirm, orders 1841/1907 dup-charged then refunded
+9b02d17 feat(search): typeahead over product titles, p95 120ms -> 38ms
+77aa41e feat(account): saved carts behind flag saved-carts-v1, on for 10% cohort
+c00913d chore: bump node 20 -> 22 on the render fleet
+41d99f0 fix(email): receipt template broke on names with apostrophes
+8ba1f22 feat(admin): bulk price edit csv import, docs at https://help.acme.example/bulk-price
+2f4410c perf(images): avif everywhere, home LCP 2.9s -> 1.7s
+
+support notes: checkout dup-charge complaints stopped after the 12th. two
+tickets about csv import header row confusion.
+next sprint: saved carts to 100%, start on gift cards.

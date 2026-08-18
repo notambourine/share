@@ -13,6 +13,7 @@
     "vendor": "node scripts/vendor.mjs",
     "brand": "node scripts/brand-audit.mjs",
     "oxlint": "oxlint --deny-warnings",
+    "eval:transforms": "node evals/transforms/run.mjs",
     "types": "tsc --noEmit && tsc -p tsconfig.bin.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "build:client": "npm run vendor && node scripts/client.mjs"
   },

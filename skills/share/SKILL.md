@@ -14,6 +14,7 @@ the frame the CLI cut at upload.
 
     nt-share put <space> <file|dir ...> [--tier signed] [--ttl <dur>|forever]
                                         [--ttl-idle <dur>] [--sign-ttl <dur>] [--short]
+                                        [--transform agenda|renewal|performance|presentation|deck]
     nt-share put <space> --clip [--name shot.png]        # the image on the clipboard
     nt-share sign <space>/<hash> [--ttl <dur>] [--short] # re-sign an older artifact
     nt-share admin <space>/<hash>                        # re-open the 5-minute admin link
@@ -81,6 +82,13 @@ vault token into the conversation.
 - Space = client or person slug, lowercase (`acme`, `sara`). The space is
   visible in the URL, so pick the name you'd show the recipient.
 - Client-facing material takes `--tier signed`; internal scratch stays open.
+- `--transform <name>` reformats each uploaded `.md`/`.txt` server-side
+  (Workers AI) before it stores: hand it raw notes, a commit log, or a
+  transcript and the link serves the finished document. The server owns the
+  format, so never pre-format the file yourself - upload the raw material.
+  `agenda`, `renewal`, and `performance` come out as documents;
+  `presentation` and `deck` as Marp decks. A `.txt` is stored as `.md`. On a
+  502, retry once without the flag and say the transform failed.
 - Markdown renders as a deck when the content says so - `marp: true` or `---`
   separators - and as a document otherwise; `.doc.html` and `.slides.html` pin
   it either way. Decks run through Marp, so `---` splits slides and Marp
