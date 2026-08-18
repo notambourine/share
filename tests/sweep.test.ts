@@ -15,7 +15,7 @@ const GONE = 'Al3adyTrashd';
 function metaFor(space: string, hash: string, expiresAt: number | null): string {
   return JSON.stringify({
     space, hash, tier: 'open', uploader: 'tom',
-    createdAt: NOW - 86400, expiresAt, idleTtl: null, lastAccess: NOW - 86400,
+    createdAt: NOW - 86400, expiresAt,
     files: [{ path: 'note.md', size: 6, type: 'text/markdown' }],
   });
 }
@@ -45,19 +45,6 @@ describe('sweep', () => {
 
     expect(env.BUCKET.objects.has(`acme/${LIVE}/meta.json`)).toBe(true);
     expect(env.BUCKET.objects.has(`_trash/_trash/acme/${GONE}/meta.json`)).toBe(false);
-  });
-
-  it('counts an idle-TTL artifact past its window', async () => {
-    const env = testEnv({
-      objects: {
-        [`acme/${DEAD}/meta.json`]: JSON.stringify({
-          space: 'acme', hash: DEAD, tier: 'open', uploader: 'tom',
-          createdAt: NOW - 86400, expiresAt: null, idleTtl: 60, lastAccess: NOW - 600,
-          files: [],
-        }),
-      },
-    });
-    expect(await sweep(env)).toEqual({ scanned: 1, trashed: 1 });
   });
 
   it('an undecodable record is scanned and left alone, never trashed blind', async () => {

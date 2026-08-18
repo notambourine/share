@@ -9,7 +9,6 @@ import { mint } from './routes/mint';
 import { listSpace } from './routes/list';
 import { del } from './routes/del';
 import { adminConfig, adminRemint, adminStatus } from './routes/admin';
-import { short } from './routes/short';
 import { session } from './routes/session';
 import { skillDoc } from './skill';
 import { brandSheet } from './brand';
@@ -63,7 +62,7 @@ function notFound(): Response {
 }
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -103,10 +102,6 @@ export default {
       return session(request, env);
     }
 
-    if (segs[0] === 'z' && segs.length === 2 && request.method === 'GET') {
-      return short(env, segs[1]);
-    }
-
     const space = segs[0];
     if (!space || !isValidSpace(space)) return notFound();
 
@@ -143,7 +138,7 @@ export default {
       return Response.redirect(`${url.origin}${path}/${url.search}`, 302);
     }
 
-    return serve(request, env, ctx, route);
+    return serve(request, env, route);
   },
 
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {

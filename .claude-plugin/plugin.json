@@ -1,6 +1,6 @@
 {
   "name": "nt-share",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "Share artifacts as branded unguessable links on share.notambourine.com: upload, sign, list, revoke.",
   "author": {
     "name": "NoTambourine LLC",

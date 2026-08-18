@@ -2,9 +2,10 @@ import type { Env, Meta } from '../lib/types';
 import { ADMIN_SECS, mintAdminLink, mintAdminToken, verifyAdminToken } from '../lib/admin';
 import { authorize, requireKeys } from '../lib/auth';
 import type { SigningKeys } from '../lib/sign';
-import { readMeta, readMetaTagged, writeMeta, isExpired } from '../lib/r2';
+import { readMeta, writeMeta, isExpired } from '../lib/r2';
 import { parseDuration } from '../lib/keys';
 import { parseObject, textAt } from '../lib/json';
+import { expiryText } from '../render/shell';
 import { jsonResponse, now } from '../lib/http';
 import type { RenderedKey } from '../lib/exportPath';
 import { derivedPrefix, formatsFor, parseCheckKey, parseDerivedKey, renderedKey } from '../lib/exportPath';
@@ -40,23 +41,23 @@ export async function adminConfig(request: Request, env: Env, space: string, has
   const secs = parseDuration(ttl);
   if (secs === null) return jsonResponse({ error: 'bad ttl' }, 400);
 
-  // Conditional write with one retry: a lastAccess touch that lands in between
-  // moves the etag, and this write must never silently lose.
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const tagged = await readMetaTagged(env, space, hash);
-    if (!tagged || isExpired(tagged.meta, t)) return jsonResponse({ error: 'no such artifact' }, 404);
-    // Counts from upload; a ttl the artifact has outlived counts from the
-    // write instead, so no chip ever expires a share by side effect.
-    const fromUpload = tagged.meta.createdAt + secs;
-    const expiresAt = secs === 0 ? null : fromUpload > t ? fromUpload : t + secs;
-    // The chip owns expiry outright: an idle rule from upload would keep a
-    // "forever" or a fixed date lying, so it dies on first admin touch.
-    const updated: Meta = { ...tagged.meta, expiresAt, idleTtl: null };
-    if (await writeMeta(env, updated, tagged.etag)) {
-      return jsonResponse({ c: await mintAdminToken(keys, space, hash, t + ADMIN_SECS), expiresAt });
-    }
-  }
-  return jsonResponse({ error: 'write conflict; retry' }, 409);
+  const meta = await readMeta(env, space, hash);
+  if (!meta || isExpired(meta, t)) return jsonResponse({ error: 'no such artifact' }, 404);
+  // Counts from upload; a ttl the artifact has outlived counts from the
+  // write instead, so no chip ever expires a share by side effect.
+  const fromUpload = meta.createdAt + secs;
+  const expiresAt = secs === 0 ? null : fromUpload > t ? fromUpload : t + secs;
+  const updated: Meta = { ...meta, expiresAt };
+  await writeMeta(env, updated);
+
+  const exp = t + ADMIN_SECS;
+  return jsonResponse({
+    c: await mintAdminToken(keys, space, hash, exp),
+    exp,
+    expiresAt,
+    // Rendered here, so the page never restates the countdown grammar.
+    expiry: expiryText(updated, t),
+  });
 }
 
 interface SourceStatus {

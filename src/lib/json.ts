@@ -55,11 +55,6 @@ export function numberAt(record: JsonObject, key: string): number | null {
   return isNumber(value) ? value : null;
 }
 
-/** Absent and `false` are the same answer for every flag this Worker reads. */
-export function flagAt(record: JsonObject, key: string): boolean {
-  return record[key] === true;
-}
-
 /** Skips a non-string entry rather than rejecting the array: the one caller is
     the admin poll, which paints what the answer does carry. */
 export function textsAt(record: JsonObject, key: string): string[] {
@@ -104,19 +99,6 @@ export function decodeTextMap(text: string): Record<string, string> | null {
     const value = textAt(record, key);
     if (value === null) return null;
     entries.push([key, value]);
-  }
-  return Object.fromEntries(entries);
-}
-
-/** Per key, unlike the text map above: this one holds retention, and one typo
-    must not quietly reset every other space to the default. */
-export function decodeNumberMap(text: string): Record<string, number> {
-  const record = parseObject(text);
-  if (!record) return {};
-  const entries: [string, number][] = [];
-  for (const key of Object.keys(record)) {
-    const value = numberAt(record, key);
-    if (value !== null) entries.push([key, value]);
   }
   return Object.fromEntries(entries);
 }

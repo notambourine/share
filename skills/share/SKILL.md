@@ -1,6 +1,6 @@
 ---
 name: share
-version: 0.14.1
+version: 0.15.0
 description: Share a generated artifact (report, code sample, deck, screenshot, folder, HTML prototype) as a branded unguessable link on share.notambourine.com. Use when the user asks to "share", "send", or "get a link for" a file or directory, or to list or revoke existing shares.
 ---
 
@@ -14,18 +14,18 @@ the frame the CLI cut at upload.
 ## Verbs
 
     nt-share put <space> <file|dir ...> [--tier signed] [--ttl <dur>|forever]
-                                        [--ttl-idle <dur>] [--sign-ttl <dur>] [--short]
+                                        [--sign-ttl <dur>]
                                         [--transform agenda|renewal|performance|presentation|deck]
     nt-share put <space> --clip [--name shot.png]        # the image on the clipboard
-    nt-share sign <space>/<hash> [--ttl <dur>] [--short] # re-sign an older artifact
+    nt-share sign <space>/<hash> [--ttl <dur>]           # re-sign an older artifact
     nt-share admin <space>/<hash>                        # re-open the 5-minute admin link
     nt-share check <space>/<hash> [--json]               # renders landed, and whether a slide clips
     nt-share ls <space>
     nt-share rm <space>/<hash>                           # revoke; lands within 10 min
 
 A `<dur>` is a number plus `m`, `h`, `d`, or `w`: `7d`, `12h`, `4w`. Defaults:
-`--ttl 90d`, `--sign-ttl 30d`. `--ttl-idle` expires the share that long after
-its last access instead of at a fixed date.
+`--ttl 90d`, `--sign-ttl 30d`. A share expires on a fixed date; the admin page's
+chips move it.
 
 `put` prints the URL to hand over - the signed one when the tier is signed, so
 there is no second call. On stderr it adds `admin (5 min): <url>`, the sender's
@@ -37,7 +37,7 @@ A folder keeps its relative paths, and one with an
 anything else links the folder root. An empty folder is a 400.
 
 `ls` prints JSON, newest first, one row per artifact: `hash`, `url`, `tier`,
-`uploader`, `createdAt`, `expiresAt`, `idleTtl`, `expired`, `files` (count),
+`uploader`, `createdAt`, `expiresAt`, `expired`, `files` (count),
 `bytes`. Read `expiresAt` there to confirm a TTL; do not curl the artifact.
 
 `--clip` uploads the image sitting on the OS clipboard as a PNG, no file on
@@ -108,16 +108,15 @@ file uploaded under the suffixed name wins.
 | --- | --- |
 | `deck.md` | branded page, deck or document from the content |
 | `deck.txt` | the source, `text/plain`, always |
-| `deck.html` | the same page, at a URL that carries an extension |
 | `deck.slides.html` | branded page, always a deck |
 | `deck.doc.html` | branded page, always a document |
 | `deck.pdf` | PDF, deck or document decided from the content |
 | `deck.slides.pdf` | PDF, always a deck |
 | `deck.doc.pdf` | PDF, always a document |
 
-Bare `.md`, `.pdf`, and `.html` read the content to choose: `marp: true` front
-matter or `---` slide separators mean deck, anything else means document. You
-cannot guess a sniff, so send `.slides.*` or `.doc.*` when the mode matters.
+Bare `.md` and `.pdf` read the content to choose: `marp: true` front matter or
+`---` slide separators mean deck, anything else means document. You cannot guess
+a sniff, so send `.slides.*` or `.doc.*` when the mode matters.
 
 The `.html` spellings answer immediately - the Worker renders them per request.
 Only the PDFs go through a browser.

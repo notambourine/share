@@ -21,13 +21,13 @@ Worker could cut, so `nt-share put` cuts one at upload (ffmpeg, or `qlmanage` on
 macOS) and sends it alongside - see `src/lib/poster.ts`. Without either tool the
 upload still lands and the card is text only.
 
-A markdown URL also takes a format suffix: `deck.md.pdf` for a branded PDF,
-`deck.md.html` for a self-contained page that opens from a mail attachment,
-`deck.md.slides.pdf` and `deck.md.doc.pdf` to name the mode yourself.
+A markdown URL also takes a format suffix: `deck.pdf` for a branded PDF,
+`deck.slides.pdf` and `deck.doc.pdf` to name the mode yourself, and
+`deck.slides.html` or `deck.doc.html` to pin the mode on a live page.
 
 ## How it holds together
 
-- **Cloudflare Worker + R2 + KV**, free tier. The Worker routes, verifies one
+- **Cloudflare Worker + R2**, free tier. The Worker routes, verifies one
   HMAC, and fills a template; rendering happens in the browser with vendored,
   pinned libraries (no CDN script on a host that serves client material).
 - **The hash is the credential.** 12 base62 chars (~71 bits), never enumerable,
@@ -38,14 +38,14 @@ A markdown URL also takes a format suffix: `deck.md.pdf` for a branded PDF,
   are soft into `_trash/` with a 90-day lifecycle purge. A nightly cron sweeps
   expired uploads.
 - **No secrets in this repo.** Bearer tokens live as sha256 hashes in a Worker
-  secret; signing keys rotate by key id; the per-space retention map is a
-  secret too. The source being public costs nothing; the URLs are the locks.
+  secret and signing keys rotate by key id. The source being public costs
+  nothing; the URLs are the locks.
 
 ## API
 
 `GET /llms.txt` documents everything in plain text. `GET /SKILL.md` is a
-drop-in Claude skill. `bin/share.ts` is the CLI (`install`, `session`, `put`,
-`sign`, `short`, `ls`, `rm`); `install` puts it on PATH as `nt-share`, so the
+drop-in Claude skill. `bin/share.ts` is the CLI (`install`, `put`, `sign`,
+`admin`, `check`, `ls`, `rm`); `install` puts it on PATH as `nt-share`, so the
 skill can call it by name.
 
 `install` writes three files into the target dir: `nt-share.mjs` resolves the
@@ -81,18 +81,16 @@ Fetch https://share.notambourine.com/SKILL.md and follow it exactly.
 ## Setup from zero
 
 One-time Cloudflare dashboard work, recorded for a rebuild or a new account.
-Deploys themselves are hands-off after step 3.
+Deploys themselves are hands-off after step 2.
 
 1. **R2 bucket**: create `notambourine-share` (name must match
    `wrangler.jsonc`). Add an object lifecycle rule: prefix `_trash/`, action
    *Delete objects*, age 90 days. Leave public access off; the Worker binding
    is the only read path; the bucket stays private.
-2. **KV namespace**: create `share-links`, paste its namespace ID into
-   `wrangler.jsonc` (`kv_namespaces[0].id`).
-3. **Connect the repo**: Workers & Pages → Create → Workers → import this
+2. **Connect the repo**: Workers & Pages → Create → Workers → import this
    repository. Defaults are correct (deploy command `npx wrangler deploy`).
    Every push to `main` deploys; the cron trigger ships with the config.
-4. **Secrets**: on the Worker: Settings → Variables and Secrets, each as type
+3. **Secrets**: on the Worker: Settings → Variables and Secrets, each as type
    *Secret* (values are JSON strings; the Worker parses them):
    - `TOKENS`: map of name → sha256 of that person's bearer token. Built and
      reprinted by `scripts/add-employee.sh`; the 1Password vault is the source
@@ -101,9 +99,7 @@ Deploys themselves are hands-off after step 3.
    - `SIGNING_KEYS`: `{"v1":"<openssl rand -base64 32>"}`. Rotate by adding
      `v2` (new links mint with it, `v1` links still verify); delete an id to
      kill its outstanding links.
-   - `SPACE_TTLS`: `{}`, later `{"<space>":<days>}` overrides. A secret
-     because client names never enter this public repo.
-5. **Custom domain**: Worker → Settings → Domains & Routes → add
+4. **Custom domain**: Worker → Settings → Domains & Routes → add
    `share.notambourine.com`.
 
 Browser Rendering needs no step of its own. The `browser` binding in

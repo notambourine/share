@@ -8,7 +8,7 @@
  */
 
 import type {
-  AiChatInput, AiRunner, AssetServer, Deferrals, Env, LinkStore, Store,
+  AiChatInput, AiRunner, AssetServer, Env, Store,
   StoredHead, StoredObject, StoredPage, StoredValue,
 } from '../src/lib/types';
 import type { JsonValue } from '../src/lib/json';
@@ -37,8 +37,8 @@ export interface MemoryStore extends Store {
 export function memoryStore(seed: Record<string, string> = {}): MemoryStore {
   const objects = new Map(Object.entries(seed));
 
-  /* Content-derived, not size-derived: a conditional put must see the etag
-     change when a same-length field flips (one epoch second to another). */
+  /* Content-derived, not size-derived: `rawBytes` serves this as the HTTP
+     etag, and two same-length bodies are not the same body. */
   const etagOf = (text: string): string => {
     let h = 5381;
     for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
@@ -72,9 +72,7 @@ export function memoryStore(seed: Record<string, string> = {}): MemoryStore {
       return headOf(key);
     },
 
-    async put(key, value, options) {
-      const match = options?.onlyIf?.etagMatches;
-      if (match !== undefined && headOf(key)?.httpEtag !== match) return null;
+    async put(key, value) {
       objects.set(key, await textOf(value));
       return headOf(key);
     },
@@ -102,23 +100,6 @@ export function memoryStore(seed: Record<string, string> = {}): MemoryStore {
   };
 }
 
-export interface MemoryLinks extends LinkStore {
-  records: Map<string, string>;
-}
-
-export function memoryLinks(): MemoryLinks {
-  const records = new Map<string, string>();
-  return {
-    records,
-    async get(key) {
-      return records.get(key) ?? null;
-    },
-    async put(key, value) {
-      records.set(key, value);
-    },
-  };
-}
-
 export interface AiCall {
   model: string;
   input: AiChatInput;
@@ -142,21 +123,17 @@ export function memoryAi(answers: (JsonValue | Error)[]): MemoryAi {
   };
 }
 
-/** Every route treats deferred work as fire-and-forget, so a test can too. */
-export const DEFERRED: Deferrals = {
-  waitUntil() { /* nothing to await in a test */ },
-};
-
 export function noAssets(): AssetServer {
   return { fetch: async () => new Response('') };
 }
 
-/* The default export asks for the whole ExecutionContext where every route
-   takes `Deferrals`. Building the rest of it would be inventing a runtime, so
-   the gap is a cast: a route that reached past waitUntil breaks here, loudly,
-   instead of in production.
-   SAFETY: waitUntil is the only member the handlers touch. */
-const asCtx = (deferrals: Deferrals): ExecutionContext => deferrals as ExecutionContext;
+/* `scheduled` asks for the whole ExecutionContext and touches one member of it.
+   Building the rest would be inventing a runtime, so the gap is a cast: a
+   handler that reached past waitUntil breaks here, loudly, instead of in
+   production.
+   SAFETY: waitUntil is the only member the handler touches. */
+const asCtx = (deferrals: Pick<ExecutionContext, 'waitUntil'>): ExecutionContext =>
+  deferrals as ExecutionContext;
 
 /**
  * Through the front door: the dispatch order in src/worker.ts is the security
@@ -164,7 +141,7 @@ const asCtx = (deferrals: Deferrals): ExecutionContext => deferrals as Execution
  * and only a test that crosses this seam can hold it.
  */
 export function fetchWorker(env: Env, request: Request): Promise<Response> {
-  return worker.fetch(request, env, asCtx(DEFERRED));
+  return worker.fetch(request, env);
 }
 
 const SCHEDULE: ScheduledController = { scheduledTime: 0, cron: '0 3 * * *', noRetry() { /* no retry to skip */ } };
@@ -181,7 +158,6 @@ export async function scheduledWorker(env: Env): Promise<void> {
 
 export interface TestEnv extends Env {
   BUCKET: MemoryStore;
-  LINKS: MemoryLinks;
 }
 
 export interface TestEnvOptions {
@@ -195,7 +171,6 @@ export interface TestEnvOptions {
 export function testEnv(options: TestEnvOptions = {}): TestEnv {
   return {
     BUCKET: memoryStore(options.objects),
-    LINKS: memoryLinks(),
     ASSETS: options.assets ?? noAssets(),
     TOKENS: options.tokens ?? '{}',
     SIGNING_KEYS: options.signingKeys ?? '{}',

@@ -102,11 +102,10 @@ function rendering202(): Response {
   });
 }
 
-/** The first GET pays the render. One load stores all three outputs, so the
-    other two tiles flip ready on the same click. */
+/** The first GET pays the render. One load stores both outputs, so the other
+    tile flips ready on the same click. */
 async function exportPage(request: Request, env: Env, target: ExportTarget): Promise<Response> {
   const { space, hash, source, format, url } = target;
-  if (format === 'txt') return htmlResponse(errorShell(404), 404); // never resolved; belt and braces
   const ext = pageExt(format);
   const key = derivedKey(space, hash, source, 'page', ext);
   const name = downloadName(source, ext === 'pdf' ? 'pdf' : 'png');
@@ -130,9 +129,6 @@ async function storePage(env: Env, space: string, hash: string, source: string, 
   await Promise.all([
     env.BUCKET.put(derivedKey(space, hash, source, 'page', 'pdf'), out.pdf, {
       httpMetadata: { contentType: 'application/pdf' },
-    }),
-    env.BUCKET.put(derivedKey(space, hash, source, 'page', 'browser.png'), out.browserPng, {
-      httpMetadata: { contentType: 'image/png' },
     }),
     env.BUCKET.put(derivedKey(space, hash, source, 'page', 'full.png'), out.fullPng, {
       httpMetadata: { contentType: 'image/png' },

@@ -1,7 +1,7 @@
 /**
  * share.notambourine.com: artifact sharing Worker.
  * Deployed by Cloudflare Workers Builds (git integration), never `wrangler deploy` by hand.
- * Secrets (dashboard only, never here): TOKENS, SIGNING_KEYS, SPACE_TTLS.
+ * Secrets (dashboard only, never here): TOKENS, SIGNING_KEYS.
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
@@ -40,12 +40,6 @@
 	"ai": {
 		"binding": "AI"
 	},
-	"kv_namespaces": [
-		{
-			"binding": "LINKS",
-			"id": "12a7b1b8e090483583267b88ddba827b"
-		}
-	],
 	"triggers": {
 		"crons": ["17 9 * * *"]
 	},

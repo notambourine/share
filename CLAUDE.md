@@ -30,8 +30,9 @@
   only they cache under `d/v<N>/` behind a hand-bumped `CACHE_VERSION`.
 - One-time dashboard setup: README.md "Setup from zero". Token add, rotate,
   offboard, and delivery: `scripts/add-employee.sh` (its header is the runbook).
-- This repo is public. Client names never enter it; per-space retention lives
-  in the `SPACE_TTLS` Worker secret; committed examples use `acme`.
+- This repo is public. Client names never enter it; committed examples use
+  `acme`. Retention is per artifact - `?ttl=` at upload, the admin page's
+  chips after - so no config file or secret holds a space name.
 - Cloudflare secrets are write-only. The 1Password vault is the source of truth
   for bearer tokens; the `TOKENS` secret is derived from it, never hand-edited.
 - The brand's golden set is the `@notambourine/brand-kit` dependency, pinned

@@ -22,8 +22,8 @@
 export const CACHE_VERSION = 3;
 
 export type ExportFormat =
-  | 'slides-html' | 'html' | 'doc-html' | 'pdf' | 'slides-pdf' | 'doc-pdf' | 'txt'
-  | 'png' | 'browser-png' | 'full-png';
+  | 'slides-html' | 'doc-html' | 'pdf' | 'slides-pdf' | 'doc-pdf' | 'txt'
+  | 'png' | 'full-png';
 
 /** A rendered format; `txt` is the source's own bytes and never renders. */
 export type RenderFormat = Exclude<ExportFormat, 'txt'>;
@@ -65,14 +65,10 @@ const FORMATS: FormatRow[] = [
     label: 'document pdf', sub: 'same words, one page after another', portrait: true },
   { suffix: '.txt', format: 'txt', md: 'tile', page: null,
     label: 'source', sub: 'the markdown itself', portrait: false },
-  { suffix: '.html', format: 'html', md: 'quiet', page: null,
-    label: 'page', sub: 'the same page, at a URL that carries an extension', portrait: false },
   { suffix: '.pdf', format: 'pdf', md: 'quiet', page: 'tile',
     label: 'pdf', sub: 'print of the page', portrait: true },
   { suffix: '.png', format: 'png', md: null, page: 'tile',
     label: 'full shot', sub: 'the whole page, one image', portrait: true },
-  { suffix: '.browser.png', format: 'browser-png', md: null, page: 'tile',
-    label: 'browser shot', sub: 'above the fold, 1280x720', portrait: false },
   { suffix: '.full.png', format: 'full-png', md: null, page: 'quiet',
     label: 'full shot', sub: 'the whole page, one image', portrait: true },
 ];
@@ -158,7 +154,7 @@ export function resolveExport(paths: readonly string[], requested: string): Expo
 }
 
 /** An `.html` spelling over a markdown source. */
-export type LiveHtmlFormat = 'slides-html' | 'html' | 'doc-html';
+export type LiveHtmlFormat = 'slides-html' | 'doc-html';
 
 function isHtmlSpelling(format: ExportFormat): format is LiveHtmlFormat {
   return format.endsWith('html');
@@ -182,15 +178,13 @@ export function explicitMode(format: RenderFormat): 'slides' | 'doc' | null {
   return null;
 }
 
-/** A page render's three outputs, one load. */
-export type PageExt = 'pdf' | 'browser.png' | 'full.png';
+/** A page render's two outputs, one load. */
+export type PageExt = 'pdf' | 'full.png';
 
 /** Bare `.png` is the full shot's alias, the way bare `.pdf` aliases a
     sniffed mode: both spellings share one cached object. */
-export function pageExt(format: RenderFormat): PageExt {
-  if (format === 'browser-png') return 'browser.png';
-  if (format === 'png' || format === 'full-png') return 'full.png';
-  return 'pdf';
+export function pageExt(format: ExportFormat): PageExt {
+  return format === 'png' || format === 'full-png' ? 'full.png' : 'pdf';
 }
 
 function isRendered(format: ExportFormat): format is RenderFormat {
@@ -363,8 +357,8 @@ export function splitFrontMatter(markdown: string): FrontMatter {
 }
 
 /**
- * Deck or document, from the content. Bare `.pdf` and `.html` sniff; the
- * explicit spellings never reach here.
+ * Deck or document, from the content. A bare `.md` URL and a bare `.pdf` sniff;
+ * the explicit spellings never reach here.
  */
 export function sniffDeck(markdown: string): boolean {
   const { front, body } = splitFrontMatter(markdown);

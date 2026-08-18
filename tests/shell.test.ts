@@ -23,8 +23,6 @@ function meta(paths: string[]): Meta {
     uploader: 'test',
     createdAt: 1_700_000_000,
     expiresAt: null,
-    idleTtl: null,
-    lastAccess: 1_700_000_000,
     files: paths.map((path) => ({ path, size: 17, type: 'text/plain; charset=utf-8' })),
   };
 }
@@ -57,6 +55,7 @@ describe('every shell escapes a hostile filename', () => {
       origin: 'https://share.test',
       kSeg: '',
       now: 1_700_000_000,
+      adminExp: 1_700_000_300,
     });
     expect(out).not.toContain('<script>alert(1)</script>');
     expect(out).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
@@ -70,6 +69,7 @@ describe('the shells still render what the client scripts select on', () => {
       origin: 'https://share.test',
       kSeg: '',
       now: 1_700_000_000,
+      adminExp: 1_700_000_300,
     });
     for (const attr of ['data-copylink', 'data-arm', 'data-fire', 'data-disarm', 'data-countdown', 'data-exp', 'data-ttl', 'data-copy-href']) {
       expect(admin).toContain(attr);
@@ -115,6 +115,7 @@ describe('the shells keep their doctype and their chrome', () => {
       origin: 'https://share.test',
       kSeg: '',
       now: 1_700_000_000,
+      adminExp: 1_700_000_300,
     });
     expect(forever).toContain('data-ttl="forever" aria-pressed="true"');
     expect(forever).toContain('data-ttl="7d" aria-pressed="false"');

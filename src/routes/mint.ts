@@ -4,13 +4,12 @@ import { authorize } from '../lib/auth';
 import { readMeta, isExpired } from '../lib/r2';
 import { mintArtifactLink, publicUrl } from '../lib/link';
 import { isValidSpace, isValidHash, parseDuration } from '../lib/keys';
-import { flagAt, parseObject, textAt } from '../lib/json';
+import { parseObject, textAt } from '../lib/json';
 import { jsonResponse, now } from '../lib/http';
 
 interface SignBody {
   path: string | null;
   ttl: string | null;
-  short: boolean;
 }
 
 /** A `type`, not an interface: it goes to `jsonResponse`, and only an inferred
@@ -18,7 +17,6 @@ interface SignBody {
 type MintResponse = {
   url: string;
   exp: number;
-  short?: string;
   tier: Tier;
   note?: string;
   openUrl?: string;
@@ -27,7 +25,7 @@ type MintResponse = {
 function decodeSignBody(text: string): SignBody | null {
   const record = parseObject(text);
   if (!record) return null;
-  return { path: textAt(record, 'path'), ttl: textAt(record, 'ttl'), short: flagAt(record, 'short') };
+  return { path: textAt(record, 'path'), ttl: textAt(record, 'ttl') };
 }
 
 /** "acme/Ab12Cd34Ef56", "/acme/Ab12.../", or a full share URL -> [space, hash]. */
@@ -54,7 +52,7 @@ export async function mint(request: Request, env: Env): Promise<Response> {
   if (gate instanceof Response) return gate;
 
   const body = decodeSignBody(await request.text());
-  if (!body) return jsonResponse({ error: 'expected JSON body {path, ttl?, short?}' }, 400);
+  if (!body) return jsonResponse({ error: 'expected JSON body {path, ttl?}' }, 400);
   const parsed = body.path && parseArtifactPath(body.path);
   if (!parsed) return jsonResponse({ error: 'path must be <space>/<hash>' }, 400);
   const [space, hash] = parsed;
@@ -68,7 +66,7 @@ export async function mint(request: Request, env: Env): Promise<Response> {
   const exp = ttlSecs === 0 ? 0 : t + ttlSecs;
 
   const origin = new URL(request.url).origin;
-  const link = await mintArtifactLink(env, gate.keys, origin, meta, exp, t, body.short);
+  const link = await mintArtifactLink(gate.keys, origin, meta, exp);
 
   const out: MintResponse = { ...link, tier: meta.tier };
   if (meta.tier !== 'open') return jsonResponse(out);

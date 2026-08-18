@@ -38,11 +38,18 @@ export async function mintAdminLink(
   return { url: `${origin}/${space}/${hash}/?c=${await mintAdminToken(keys, space, hash, exp)}`, exp };
 }
 
+export interface AdminVerify extends VerifyResult {
+  /** Epoch seconds the token carries; 0 when it verified as anything else.
+      Answered here so the admin page never has to take a credential apart. */
+  exp: number;
+}
+
 export async function verifyAdminToken(
   keys: SigningKeys, space: string, hash: string, token: string, now: number,
-): Promise<VerifyResult> {
+): Promise<AdminVerify> {
   const v = await verifyToken(keys, scope(space, hash), token, now);
+  const exp = Number(token.split('.')[1]);
   // exp=0 means "forever" in the link grammar; a write credential never does.
-  if (v.ok && token.split('.')[1] === '0') return { ok: false, reason: 'expired' };
-  return v;
+  if (v.ok && exp === 0) return { ok: false, reason: 'expired', exp: 0 };
+  return { ...v, exp: Number.isFinite(exp) ? exp : 0 };
 }

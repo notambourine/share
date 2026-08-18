@@ -58,13 +58,10 @@ describe('signed-tier upload mints its own link', () => {
     expect(view.status).toBe(401);
   });
 
-  it('honors sign ttl and short, and rejects a bad sign duration', async () => {
+  it('honors sign ttl and rejects a bad sign duration', async () => {
     const env = await stubEnv();
-    const res = await put(env, 'Bearer raw-token', '?tier=signed&sign=forever&short');
-    const body = await res.json<{ signedExp: number; short: string }>();
-    expect(body.signedExp).toBe(0);
-    expect(body.short).toMatch(/\/z\/[A-Za-z0-9]{8}$/);
-    expect(env.LINKS.records.size).toBe(1);
+    const res = await put(env, 'Bearer raw-token', '?tier=signed&sign=forever');
+    expect((await res.json<{ signedExp: number }>()).signedExp).toBe(0);
 
     expect((await put(await stubEnv(), 'Bearer raw-token', '?tier=signed&sign=nope')).status).toBe(400);
   });
