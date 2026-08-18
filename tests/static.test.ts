@@ -1,9 +1,14 @@
+import { readdirSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ROBOTS, SHELL_CSP } from '../src/lib/http';
 import { isStatic, staticAsset } from '../src/worker';
 import { brandSheet, DECK_THEME, TOKENS, LOCKUP } from '../src/brand';
 import { homeShell } from '../src/render/shell';
 import { testEnv } from './bindings';
+
+const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 const envWith = (body: string) => testEnv({
   assets: { fetch: async () => new Response(body, { headers: { 'content-type': 'font/woff2' } }) },
@@ -104,6 +109,20 @@ describe('brand', () => {
     expect(html).toContain('aria-label="NoTambourine"');
     expect(html).not.toContain('--font-wordmark');
     expect(html).toContain('rel="manifest"');
+  });
+
+  /* Read from public/ rather than restating it: run_worker_first gives this
+     router the whole origin, so a file on disk that STATIC does not name is a
+     404 in production and green everywhere else. That is how /nt-code.css
+     shipped broken - committed, linked by every code and markdown shell, and
+     named by no route. Built output may be absent here (CI tests before it
+     builds); what it leaves behind still has to be reachable. */
+  it('routes every file that ships under public/', () => {
+    const missed = readdirSync(PUBLIC, { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile() && !e.name.startsWith('.'))
+      .map((e) => `/${relative(PUBLIC, join(e.parentPath, e.name)).split('\\').join('/')}`)
+      .filter((path) => !isStatic(path));
+    expect(missed).toEqual([]);
   });
 
   it('never swallows a share path', () => {
