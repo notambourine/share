@@ -1,7 +1,7 @@
 import type { Env, Meta } from '../lib/types';
 import { ADMIN_SECS, mintAdminLink, mintAdminToken, verifyAdminToken } from '../lib/admin';
-import { authenticate, SESSION_SCOPE_MSG } from '../lib/auth';
-import { parseSigningKeys } from '../lib/sign';
+import { authorize, requireKeys } from '../lib/auth';
+import type { SigningKeys } from '../lib/sign';
 import { readMeta, readMetaTagged, writeMeta, isExpired } from '../lib/r2';
 import { parseDuration } from '../lib/keys';
 import { parseObject, textAt } from '../lib/json';
@@ -10,19 +10,30 @@ import type { RenderedKey } from '../lib/exportPath';
 import { derivedPrefix, formatsFor, parseCheckKey, parseDerivedKey, renderedKey } from '../lib/exportPath';
 import { type SlideCheck, decodeSlideCheck } from '../lib/pdf';
 
+/** The `?c=` credential: this artifact's admin token, and the clock both
+    handlers then read. No Bearer, so it never touches the vault map. */
+async function adminToken(
+  request: Request, env: Env, space: string, hash: string,
+): Promise<{ keys: SigningKeys; t: number } | Response> {
+  const keys = requireKeys(env, 'json');
+  if (keys instanceof Response) return keys;
+  const t = now();
+  const c = new URL(request.url).searchParams.get('c');
+  if (!c || !(await verifyAdminToken(keys, space, hash, c, t)).ok) {
+    return jsonResponse({ error: `admin link missing or expired; re-open: nt-share admin ${space}/${hash}` }, 401);
+  }
+  return { keys, t };
+}
+
 /**
  * POST /<space>/<hash>/config?c=<token>: the admin page's one write, `{ttl}`.
  * Answers a fresh 5-minute token - the sliding window is a new credential per
  * edit, never a longer exp on the old one - plus the expiry it committed.
  */
 export async function adminConfig(request: Request, env: Env, space: string, hash: string): Promise<Response> {
-  const keys = parseSigningKeys(env);
-  if (!keys) return jsonResponse({ error: 'signing keys misconfigured' }, 500);
-  const t = now();
-  const c = new URL(request.url).searchParams.get('c');
-  if (!c || !(await verifyAdminToken(keys, space, hash, c, t)).ok) {
-    return jsonResponse({ error: `admin link missing or expired; re-open: nt-share admin ${space}/${hash}` }, 401);
-  }
+  const admin = await adminToken(request, env, space, hash);
+  if (admin instanceof Response) return admin;
+  const { keys, t } = admin;
 
   const ttl = textAt(parseObject(await request.text()) ?? {}, 'ttl');
   if (!ttl) return jsonResponse({ error: 'expected JSON body {ttl}' }, 400);
@@ -63,13 +74,9 @@ interface SourceStatus {
  * because which slides clip is sender-only material.
  */
 export async function adminStatus(request: Request, env: Env, space: string, hash: string): Promise<Response> {
-  const keys = parseSigningKeys(env);
-  if (!keys) return jsonResponse({ error: 'signing keys misconfigured' }, 500);
-  const t = now();
-  const c = new URL(request.url).searchParams.get('c');
-  if (!c || !(await verifyAdminToken(keys, space, hash, c, t)).ok) {
-    return jsonResponse({ error: `admin link missing or expired; re-open: nt-share admin ${space}/${hash}` }, 401);
-  }
+  const admin = await adminToken(request, env, space, hash);
+  if (admin instanceof Response) return admin;
+  const { t } = admin;
 
   const meta = await readMeta(env, space, hash);
   if (!meta || isExpired(meta, t)) return jsonResponse({ error: 'no such artifact' }, 404);
@@ -112,15 +119,12 @@ export async function adminStatus(request: Request, env: Env, space: string, has
  * write-verb bar and a session stays capped at /up.
  */
 export async function adminRemint(request: Request, env: Env, space: string, hash: string): Promise<Response> {
-  const auth = await authenticate(request, env);
-  if (auth.session || auth.expired) return jsonResponse({ error: SESSION_SCOPE_MSG.trim() }, 401);
-  if (!auth.name) return jsonResponse({ error: 'unauthorized' }, 401);
+  const gate = await authorize(request, env, { need: 'vault', flavor: 'json', keys: 'required' });
+  if (gate instanceof Response) return gate;
 
   const t = now();
   const meta = await readMeta(env, space, hash);
   if (!meta || isExpired(meta, t)) return jsonResponse({ error: 'no such artifact' }, 404);
 
-  const keys = parseSigningKeys(env);
-  if (!keys) return jsonResponse({ error: 'signing keys misconfigured' }, 500);
-  return jsonResponse({ ...await mintAdminLink(keys, new URL(request.url).origin, space, hash, t) });
+  return jsonResponse({ ...await mintAdminLink(gate.keys, new URL(request.url).origin, space, hash, t) });
 }
