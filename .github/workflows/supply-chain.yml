@@ -61,7 +61,11 @@ jobs:
           grep linux_x64 checksums.txt | sha256sum -c -
           tar -xzf betterleaks_*_linux_x64.tar.gz betterleaks
           # --redact so a finding never prints the credential into a CI log.
-          ./betterleaks git "${GITHUB_WORKSPACE}" --no-banner --redact=100
+          # --confidence medium (needs betterleaks >=1.8.0) is what keeps this gate quiet
+          # as upstream broadens its rules: only the three generic rules grade a hit from
+          # its surrounding context, so a placeholder or fixture lands below the bar and
+          # no rule that names an issuer is affected.
+          ./betterleaks git "${GITHUB_WORKSPACE}" --no-banner --redact=100 --confidence medium
   zizmor:
     runs-on: ubuntu-slim
     timeout-minutes: 5
