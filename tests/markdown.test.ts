@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { renderMarkdown, renderDeck, renderCode } from '../src/render/markdown';
+import { renderMarkdown, renderDeck, renderCode, renderSource } from '../src/render/markdown';
 
 const THEME = '/* @theme nt */\nsection { background: #101014; }\n';
 
@@ -102,5 +102,30 @@ describe('a deck', () => {
   it('strikes text through on both sides, under each engine own tag', () => {
     expect(renderDeck('---\nmarp: true\n---\n\n~~gone~~\n', '').html).toContain('<s>gone</s>');
     expect(renderMarkdown('~~gone~~\n')).toContain('<del>gone</del>');
+  });
+});
+
+/* The one way in: the live shell and the print page both enter here, so this is
+   where the sniff rule and the deck theme stop being a caller's business. */
+describe('renderSource', () => {
+  const DECK = '---\nmarp: true\n---\n\n# One\n\n---\n\n# Two\n';
+  const DOC = '# Report\n\nParagraph.\n';
+
+  it('renders the mode it is given, whatever the content looks like', () => {
+    expect(renderSource(DECK, 'doc').mode).toBe('doc');
+    expect(renderSource(DECK, 'doc').html).toContain('<h1>One</h1>');
+    expect(renderSource(DOC, 'slides').mode).toBe('slides');
+    expect(renderSource(DOC, 'slides').html).toContain('data-marpit-svg');
+  });
+
+  it('sniffs both ways when the mode is null', () => {
+    expect(renderSource(DECK, null).mode).toBe('slides');
+    expect(renderSource(DOC, null).mode).toBe('doc');
+  });
+
+  it('carries a scoped theme for a deck and none for a document', () => {
+    expect(renderSource(DOC, null).css).toBeNull();
+    expect(renderSource('# Page\n', 'page').css).toBeNull();
+    expect(renderSource(DECK, null).css).toContain('svg[data-marpit-svg]');
   });
 });

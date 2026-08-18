@@ -16,7 +16,8 @@
 import { marked } from 'marked';
 import { Marpit } from '@marp-team/marpit';
 import hljs from '@highlightjs/cdn-assets/es/highlight.min.js';
-import { splitFrontMatter } from '../lib/exportPath';
+import { type RenderMode, sniffDeck, splitFrontMatter } from '../lib/exportPath';
+import { DECK_THEME } from '../brand';
 
 /* Marpit defaults markdown-it to the commonmark preset, which has GFM tables and
    strikethrough off. `marked` renders both, so the deck has to match or the same
@@ -97,6 +98,27 @@ export function renderDeck(text: string, themeCss: string): Deck {
   }
   const { html, css } = marpit.render(text);
   return { html, css };
+}
+
+/**
+ * A rendered source. The mode is the resolved one, never the requested one, so
+ * a caller that sniffed learns what it got; `css` is Marpit's scoped theme and
+ * only a deck has one.
+ */
+export type Rendered =
+  | { mode: 'slides'; html: string; css: string }
+  | { mode: 'doc' | 'page'; html: string; css: null };
+
+/**
+ * The one way in. A null mode means the content decides, which is the bare `.md`
+ * URL and the bare `.pdf`; the explicit spellings pass the mode they pin. Both
+ * the live shell and the print page enter here, which is what keeps one theme
+ * and one sniff rule behind every view of the same file.
+ */
+export function renderSource(text: string, mode: RenderMode | null): Rendered {
+  const resolved = mode ?? (sniffDeck(text) ? 'slides' : 'doc');
+  if (resolved === 'slides') return { mode: 'slides', ...renderDeck(text, DECK_THEME) };
+  return { mode: resolved, html: renderMarkdown(text), css: null };
 }
 
 /** A code file: text, never markup, so the extension only picks a grammar. */

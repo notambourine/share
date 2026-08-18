@@ -19,8 +19,8 @@ import type { PDFOptions } from '@cloudflare/puppeteer';
 import { raw } from 'hono/html';
 import type { Env } from '../lib/types';
 import type { RenderMode } from '../lib/exportPath';
-import { DECK_THEME, TOKENS, LOCKUP, token } from '../brand';
-import { renderDeck, renderMarkdown } from './markdown';
+import { TOKENS, LOCKUP, token } from '../brand';
+import { renderSource } from './markdown';
 
 /** 1152x648 is 16:9 at the same aspect as Marpit's 1280x720 slide box. */
 const DECK_PAGE = { width: '1152px', height: '648px' };
@@ -92,8 +92,9 @@ async function asset(env: Env, origin: string, path: string): Promise<string> {
 }
 
 /* Assembling 155 KB of base64 costs real CPU against a 10 ms budget, and the
-   answer never varies within a deployment. One isolate pays it once. */
-let styleCache: Promise<string> | null = null;
+   answer never varies within a deployment. One isolate pays it once per origin -
+   the origin is what the sheets are fetched from, so it cannot be dropped. */
+const styleCache = new Map<string, Promise<string>>();
 
 function buildStyle(env: Env, origin: string): Promise<string> {
   return (async () => {
@@ -113,12 +114,16 @@ function buildStyle(env: Env, origin: string): Promise<string> {
   })();
 }
 
-export async function inlineStyle(env: Env, origin: string): Promise<string> {
-  if (!styleCache) styleCache = buildStyle(env, origin).catch((err) => {
-    styleCache = null; // a transient asset miss must not poison the isolate
-    throw err;
-  });
-  return styleCache;
+export function inlineStyle(env: Env, origin: string): Promise<string> {
+  let pending = styleCache.get(origin);
+  if (!pending) {
+    pending = buildStyle(env, origin).catch((err) => {
+      styleCache.delete(origin); // a transient asset miss must not poison the isolate
+      throw err;
+    });
+    styleCache.set(origin, pending);
+  }
+  return pending;
 }
 
 /* The one script left. It waits for the faces to land, flags the document ready,
@@ -138,8 +143,7 @@ export interface PrintOpts {
 export async function printHtml(env: Env, opts: PrintOpts): Promise<string> {
   const { origin, baseHref, title, markdown, mode } = opts;
   const style = await inlineStyle(env, origin);
-  const deck = mode === 'slides' ? renderDeck(markdown, DECK_THEME) : null;
-  const content = deck ? deck.html : renderMarkdown(markdown);
+  const out = renderSource(markdown, mode);
 
   /* An `@page` rule cannot be scoped to a class, so the page box is the one
      piece of print CSS that has to come from here rather than print.css. */
@@ -159,11 +163,11 @@ export async function printHtml(env: Env, opts: PrintOpts): Promise<string> {
         <base href={baseHref} />
         <title>{`${title} · NoTambourine`}</title>
         <style>{raw(style)}{raw(page)}</style>
-        {deck ? <style>{raw(deck.css)}</style> : null}
+        {out.css === null ? null : <style>{raw(out.css)}</style>}
       </head>
       <body>
         {mode === 'slides' ? null : <header class="print-mark">{raw(LOCKUP)}</header>}
-        <main id="content">{raw(content)}</main>
+        <main id="content">{raw(out.html)}</main>
         <script data-transient="" src={`${origin}${PRINT}`}></script>
       </body>
     </html>
