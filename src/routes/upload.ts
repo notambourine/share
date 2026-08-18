@@ -1,4 +1,4 @@
-import type { Deferrals, Env, Meta, MetaFile, Tier } from '../lib/types';
+import type { Env, Meta, MetaFile, Tier } from '../lib/types';
 import { DEFAULT_ARTIFACT_DAYS, DEFAULT_LINK_DAYS } from '../lib/types';
 import { genSlug, normalizeUploadPath, contentTypeFor, isValidSpace, parseDuration } from '../lib/keys';
 import { posterParent } from '../lib/poster';
@@ -8,7 +8,6 @@ import { parseSigningKeys } from '../lib/sign';
 import { mintArtifactLink, publicUrl } from '../lib/link';
 import { mintAdminLink } from '../lib/admin';
 import { writeMeta } from '../lib/r2';
-import { prerender } from './export';
 import { decodeNumberMap } from '../lib/json';
 import { jsonResponse, textResponse, wantsJson, now } from '../lib/http';
 
@@ -25,7 +24,7 @@ function artifactDays(env: Env, space: string): number {
 }
 
 export async function upload(
-  request: Request, env: Env, ctx: Deferrals, space: string,
+  request: Request, env: Env, space: string,
 ): Promise<Response> {
   const auth = await authenticate(request, env);
   if (!auth.name) return textResponse(auth.expired ? SESSION_EXPIRED_MSG : 'unauthorized\n', 401);
@@ -126,12 +125,9 @@ export async function upload(
   };
   await writeMeta(env, meta);
 
-  /* Warm the export cache off the response path. The browser budget is the
-     scarce resource, so this runs after meta.json lands and never blocks. */
-  ctx.waitUntil(prerender(env, url, meta).catch((err) => {
-    console.log(`prerender: ${space}/${hash} failed: ${err}`);
-  }));
-
+  /* No render at upload. A page is rendered by the request that asks for it and
+     a PDF by the tile that is clicked, so an upload nobody opens spends none of
+     the browser budget and a brand edit needs no backfill. */
   const link = publicUrl(url.origin, meta);
   const signed = tier === 'signed' && keys
     ? await mintArtifactLink(env, keys, url.origin, meta, linkExp, t, short) : null;

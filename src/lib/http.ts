@@ -27,22 +27,6 @@ export const SHELL_CSP = [
   "form-action 'none'",
 ].join('; ');
 
-/**
- * The `.html` snapshot carries its fonts as `data:` URIs so it opens from a
- * mail attachment, which `font-src 'self'` forbids. It gets its own header
- * rather than a `data:` allowance in SHELL_CSP, which would loosen every shell
- * page for a payload only the snapshot has. No script-src at all: the export
- * strips the renderers once they have run.
- */
-export const SNAPSHOT_CSP = [
-  "default-src 'none'",
-  "style-src 'unsafe-inline'",
-  'font-src data:',
-  'img-src data: https:',
-  "base-uri 'none'",
-  "form-action 'none'",
-].join('; ');
-
 export function htmlResponse(html: string, status = 200, extra?: Record<string, string>): Response {
   return new Response(html, {
     status,

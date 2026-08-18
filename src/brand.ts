@@ -34,8 +34,10 @@ export { LOCKUP };
 /** Marpit takes a theme as a string, so the export and the browser both read this. */
 export { DECK as DECK_THEME };
 
-/* The paths these answer on. `/vendor/marp/nt-marp.css` keeps its name: it is
-   what public/render.js fetches, and the URL is the theme's, not the file's. */
+/* The paths these answer on. Nothing in this repo fetches the deck theme any
+   more - `src/render/markdown.ts` hands `DECK_THEME` straight to Marpit, which
+   scopes it and returns CSS the page inlines - but the URL stays published, so a
+   deck built outside this Worker can link the same theme. */
 const BRAND_ROUTES = new Map([
   ['/tokens.css', TOKENS],
   ['/vendor/marp/nt-marp.css', DECK],

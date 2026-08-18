@@ -90,7 +90,7 @@ export default {
     if (segs[0] === 'up') {
       if (request.method !== 'POST') return textResponse('POST only\n', 405);
       if (segs.length !== 2) return textResponse('POST /up/<space>\n', 404);
-      return upload(request, env, ctx, segs[1]);
+      return upload(request, env, segs[1]);
     }
 
     if (segs[0] === 'sign' && segs.length === 1) {

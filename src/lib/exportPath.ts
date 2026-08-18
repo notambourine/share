@@ -7,11 +7,17 @@
  */
 
 /**
- * Derived artifacts cache under `d/v<N>/`. Hashes are immutable, so nothing
- * else invalidates a stored PDF. Bump on any change to tokens.css, nt-marp.css,
+ * Derived artifacts cache under `d/v<N>/`, and they are all binary now: PDFs and
+ * PNGs, the two formats a print engine has to produce. Hashes are immutable, so
+ * nothing else invalidates one. Bump on any change to tokens.css, nt-marp.css,
  * print.css, or the print HTML; old versions age out with their upload.
+ *
+ * A stored render is what forces a bump to be a human remembering, which is why
+ * HTML no longer has one: a page is rendered by the request that asks for it, so
+ * a brand edit reaches every share link ever made with nothing to invalidate.
+ * Re-rendering a PDF costs a browser minute, so that one stays deliberate.
  */
-export const CACHE_VERSION = 2;
+export const CACHE_VERSION = 3;
 
 export type ExportFormat =
   | 'slides-html' | 'html' | 'doc-html' | 'pdf' | 'slides-pdf' | 'doc-pdf' | 'txt'
@@ -101,15 +107,26 @@ export function resolveExport(paths: readonly string[], requested: string): Expo
   return allowed.has(parsed.format) ? { source, format: parsed.format } : null;
 }
 
-/** null means the format carries no mode of its own and the content decides. */
-export function explicitMode(format: RenderFormat): RenderMode | null {
+/** An `.html` spelling over a markdown source. */
+export type LiveHtmlFormat = 'slides-html' | 'html' | 'doc-html';
+
+/**
+ * The `.html` spellings render live in the Worker, so they store nothing and a
+ * brand edit reaches them on the next view. They exist to pin the mode - a
+ * stable URL that says "read this one as slides" - rather than to hand back a
+ * file, which is what `.pdf` is for.
+ */
+export function isLiveHtml(source: string, format: ExportFormat): format is LiveHtmlFormat {
+  return !isPageSource(source)
+    && (format === 'slides-html' || format === 'html' || format === 'doc-html');
+}
+
+/** null means the format carries no mode of its own and the content decides.
+    Never `page`: that mode comes from the source being HTML, not from a suffix. */
+export function explicitMode(format: RenderFormat): 'slides' | 'doc' | null {
   if (format === 'slides-html' || format === 'slides-pdf') return 'slides';
   if (format === 'doc-html' || format === 'doc-pdf') return 'doc';
   return null;
-}
-
-export function formatExt(format: RenderFormat): 'html' | 'pdf' {
-  return format === 'slides-html' || format === 'html' || format === 'doc-html' ? 'html' : 'pdf';
 }
 
 /** A page render's three outputs, one load. */
@@ -126,7 +143,7 @@ export function pageExt(format: RenderFormat): PageExt {
 /** Keyed by resolved mode, not by requested spelling, so `.pdf` and the
     explicit spelling it sniffs to share one cached object. */
 export function derivedKey(
-  space: string, hash: string, source: string, mode: RenderMode, ext: 'html' | PageExt,
+  space: string, hash: string, source: string, mode: RenderMode, ext: PageExt,
 ): string {
   return `${space}/${hash}/d/v${CACHE_VERSION}/${source}.${mode}.${ext}`;
 }

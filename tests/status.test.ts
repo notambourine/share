@@ -41,7 +41,6 @@ function statusReq(c: string | null): Request {
 describe('GET /<space>/<hash>/status', () => {
   it('answers readiness and the overflow verdict; pending sources ride along empty', async () => {
     const env = seededEnv({
-      [derivedKey(SPACE, HASH, 'deck.md', 'slides', 'html')]: '<!doctype html>',
       [derivedKey(SPACE, HASH, 'deck.md', 'slides', 'pdf')]: 'PDFBYTES',
       [checkKey(SPACE, HASH, 'deck.md')]: '{"slides":12,"overflow":[7]}',
     });
@@ -51,7 +50,7 @@ describe('GET /<space>/<hash>/status', () => {
     const body = await res.json<StatusBody>();
     // Markdown sources only: hero.png renders nothing and never appears.
     expect(body.sources).toEqual([
-      { path: 'deck.md', rendered: ['slides.html', 'slides.pdf'], check: { slides: 12, overflow: [7] } },
+      { path: 'deck.md', rendered: ['slides.pdf'], check: { slides: 12, overflow: [7] } },
       { path: 'notes.md', rendered: [], check: null },
     ]);
   });

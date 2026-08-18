@@ -1,14 +1,16 @@
 /**
- * Print HTML for the export formats. The headless browser runs the same Marpit,
- * marked, and highlight.js a viewer runs, so there is one render path and the
- * Worker spends no CPU on markdown.
+ * Print HTML for the PDF exports. The markup arrives rendered from
+ * src/render/markdown.ts - the same module the live shell renders from - so the
+ * browser here only typesets. It used to be handed the markdown plus the three
+ * parser libraries and asked to do the render itself, which meant a page load
+ * could not start laying out until 500 KB of JavaScript had parsed.
  *
- * A deck PDF is a different document from the live deck shell: render.js shows
- * one slide at a time behind a `.current` class, so printing the live shell
- * yields a one-page PDF. Here every slide is visible, one per page.
+ * A deck PDF is a different document from the live deck shell: the shell shows
+ * one slide at a time behind a `.current` class, so printing it yields a
+ * one-page PDF. Here every slide is visible, one per page.
  *
  * Unlike the shells, most of this document is payload rather than markup: the
- * inlined stylesheet, the render script, and the lockup are already-built
+ * inlined stylesheet, the rendered content, and the lockup are already-built
  * strings and every one goes through `raw()`. JSX still owns the attributes and
  * the title, which is where a filename could otherwise break out.
  */
@@ -18,6 +20,7 @@ import { raw } from 'hono/html';
 import type { Env } from '../lib/types';
 import type { RenderMode } from '../lib/exportPath';
 import { DECK_THEME, TOKENS, LOCKUP } from '../brand';
+import { renderDeck, renderMarkdown } from './markdown';
 
 /** 1152x648 is 16:9 at the same aspect as Marpit's 1280x720 slide box. */
 const DECK_PAGE = { width: '1152px', height: '648px' };
@@ -71,7 +74,7 @@ const FACES: { file: string; family: string; style: string; weight: string }[] =
 
 /* tokens.css is missing here because it is not an asset: src/brand.ts imports it
    from the golden set and it is already a string in this bundle. */
-const SHEETS = ['/vendor/highlight/nt-code.css', '/print.css'];
+const SHEETS = ['/nt-code.css', '/print.css'];
 
 function base64(bytes: Uint8Array): string {
   let binary = '';
@@ -118,17 +121,9 @@ export async function inlineStyle(env: Env, origin: string): Promise<string> {
   return styleCache;
 }
 
-/** The markdown reaches the page as JSON, not as JS source, so `<` is the
-    only escape it needs: it keeps a `</script>` in the markdown from closing the
-    block, and `JSON.parse` turns it back into `<`. U+2028 and U+2029 need no
-    handling here, unlike a JS literal, because nothing evaluates this as source. */
-function jsonBlock(data: Record<string, string>): string {
-  return JSON.stringify(data).replace(/</g, '\\u003c');
-}
-
-const HLJS = '/vendor/highlight/highlight.min.js';
-const MARKED = '/vendor/marked/marked.min.js';
-const MARPIT = '/vendor/marp/marpit.js';
+/* The one script left. It waits for the faces to land, flags the document ready,
+   and removes every `data-transient` node - itself included - so `page.pdf()`
+   typesets a document with no JavaScript in it at all. */
 const PRINT = '/print.js';
 
 export interface PrintOpts {
@@ -143,7 +138,8 @@ export interface PrintOpts {
 export async function printHtml(env: Env, opts: PrintOpts): Promise<string> {
   const { origin, baseHref, title, markdown, mode } = opts;
   const style = await inlineStyle(env, origin);
-  const theme = mode === 'slides' ? DECK_THEME : '';
+  const deck = mode === 'slides' ? renderDeck(markdown, DECK_THEME) : null;
+  const content = deck ? deck.html : renderMarkdown(markdown);
 
   /* An `@page` rule cannot be scoped to a class, so the page box is the one
      piece of print CSS that has to come from here rather than print.css. */
@@ -154,7 +150,6 @@ export async function printHtml(env: Env, opts: PrintOpts): Promise<string> {
   /* On `html`, not `body`: tokens.css paints the dark canvas on `html`, and a
      `.theme-light` below it leaves that background on the paper. */
   const rootClass = mode === 'slides' ? 'print-deck' : 'print-doc theme-light';
-  const scripts = mode === 'slides' ? [HLJS, MARPIT, PRINT] : [HLJS, MARKED, PRINT];
 
   return `<!doctype html>\n${
     <html lang="en" class={rootClass}>
@@ -164,16 +159,12 @@ export async function printHtml(env: Env, opts: PrintOpts): Promise<string> {
         <base href={baseHref} />
         <title>{`${title} · NoTambourine`}</title>
         <style>{raw(style)}{raw(page)}</style>
+        {deck ? <style>{raw(deck.css)}</style> : null}
       </head>
       <body>
         {mode === 'slides' ? null : <header class="print-mark">{raw(LOCKUP)}</header>}
-        <main id="content"></main>
-        {/* src/client/print.ts reads this, then strips every data-transient node
-            including this one, which is what leaves a snapshot behind. */}
-        <script type="application/json" id="print-data" data-transient="">
-          {raw(jsonBlock({ markdown, theme, mode }))}
-        </script>
-        {scripts.map((s) => <script data-transient="" src={`${origin}${s}`}></script>)}
+        <main id="content">{raw(content)}</main>
+        <script data-transient="" src={`${origin}${PRINT}`}></script>
       </body>
     </html>
   }`;

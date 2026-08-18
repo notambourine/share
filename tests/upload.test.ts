@@ -23,7 +23,7 @@ async function put(env: Env, auth: string, query = '', accept = 'application/jso
   const req = new Request(`https://share.test/up/${SPACE}${query}`, {
     method: 'POST', headers: { authorization: auth, accept }, body: form,
   });
-  return upload(req, env, DEFERRED, SPACE);
+  return upload(req, env, SPACE);
 }
 
 const sessionBearer = async () =>

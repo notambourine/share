@@ -129,20 +129,24 @@ Swap a markdown share URL's extension for a branded export: uploaded
 Accept gets no vote, and a file uploaded under the suffixed name always wins
 over the export.
 
-    deck.md              branded document, rendered in the browser
+    deck.md              branded page, deck or document decided from the content
     deck.txt             the source, text/plain, always
-    deck.html            self-contained page: fonts inlined, opens offline; deck or document from the content
-    deck.slides.html     self-contained deck
-    deck.doc.html        self-contained document
+    deck.html            the same page, at a URL that carries an extension
+    deck.slides.html     branded page, always a deck
+    deck.doc.html        branded page, always a document
     deck.pdf             PDF, deck or document decided from the content
     deck.slides.pdf      PDF, always a deck
     deck.doc.pdf         PDF, always a document
 
-Bare .pdf and .html read the content to choose: `marp: true` front matter or
-`---` slide separators mean deck, anything else means document. Name
+Bare .md, .pdf, and .html read the content to choose: `marp: true` front matter
+or `---` slide separators mean deck, anything else means document. Name
 .slides.* or .doc.* when you want to decide instead of guessing. When one
 upload holds both deck.md and deck.markdown, the .md spelling wins the base
 name.
+
+The .html spellings are pages, not downloads: the Worker renders them on the
+request that asks, so they answer immediately and pick up a brand change with no
+re-render. Only the PDFs are stored artifacts.
 
 An uploaded HTML page exports too: uploaded `page.html`, ask for
 
@@ -153,12 +157,12 @@ An uploaded HTML page exports too: uploaded `page.html`, ask for
 
 PNG is HTML-only; markdown keeps its own family above. When one upload holds
 both deck.md and deck.html, markdown wins the base and deck.png is a 404.
-Nothing prerenders these: the first request pays the render.
 
-PDFs render in a headless browser and then cache, so the first request after an
-upload can take a few seconds. A .pdf or .png URL that is not rendered yet
-answers 202 with Retry-After: 5 - wait that long and re-request. A cold .html
-serves the live browser-rendered shell instead.
+Nothing renders at upload. A .pdf or .png is rendered by the first request that
+asks for it and then cached, so that request can take a few seconds; one that is
+not rendered yet answers 202 with Retry-After: 5 - wait that long and
+re-request. It never answers HTML at 200, so `curl -o` cannot write a page into
+a .pdf.
 
 ## Skill
 

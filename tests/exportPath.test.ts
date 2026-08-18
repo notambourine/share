@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CACHE_VERSION, parseExportPath, resolveExport, explicitMode,
-  formatExt, pageExt, derivedKey, sniffDeck,
+  isLiveHtml, pageExt, derivedKey, sniffDeck,
 } from '../src/lib/exportPath';
 
 describe('parseExportPath', () => {
@@ -102,13 +102,20 @@ describe('mode and extension', () => {
     expect(explicitMode('html')).toBeNull();
   });
 
-  it('maps format to output extension', () => {
-    expect(formatExt('slides-html')).toBe('html');
-    expect(formatExt('html')).toBe('html');
-    expect(formatExt('doc-html')).toBe('html');
-    expect(formatExt('pdf')).toBe('pdf');
-    expect(formatExt('slides-pdf')).toBe('pdf');
-    expect(formatExt('doc-pdf')).toBe('pdf');
+  /* The split that decides whether a request reaches a browser at all: an
+     `.html` spelling renders in the Worker, a `.pdf` needs a print engine. */
+  it('sorts the html spellings away from the ones that store an artifact', () => {
+    for (const f of ['slides-html', 'html', 'doc-html'] as const) {
+      expect(isLiveHtml('deck.md', f)).toBe(true);
+    }
+    for (const f of ['pdf', 'slides-pdf', 'doc-pdf', 'txt'] as const) {
+      expect(isLiveHtml('deck.md', f)).toBe(false);
+    }
+  });
+
+  it('an uploaded HTML source never renders live: it is already a page', () => {
+    expect(isLiveHtml('page.html', 'html')).toBe(false);
+    expect(isLiveHtml('page.htm', 'slides-html')).toBe(false);
   });
 });
 
@@ -138,8 +145,8 @@ describe('derivedKey', () => {
   });
 
   it('sits under d/, which no upload may claim', () => {
-    expect(derivedKey('acme', 'Xk92mQ7bTp01', 'a/b.md', 'doc', 'html'))
-      .toBe(`acme/Xk92mQ7bTp01/d/v${CACHE_VERSION}/a/b.md.doc.html`);
+    expect(derivedKey('acme', 'Xk92mQ7bTp01', 'a/b.md', 'doc', 'pdf'))
+      .toBe(`acme/Xk92mQ7bTp01/d/v${CACHE_VERSION}/a/b.md.doc.pdf`);
   });
 });
 

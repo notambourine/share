@@ -53,8 +53,6 @@ export function decodeSlideCheck(text: string): SlideCheck | null {
 }
 
 export interface Artifacts {
-  /** The rendered DOM, self-contained: fonts inlined, scripts removed. */
-  html: string;
   pdf: Uint8Array;
   /** Slides renders only; null on doc renders or when the measure failed. */
   check: SlideCheck | null;
@@ -112,17 +110,17 @@ async function withPage<T>(binding: Fetcher, work: (page: BrowserPage) => Promis
 }
 
 /**
- * One page load, both artifacts. `page.content()` is the `.html` snapshot and
- * `page.pdf()` is the `.pdf`; rendering twice would double the only budget
- * that binds.
+ * One page load, one PDF, plus the fit question answered while the page is still
+ * open - measuring it costs no browser budget, and only a laid-out page knows.
  */
 export function render(
   binding: Fetcher, html: string, pdfOptions: PDFOptions, measureSlides = false,
 ): Promise<Artifacts | null> {
   return withPage(binding, async (page) => {
     await page.setContent(html);
-    /* The print HTML flags itself once Marpit, highlight.js, and the fonts
-       have all landed. Waiting on a load event would catch none of them. */
+    /* The print HTML flags itself once the faces have landed. A load event fires
+       before a webfont swap, and typesetting against the fallback would reflow
+       every line of the PDF. */
     await page.waitForSelector('html[data-ready="1"]', { timeout: RENDER_TIMEOUT_MS });
     let check: SlideCheck | null = null;
     if (measureSlides) {
@@ -133,9 +131,8 @@ export function render(
         console.log(`pdf: overflow measure failed: ${err}`);
       }
     }
-    const out = await page.content();
     const pdf = await page.pdf(pdfOptions);
-    return { html: out, pdf: new Uint8Array(pdf), check };
+    return { pdf: new Uint8Array(pdf), check };
   });
 }
 

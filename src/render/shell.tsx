@@ -1,11 +1,13 @@
 /**
- * Branded HTML shells. The Worker emits ~3 kB of markup; highlighting and
- * markdown happen in the browser (public/render.js), so a brand change ships
- * to every artifact ever uploaded without re-rendering anything.
+ * Branded HTML shells, rendered whole. Content arrives already marked up from
+ * src/render/markdown.ts, so a page is one round trip and carries no parser; the
+ * brand still ships to every artifact ever uploaded because tokens.css and
+ * shell.css are links, resolved at view time rather than baked in.
  *
  * JSX escapes every interpolated child and attribute, so a filename never needs
  * an escape call at the call site. `raw()` is the deliberate opt-out and marks
- * the only values that are already markup: the lockup out of the golden set.
+ * the only values that are already markup: the lockup out of the golden set, and
+ * the rendered document or deck.
  */
 
 import type { Child } from 'hono/jsx';
@@ -81,13 +83,11 @@ function layout({ title, body, head, bodyAttrs = {}, home = false, bar, script =
   }`;
 }
 
-const HLJS_CSS = <link rel="stylesheet" href="/vendor/highlight/nt-code.css" />;
-const HLJS_JS = <script src="/vendor/highlight/highlight.min.js" defer></script>;
-const MARKED_JS = <script src="/vendor/marked/marked.min.js" defer></script>;
-/* No stylesheet link for nt-marp.css: render.js fetches it and hands it to
-   Marpit, which scopes it to the slide sections. Linking it too would leak
-   bare `section` rules onto the rest of the page. */
-const MARP_JS = <script src="/vendor/marp/marpit.js" defer></script>;
+/* The code theme is ours and stays a link, so it caches across artifacts and a
+   colour correction needs no re-render. Marpit's theme output is the opposite
+   case and gets inlined: it is scoped to that deck's slide sections, and linking
+   nt-marp.css would leak bare `section` rules onto the rest of the page. */
+const CODE_CSS = <link rel="stylesheet" href="/nt-code.css" />;
 
 function fileName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1) || path;
@@ -102,6 +102,10 @@ export interface ShellOpts {
   pageHref?: string;
   /** Absolute bytes of the poster frame, when the upload carried one. */
   posterHref?: string;
+  /** Already-rendered markup for the `md`, `slides`, and `code` shells. */
+  content?: string;
+  /** Marpit's theme output, scoped to this deck's sections. */
+  deckCss?: string;
 }
 
 /**
@@ -141,7 +145,9 @@ function caption(name: string, size?: number): Child {
 export function fileShell(kind: string, o: ShellOpts): string {
   const { path, rawHref, size } = o;
   const name = fileName(path);
-  const bodyAttrs = { 'data-kind': kind, 'data-raw': rawHref };
+  /* `data-kind` is all the client needs now that nothing fetches: the deck nav
+     is the only script left, and it keys off the slides it can see. */
+  const bodyAttrs = { 'data-kind': kind };
   // An image is its own poster; everything else shows a frame or nothing.
   const og = ogTags(o, kind === 'image' ? rawHref : o.posterHref);
   switch (kind) {
@@ -187,30 +193,30 @@ export function fileShell(kind: string, o: ShellOpts): string {
     case 'code':
       return layout({
         title: name,
-        head: [og, HLJS_CSS, HLJS_JS],
+        head: [og, CODE_CSS],
         bodyAttrs,
         body: (
           <div class="doc code">
             {caption(name, size)}
-            <pre><code id="content">loading…</code></pre>
+            {raw(o.content ?? '')}
           </div>
         ),
       });
     case 'md':
       return layout({
         title: name,
-        head: [og, HLJS_CSS, HLJS_JS, MARKED_JS],
+        head: [og, CODE_CSS],
         bodyAttrs,
-        body: <article class="doc prose" id="content"><p class="caption">loading…</p></article>,
+        body: <article class="doc prose">{raw(o.content ?? '')}</article>,
       });
     case 'slides':
       return layout({
         title: name,
-        head: [og, HLJS_CSS, HLJS_JS, MARP_JS],
+        head: [og, CODE_CSS, <style>{raw(o.deckCss ?? '')}</style>],
         bodyAttrs,
         body: (
           <>
-            <div class="deck" id="content"></div>
+            <div class="deck">{raw(o.content ?? '')}</div>
             <nav class="deck-nav" hidden>
               <button type="button" data-prev aria-label="previous slide">prev</button>
               <span class="caption" data-count></span>
@@ -307,10 +313,11 @@ interface Tile {
   thumb: Child;
   fmt?: string;
   /** Derived render this tile waits on, keyed by source path; admin.js polls
-      the status route and paints the state. `html` means either mode's html.
-      `click` marks a render nothing prerenders: the tile says "click to
-      generate" and the click's own GET fires it (decision 9). */
-  status?: { src: string; awaits: string; click?: boolean };
+      the status route and paints the state. Only the binary formats have one:
+      an html target renders on the request that asks for it, so it is ready the
+      moment the upload lands. Nothing prerenders any more, so every tile that
+      waits also says "click to generate" and its own GET fires the render. */
+  status?: { src: string; awaits: string };
 }
 
 function srcThumb(text: string): Child {
@@ -325,27 +332,28 @@ function htmlStem(path: string): string {
   return path.replace(/\.html?$/i, '');
 }
 
-/** An uploaded page: the page itself plus its three click-to-generate
-    exports (no prerender for HTML - decision 9). */
+/** An uploaded page: the page itself plus its three click-to-generate exports. */
 function pageTiles(path: string, tag: string): Tile[] {
   const stem = encodeURI(htmlStem(path));
   return [
     { target: encodeURI(path), label: `${tag}page`, sub: 'the uploaded page, opens in a tab', thumb: THUMB_LAND, fmt: 'html' },
-    { target: `${stem}.pdf`, label: `${tag}pdf`, sub: 'print of the page', thumb: THUMB_PORT, fmt: 'pdf', status: { src: path, awaits: 'page.pdf', click: true } },
-    { target: `${stem}.png`, label: `${tag}full shot`, sub: 'the whole page, one image', thumb: THUMB_PORT, fmt: 'png', status: { src: path, awaits: 'page.full.png', click: true } },
-    { target: `${stem}.browser.png`, label: `${tag}browser shot`, sub: 'above the fold, 1280x720', thumb: THUMB_LAND, fmt: 'png', status: { src: path, awaits: 'page.browser.png', click: true } },
+    { target: `${stem}.pdf`, label: `${tag}pdf`, sub: 'print of the page', thumb: THUMB_PORT, fmt: 'pdf', status: { src: path, awaits: 'page.pdf' } },
+    { target: `${stem}.png`, label: `${tag}full shot`, sub: 'the whole page, one image', thumb: THUMB_PORT, fmt: 'png', status: { src: path, awaits: 'page.full.png' } },
+    { target: `${stem}.browser.png`, label: `${tag}browser shot`, sub: 'above the fold, 1280x720', thumb: THUMB_LAND, fmt: 'png', status: { src: path, awaits: 'page.browser.png' } },
   ];
 }
 
-/** The mock's five, per markdown source. Tile targets under the shipped
-    grammar; none carry `c=`. */
+/** Five per markdown source. The two html targets pin a mode - the same words
+    read as slides or as a document - and both are ready on arrival, because the
+    Worker renders them per request. Only the PDFs wait on a browser. Tile targets
+    under the shipped grammar; none carry `c=`. */
 function mdTiles(path: string, tag: string): Tile[] {
   const stem = encodeURI(mdStem(path));
   return [
-    { target: `${stem}.slides.html`, label: `${tag}deck`, sub: 'every slide, scroll through', thumb: THUMB_LAND, status: { src: path, awaits: 'slides.html' } },
+    { target: `${stem}.slides.html`, label: `${tag}deck`, sub: 'every slide, one at a time', thumb: THUMB_LAND, fmt: 'html' },
+    { target: `${stem}.doc.html`, label: `${tag}document`, sub: 'the same words, as prose', thumb: THUMB_PORT, fmt: 'html' },
     { target: `${stem}.slides.pdf`, label: `${tag}deck pdf`, sub: 'for email attachments', thumb: THUMB_LAND, fmt: 'pdf', status: { src: path, awaits: 'slides.pdf' } },
     { target: `${stem}.doc.pdf`, label: `${tag}document pdf`, sub: 'same words, one page after another', thumb: THUMB_PORT, fmt: 'pdf', status: { src: path, awaits: 'doc.pdf' } },
-    { target: `${stem}.html`, label: `${tag}offline copy`, sub: 'one file, fonts inside, no server', thumb: THUMB_LAND, fmt: 'html', status: { src: path, awaits: 'html' } },
     { target: `${stem}.txt`, label: `${tag}source`, sub: 'the markdown itself', thumb: srcThumb('---\nmarp: true\n---\n# the plan') },
   ];
 }
@@ -390,7 +398,7 @@ function tileHtml(base: string, t: Tile): Child {
     <a
       class="tile" href={`${base}${t.target}`} target="_blank" rel="noopener"
       data-src={t.status?.src} data-await={t.status?.awaits}
-      data-gen={t.status?.click ? '1' : undefined}
+      data-gen={t.status ? '1' : undefined}
     >
       <span class="thumb">{t.thumb}{t.fmt ? <span class="fmt">{t.fmt}</span> : null}</span>
       <span class="tlabel"><span class="t">{t.label}</span><span class="s">{t.sub}</span>{t.status ? <span class="tstate"></span> : null}</span>
@@ -433,7 +441,7 @@ function lockedRows(meta: Meta, base: string): Child[] {
       rows.push(
         row(`${enc}.pdf`, `${stem}.pdf`, 'pdf'),
         row(`${enc}.slides.html`, `${stem}.slides.html`, 'deck'),
-        row(`${enc}.html`, `${stem}.html`, 'offline'),
+        row(`${enc}.doc.html`, `${stem}.doc.html`, 'document'),
         row(`${enc}.txt`, `${stem}.txt`, 'source'),
       );
     }

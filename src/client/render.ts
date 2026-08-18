@@ -1,11 +1,6 @@
-/* Client-side rendering for share shells. The Worker only emits markup;
-   highlighting, markdown, and slides happen here (vendored libs, no CDN). */
-
-import { renderCode, renderMarkdown, renderDeck } from './pipeline';
-
-const body = document.body;
-const kind = body.dataset.kind;
-const raw = body.dataset.raw;
+/* The only script a shell loads. Every page arrives rendered from the Worker, so
+   what is left here is the part that is actually interactive: the copy button and
+   deck navigation. */
 
 const copy = document.querySelector('[data-copy]');
 if (copy) {
@@ -15,10 +10,6 @@ if (copy) {
       setTimeout(() => { copy.textContent = 'copy link'; }, 1500);
     });
   });
-}
-
-function withText(href: string, fn: (text: string) => void): void {
-  void fetch(href).then((r) => r.text()).then(fn);
 }
 
 /**
@@ -63,40 +54,7 @@ function deck(host: Element): void {
   show(fromHash());
 }
 
-function content(): Element | null {
-  return document.getElementById('content');
-}
-
-if (kind && raw) {
-  if (kind === 'code') {
-    withText(raw, (text) => {
-      const el = content();
-      if (el) renderCode(el, text, decodeURIComponent(location.pathname.split('/').pop() ?? ''));
-    });
-  }
-
-  if (kind === 'md') {
-    withText(raw, (text) => {
-      const el = content();
-      if (el) renderMarkdown(el, text);
-    });
-  }
-
-  if (kind === 'slides') {
-    /* render.js fetches the theme rather than linking it, because Marpit scopes
-       it to the slide sections; a stylesheet link would leak bare `section`
-       rules onto the rest of the page. */
-    const themeCss = fetch('/vendor/marp/nt-marp.css')
-      .then((r) => (r.ok ? r.text() : ''))
-      .catch(() => '');
-
-    withText(raw, (text) => {
-      void themeCss.then((css) => {
-        const host = content();
-        if (!host) return;
-        renderDeck(host, text, css);
-        deck(host);
-      });
-    });
-  }
-}
+/* The slides are in the markup already, so their container is the whole signal -
+   no data attribute to read and nothing to wait for. */
+const host = document.querySelector('.deck');
+if (host) deck(host);

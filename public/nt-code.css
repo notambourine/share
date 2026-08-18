@@ -1,5 +1,6 @@
-/* highlight.js theme on NoTambourine tokens. Ours, not vendored — the
-   highlight.min.js next to it is the pinned third-party artifact. */
+/* highlight.js class names on NoTambourine tokens. Ours, not vendored: the
+   library itself is imported into the Worker, which emits these classes from
+   src/render/markdown.ts, so this is the only half a browser still fetches. */
 .hljs { color: var(--fg2, #C9C9CE); background: transparent; }
 .hljs-comment, .hljs-quote { color: var(--fg3, #8A8A92); font-style: italic; }
 .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section,

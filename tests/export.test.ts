@@ -69,6 +69,49 @@ describe('page exports (uploaded HTML)', () => {
   });
 });
 
+/* The bare URL is the one nearly every recipient opens, and it used to arrive
+   empty: a shell, a second request for `?raw`, then 169 KB of parser before any
+   text painted. The mode came from the extension alone, so a Marp deck opened as
+   a document no matter what it said. */
+describe('the live markdown view', () => {
+  it('arrives rendered, as a deck when the content says deck', async () => {
+    const html = await (await ask(world(), 'deck.md')).text();
+    expect(html).toContain('data-kind="slides"');
+    expect(html).toContain('data-marpit-svg');
+    // No parser, and no second round trip to fetch what it would parse.
+    expect(html).not.toContain('marpit.js');
+    expect(html).not.toContain('data-raw');
+  });
+
+  it('arrives as a document when the content is prose', async () => {
+    const prose = '# Notes\n\nJust prose, no separators.\n';
+    const env = world({ [`${SPACE}/${HASH}/f/notes.md`]: prose },
+      [{ path: 'notes.md', size: prose.length, type: 'text/markdown; charset=utf-8' }]);
+    const html = await (await ask(env, 'notes.md')).text();
+    expect(html).toContain('data-kind="md"');
+    expect(html).toContain('<h1>Notes</h1>');
+  });
+
+  it('highlights a code file in the Worker too', async () => {
+    const src = 'const a = 1;\n';
+    const env = world({ [`${SPACE}/${HASH}/f/app.ts`]: src },
+      [{ path: 'app.ts', size: src.length, type: 'text/plain; charset=utf-8' }]);
+    const html = await (await ask(env, 'app.ts')).text();
+    expect(html).toContain('hljs-keyword');
+    expect(html).not.toContain('highlight.min.js');
+  });
+
+  /* Rendering means reading the bytes, so a file too big to read in a browser
+     gets the download card instead. `?raw` still hands over every byte. */
+  it('offers a download rather than inlining a file over the cap', async () => {
+    const env = world({ [`${SPACE}/${HASH}/f/huge.md`]: '# big\n' },
+      [{ path: 'huge.md', size: 2 * 1024 * 1024, type: 'text/markdown; charset=utf-8' }]);
+    const html = await (await ask(env, 'huge.md')).text();
+    expect(html).toContain('data-kind="download"');
+    expect(html).toContain('?raw');
+  });
+});
+
 describe('format suffixes', () => {
   it('serves a cached PDF, and the suffix outranks Accept', async () => {
     const key = derivedKey(SPACE, HASH, 'deck.md', 'slides', 'pdf');
@@ -93,18 +136,30 @@ describe('format suffixes', () => {
     expect(await res.text()).toBe('DOC');
   });
 
-  it('the snapshot carries its own CSP, so data: fonts load', async () => {
-    const env = world({ [derivedKey(SPACE, HASH, 'deck.md', 'slides', 'html')]: '<!doctype html>' });
-    const res = await ask(env, 'deck.html');
-    expect(res.headers.get('content-security-policy')).toContain('font-src data:');
-  });
-
-  it('.slides.html serves the cached snapshot, same as every other export', async () => {
-    const env = world({ [derivedKey(SPACE, HASH, 'deck.md', 'slides', 'html')]: '<!doctype html>SNAP' });
+  /* The `.html` spellings are mode overrides, not artifacts: they render on the
+     request that asks and store nothing, so there is no browser budget to spend
+     and no stored copy to go stale when the brand moves. */
+  it('.slides.html renders live, with no stored object and no browser', async () => {
+    const env = world();
     const res = await ask(env, 'deck.slides.html');
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain('SNAP');
-    expect(res.headers.get('content-security-policy')).toContain('font-src data:');
+    expect(res.headers.get('content-type')).toContain('text/html');
+    const html = await res.text();
+    expect(html).toContain('data-marpit-svg');
+    // Rendered here, so the page ships no parser and asks for no second round trip.
+    expect(html).not.toContain('marpit.js');
+    expect(html).not.toContain('?raw');
+  });
+
+  it('.doc.html pins the document mode over content that sniffs as a deck', async () => {
+    const html = await (await ask(world(), 'deck.doc.html')).text();
+    expect(html).toContain('data-kind="md"');
+    expect(html).not.toContain('data-marpit-svg');
+  });
+
+  it('a bare .html sniffs the mode, the way a bare .pdf does', async () => {
+    const html = await (await ask(world(), 'deck.html')).text();
+    expect(html).toContain('data-kind="slides"');
   });
 
   it('.txt is the source bytes as text/plain, always', async () => {
