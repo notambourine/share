@@ -4,14 +4,17 @@
   Do not add vet/guarddog/socket-tree jobs to CI; their lights are silenced
   in `.claude/settings.json`.
 - Deploys ride Cloudflare Workers Builds on push to `main`. Never run
-  `wrangler deploy` or `wrangler dev`; verify with `npm run brand`,
-  `npm run oxlint`, `npm test`, and `npm run types`. CI runs the same four.
-- The deploy runs `npm run build:client`, which bundles `src/client/` into
-  `public/render.js`, `public/admin.js`, and `public/print.js`. Those three are
-  gitignored, so a deploy that skips the build serves 404 for every page script.
-  CI runs the same build as a fifth gate, which works under `--ignore-scripts`
-  because esbuild's native binary ships inside its platform package instead of
-  being fetched by a postinstall.
+  `wrangler deploy` or `wrangler dev`; verify with `npm run oxlint`, `npm test`,
+  `npm run types`, then `npm run build:client` and `npm run brand`. CI runs the
+  same five in that order.
+- The deploy runs `npm run build:client`, which is every write into `public/`:
+  it bundles `src/client/` into `public/render.js`, `public/admin.js`, and
+  `public/print.js`, and copies `public/fonts/` and `public/logo/` out of the
+  brand dep. All of it is gitignored, so a deploy that skips the build serves
+  404 for every page script and a bare favicon. CI runs the same build as a
+  gate, which works under `--ignore-scripts` because esbuild's native binary
+  ships inside its platform package instead of being fetched by a postinstall.
+  Run it before `npm run brand`, which hashes what it wrote.
 - `src/client/` is browser code and carries the DOM lib, never
   `@cloudflare/workers-types`; `tsconfig.client.json` owns it and `npm run types`
   checks all three projects. It may import from `src/lib/` - that is the point,
@@ -31,13 +34,15 @@
   in the `SPACE_TTLS` Worker secret; committed examples use `acme`.
 - Cloudflare secrets are write-only. The 1Password vault is the source of truth
   for bearer tokens; the `TOKENS` secret is derived from it, never hand-edited.
-- The brand's golden set is the `upstream/brand-kit` submodule. `src/brand.ts`
-  imports `tokens.css` and `deck.css` from it and the Worker serves them at
-  `/tokens.css` and `/vendor/marp/nt-marp.css`. Never add a copy under
-  `public/`; correct a brand value in that repo and bump the pin.
-- `public/fonts/*` and `public/logo/*` are the only brand copies, because a
-  static server should serve a woff2, a png, and an .ico. `npm run vendor`
-  refreshes both from the submodule; never hand-edit or hand-add a file there.
+- The brand's golden set is the `@notambourine/brand-kit` dependency, pinned
+  exact. `src/brand.ts` imports `tokens.css` and `deck.css` from it and the
+  Worker serves them at `/tokens.css` and `/vendor/marp/nt-marp.css`. Never add
+  a copy under `public/`; correct a brand value in that repo, publish, and bump
+  the version here.
+- `public/fonts/*` and `public/logo/*` are the only brand files on disk, because
+  a static server should serve a woff2, a png, and an .ico. `npm run vendor`
+  writes both out of the dep during the build and empties them first; they are
+  gitignored, so never hand-edit, hand-add, or commit a file there.
 - Icons come from `public/logo/`. `/favicon.svg`, `/favicon.ico`, and
   `/apple-touch-icon.png` are Worker aliases onto it, never second copies.
 - Never typeset the brand name as display type. `src/brand.ts` exports `LOCKUP`

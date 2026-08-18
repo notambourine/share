@@ -4,8 +4,8 @@
  * These imports are load-bearing, the same way `src/skill.ts` imports SKILL.md:
  * they make drift between what this Worker serves and what brand-kit defines
  * impossible, where a copy under public/ could only ever be detected after the
- * fact. Bumping `upstream/brand-kit` is the whole update - there is no second
- * step, so there is nothing to forget.
+ * fact. Bumping `@notambourine/brand-kit` in package.json is the whole update -
+ * there is no second step, so there is nothing to forget.
  *
  * The fonts stay on the ASSETS path. They are inert binaries rather than brand
  * decisions, a static server is the right thing to serve them, and tokens.css
@@ -14,14 +14,14 @@
 /* The kit's tokens.css is three @import lines, for a page that links it off a
    disk. Serving that would cost three more routes and three more requests, so
    the parts are joined here and /tokens.css stays one file on the wire. */
-import FONTS from '../upstream/brand-kit/fonts.css';
-import VARS from '../upstream/brand-kit/vars.css';
-import ELEMENTS from '../upstream/brand-kit/elements.css';
-import DECK from '../upstream/brand-kit/deck.css';
+import FONTS from '@notambourine/brand-kit/fonts.css';
+import VARS from '@notambourine/brand-kit/vars.css';
+import ELEMENTS from '@notambourine/brand-kit/elements.css';
+import DECK from '@notambourine/brand-kit/deck.css';
 /* Inline rather than `<img src="/logo/lockup.svg">`: a PDF header and an
    offline `.html` snapshot both have to carry the mark with no origin to fetch
    from, and inline is also the only form `fill: currentColor` can reach. */
-import LOCKUP from '../upstream/brand-kit/logo/lockup.svg';
+import LOCKUP from '@notambourine/brand-kit/logo/lockup.svg';
 import { ROBOTS } from './lib/http';
 
 /** The three parts joined, so /tokens.css is one file on the wire and the PDF

@@ -1,4 +1,0 @@
-[submodule "upstream/brand-kit"]
-	path = upstream/brand-kit
-	url = https://github.com/notambourine/brand-kit.git
-	branch = main

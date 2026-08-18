@@ -126,9 +126,12 @@ npm ci
 npm test        # vitest: signing, path safety, negotiation, auth
 npm run oxlint  # oxlint plus the vendored anti-slop rules in tools/oxlint/
 npm run types   # tsc --noEmit, Worker and CLI (bin/ runs as .ts, node 22.18+ strips the types)
-npm run vendor  # refresh public/vendor/, fonts/, and logo/ after bumping a pin
-npm run brand   # gate: those copies match upstream/brand-kit, colors and tokens too
+npm run build:client  # writes public/: the page bundles, plus fonts/ and logo/ from the brand dep
+npm run brand   # gate: public/ holds what @notambourine/brand-kit ships, colors and tokens too
 ```
+
+`public/fonts/`, `public/logo/`, and the three page bundles are build output, not
+checked in. Run `build:client` before `brand`, which is the order CI uses.
 
 Deploys ride Cloudflare Workers Builds on push to `main`; there is no manual
 deploy step.

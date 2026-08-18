@@ -32,9 +32,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # upstream/brand-kit holds the brand's golden set. src/brand.ts
-          # imports its stylesheets, so without this the suite does not build.
-          submodules: true
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -51,24 +48,27 @@ jobs:
       # Wrap it if a step here ever gains a secret.
       - run: npm ci --ignore-scripts
 
-      # The brand contract, and the gate on a submodule bump PR: public/fonts/
-      # and public/logo/ match the golden set file for file, every color is one
-      # it defines, and every var() reads a token it still declares. ubuntu only
-      # - the hashes would trip on CRLF if the windows runner rewrote a text file.
-      - run: npm run brand
-        if: matrix.os == 'ubuntu-latest'
-
       - run: npm run oxlint
 
       - run: npm test
 
       - run: npm run types
 
-      # The deploy runs this too, and the bundles are gitignored, so a break here
-      # would otherwise surface as 404s on the page scripts after a merge. Works
-      # under --ignore-scripts: esbuild's native binary ships inside its
-      # platform package rather than being fetched by a postinstall.
+      # The deploy runs this too, and all of its output is gitignored, so a break
+      # here would otherwise surface as 404s on the page scripts and a bare
+      # favicon after a merge. Works under --ignore-scripts: esbuild's native
+      # binary ships inside its platform package rather than being fetched by a
+      # postinstall.
       - run: npm run build:client
+
+      # The brand contract, and the gate on a @notambourine/brand-kit bump PR:
+      # public/fonts/ and public/logo/ hold what the kit ships file for file,
+      # every color is one it defines, and every var() reads a token it still
+      # declares. After build:client, which is what writes those two directories.
+      # ubuntu only - the hashes would trip on CRLF if the windows runner
+      # rewrote a text file.
+      - run: npm run brand
+        if: matrix.os == 'ubuntu-latest'
 
   # Claude Code keys a plugin's cache dir by the `version` string in
   # .claude-plugin/plugin.json, not by commit SHA (that fallback applies only to
