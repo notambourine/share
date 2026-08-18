@@ -10,6 +10,7 @@ import { mintAdminLink } from '../lib/admin';
 import { writeMeta } from '../lib/r2';
 import { decodeNumberMap } from '../lib/json';
 import { jsonResponse, textResponse, wantsJson, now } from '../lib/http';
+import { MAX_TRANSFORM_BYTES, TRANSFORMS, runTransform, transformable } from '../transforms';
 
 const MAX_FILES = 200;
 
@@ -39,6 +40,15 @@ export async function upload(
     return textResponse('tier must be open or signed\n', 400);
   }
   const tier: Tier = tierParam;
+
+  const transform = url.searchParams.get('transform');
+  if (transform !== null && !TRANSFORMS.has(transform)) {
+    return textResponse(`unknown transform (${[...TRANSFORMS.keys()].join(', ')})\n`, 400);
+  }
+  const ai = env.AI;
+  if (transform !== null && !ai) {
+    return textResponse('transform unavailable: no AI binding\n', 503);
+  }
 
   /* Signing your own fresh upload spends no authority the upload did not, so a
      session token covers both and the signed tier costs one 1Password unlock.
@@ -94,6 +104,30 @@ export async function upload(
   if (entries.length === 0) return textResponse('no files (use -F f=@file)\n', 400);
   if (entries.length > MAX_FILES) return textResponse(`too many files (max ${MAX_FILES})\n`, 400);
 
+  /* Before any byte lands, so a failed transform stores nothing, and before
+     the poster grouping, so `seen` still matches the paths. Only the text
+     files rewrite; a deck's images ride along untouched. */
+  if (transform !== null && ai) {
+    const sources = entries.filter((e) => transformable(e.path));
+    if (sources.length === 0) return textResponse('transform needs a .md or .txt file\n', 400);
+    for (const e of sources) {
+      if (e.blob.size > MAX_TRANSFORM_BYTES) {
+        return textResponse(`too large to transform: ${e.path}\n`, 413);
+      }
+      const out = await runTransform(ai, transform, e.path, await e.blob.text());
+      if (out === null) return textResponse('transform failed; retry without transform=\n', 502);
+      // A .txt would serve as text/plain and never render; the output is markdown now.
+      const path = e.path.replace(/\.txt$/i, '.md');
+      if (path !== e.path) {
+        if (seen.has(path)) return textResponse(`duplicate path: ${path}\n`, 400);
+        seen.delete(e.path);
+        seen.add(path);
+        e.path = path;
+      }
+      e.blob = new File([`${out}\n`], path.slice(path.lastIndexOf('/') + 1));
+    }
+  }
+
   const hash = genSlug(12);
   /* A poster only counts as one when the file it names rode along; otherwise
      someone uploaded a picture that happens to be called that, and it keeps its
@@ -121,7 +155,9 @@ export async function upload(
 
   const meta: Meta = {
     space, hash, tier, uploader,
-    createdAt: t, expiresAt, idleTtl, lastAccess: t, files,
+    createdAt: t, expiresAt, idleTtl, lastAccess: t,
+    ...(transform !== null && { transform }),
+    files,
   };
   await writeMeta(env, meta);
 
@@ -137,6 +173,7 @@ export async function upload(
   if (wantsJson(request)) {
     return jsonResponse({
       url: link, hash, tier, expiresAt, files: files.map((f) => f.path),
+      ...(transform !== null && { transform }),
       ...(signed && { signedUrl: signed.url, signedExp: signed.exp, short: signed.short }),
       ...(admin && { adminUrl: admin.url, adminExp: admin.exp }),
     }, 201);

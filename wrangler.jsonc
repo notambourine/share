@@ -34,6 +34,12 @@
 	"browser": {
 		"binding": "BROWSER"
 	},
+	// Workers AI, for `?transform=` on upload (src/transforms/). Same deal as
+	// the browser binding, except the model it calls (DeepSeek V4 Flash) is
+	// paid-only: the account must sit on the Workers Paid plan.
+	"ai": {
+		"binding": "AI"
+	},
 	"kv_namespaces": [
 		{
 			"binding": "LINKS",

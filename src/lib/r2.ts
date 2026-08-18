@@ -40,6 +40,9 @@ export function decodeMeta(text: string): Meta | null {
     decoded.push(one);
   }
 
+  // Absent on every upload that predates transforms and on every plain one.
+  const transform = textAt(record, 'transform');
+
   return {
     space,
     hash,
@@ -50,6 +53,7 @@ export function decodeMeta(text: string): Meta | null {
     lastAccess,
     expiresAt: numberAt(record, 'expiresAt'),
     idleTtl: numberAt(record, 'idleTtl'),
+    ...(transform !== null && { transform }),
     files: decoded,
   };
 }

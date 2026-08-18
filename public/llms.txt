@@ -53,6 +53,12 @@ Query parameters:
   idle=<dur>         expire this long after last access instead of a fixed date
   sign=<dur>|forever signed tier only: link life, default 30d
   short              signed tier only: also mint a /z/<id> shortlink
+  transform=<name>   reformat each .md/.txt through Workers AI before storing:
+                     agenda, renewal, performance, presentation, or deck. The
+                     server owns the format, so send raw notes, never a
+                     pre-formatted file. presentation and deck come out as
+                     Marp decks; a .txt is stored as .md. A 502 means the
+                     model call failed and nothing stored: retry without it.
 
 A signed-tier upload returns the signed link, not the bare one, because the
 bare one 401s. With `Accept: application/json` it comes back as signedUrl,

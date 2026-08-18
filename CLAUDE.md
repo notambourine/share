@@ -62,6 +62,10 @@
 - Every color in this repo must be one the golden set defines, including inside
   a `var()` fallback, and every `var(--x)` must read a token it still declares.
   `npm run brand` is the gate and CI runs it.
+- `src/transforms/` is the `?transform=` upload feature: the format lives in
+  those prompts, server-side, so never publish a formatting skill for uploaders
+  to follow. A prompt or model edit runs `npm run eval:transforms` (live model,
+  by hand, needs a Workers AI token) before it ships; CI never runs it.
 - `skills/share/SKILL.md` is the only copy of the skill. `src/skill.ts` imports
   it to serve `/SKILL.md`; never add a copy under `public/`.
 - `skills/` is the published plugin surface, and this repo holds no other

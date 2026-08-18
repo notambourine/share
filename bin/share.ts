@@ -9,6 +9,7 @@
    nt-share install                                     (put nt-share on PATH)
    nt-share put <space> <file|dir ...> [--tier signed] [--ttl <dur>|forever]
                                        [--ttl-idle <dur>] [--sign-ttl <dur>] [--short]
+                                       [--transform agenda|renewal|performance|presentation|deck]
    nt-share put <space> --clip [--name shot.png]        (the image on the clipboard)
    nt-share sign <space>/<hash> [--ttl 30d] [--short]   (re-sign an older artifact)
    nt-share short <space>/<hash> [--ttl 30d]
@@ -512,6 +513,8 @@ switch (cmd) {
     if (flags.tier) q.set('tier', flags.tier);
     if (flags['sign-ttl']) q.set('sign', flags['sign-ttl']);
     if (flags.short) q.set('short', '1');
+    // The server owns the name list and 400s an unknown one, so no copy here.
+    if (flags.transform) q.set('transform', flags.transform);
     const made = fields(await upload(
       `/up/${space}${q.size ? `?${q}` : ''}`, { method: 'POST', body: form },
     ));

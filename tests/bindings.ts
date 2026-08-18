@@ -8,9 +8,10 @@
  */
 
 import type {
-  AssetServer, Deferrals, Env, LinkStore, Store,
+  AiChatInput, AiRunner, AssetServer, Deferrals, Env, LinkStore, Store,
   StoredHead, StoredObject, StoredPage, StoredValue,
 } from '../src/lib/types';
+import type { JsonValue } from '../src/lib/json';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -117,6 +118,29 @@ export function memoryLinks(): MemoryLinks {
   };
 }
 
+export interface AiCall {
+  model: string;
+  input: AiChatInput;
+}
+
+export interface MemoryAi extends AiRunner {
+  calls: AiCall[];
+}
+
+/** Answers in order, repeating the last; an Error entry throws instead. */
+export function memoryAi(answers: (JsonValue | Error)[]): MemoryAi {
+  const calls: AiCall[] = [];
+  return {
+    calls,
+    async run(model, input) {
+      const answer = answers[Math.min(calls.length, answers.length - 1)];
+      calls.push({ model, input });
+      if (answer instanceof Error) throw answer;
+      return answer;
+    },
+  };
+}
+
 /** Every route treats deferred work as fire-and-forget, so a test can too. */
 export const DEFERRED: Deferrals = {
   waitUntil() { /* nothing to await in a test */ },
@@ -136,6 +160,7 @@ export interface TestEnvOptions {
   tokens?: string;
   signingKeys?: string;
   assets?: AssetServer;
+  ai?: AiRunner;
 }
 
 export function testEnv(options: TestEnvOptions = {}): TestEnv {
@@ -145,5 +170,6 @@ export function testEnv(options: TestEnvOptions = {}): TestEnv {
     ASSETS: options.assets ?? noAssets(),
     TOKENS: options.tokens ?? '{}',
     SIGNING_KEYS: options.signingKeys ?? '{}',
+    ...(options.ai && { AI: options.ai }),
   };
 }

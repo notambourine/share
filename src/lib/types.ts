@@ -8,6 +8,8 @@
  * narrow contracts honest against the runtime.
  */
 
+import type { JsonValue } from './json';
+
 export interface StoredHead {
   size: number;
   httpEtag: string;
@@ -64,10 +66,33 @@ export interface Deferrals {
   waitUntil(promise: Promise<unknown>): void;
 }
 
+export interface AiMessage {
+  role: 'system' | 'user';
+  content: string;
+}
+
+/** The chat slice of a Workers AI text model's input, as src/transforms/ sends it. */
+export interface AiChatInput {
+  messages: AiMessage[];
+  max_completion_tokens: number;
+  temperature: number;
+  reasoning_effort: 'low' | 'medium' | 'high';
+}
+
+/** No BindingsFit row: workers-types keys `Ai["run"]` to a closed model union
+    that lags releases, so a fit against a string model id cannot be stated.
+    The answer is JSON-shaped data whatever the model; decodeAiText narrows it. */
+export interface AiRunner {
+  run(model: string, input: AiChatInput): Promise<JsonValue>;
+}
+
 export interface Env {
   BUCKET: Store;
   LINKS: LinkStore;
   ASSETS: AssetServer;
+  /** Workers AI, for `?transform=` on upload (src/transforms/). Optional: a
+      deploy that predates the binding still uploads; only transforms 503. */
+  AI?: AiRunner;
   /** Browser Rendering, driven by @cloudflare/puppeteer, so this one stays the
       whole binding. Optional: a deploy that predates it, or an account past its
       daily browser minutes, degrades to the live shell. */
@@ -115,6 +140,8 @@ export interface Meta {
   idleTtl: number | null;
   /** Epoch seconds. Rewritten at most once per day, and only when idleTtl is set. */
   lastAccess: number;
+  /** The `?transform=` name the upload's text files went through, when one did. */
+  transform?: string;
   files: MetaFile[];
 }
 
