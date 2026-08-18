@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   CACHE_VERSION, parseExportPath, resolveExport, explicitMode,
-  isLiveHtml, pageExt, derivedKey, sniffDeck,
+  isLiveHtml, pageExt, derivedKey, checkKey, sniffDeck,
+  formatsFor, stemOf, isRenderedKey,
+  derivedPrefix, parseDerivedKey, parseCheckKey,
 } from '../src/lib/exportPath';
 
 describe('parseExportPath', () => {
@@ -147,6 +150,138 @@ describe('derivedKey', () => {
   it('sits under d/, which no upload may claim', () => {
     expect(derivedKey('acme', 'Xk92mQ7bTp01', 'a/b.md', 'doc', 'pdf'))
       .toBe(`acme/Xk92mQ7bTp01/d/v${CACHE_VERSION}/a/b.md.doc.pdf`);
+  });
+});
+
+describe('formatsFor', () => {
+  const suffixes = (source: string) => formatsFor(source).map((s) => s.suffix);
+  const tiled = (source: string) => formatsFor(source).filter((s) => s.tile).map((s) => s.suffix);
+
+  it('offers a markdown source its family and nothing else', () => {
+    expect(suffixes('deck.md')).toEqual([
+      '.slides.html', '.doc.html', '.slides.pdf', '.doc.pdf', '.txt', '.html', '.pdf',
+    ]);
+    expect(suffixes('notes.markdown')).toEqual(suffixes('deck.md'));
+  });
+
+  it('offers an uploaded page the print and the shots', () => {
+    expect(suffixes('page.html')).toEqual(['.pdf', '.png', '.browser.png', '.full.png']);
+    expect(suffixes('page.htm')).toEqual(suffixes('page.html'));
+  });
+
+  it('offers an upload that is neither markdown nor a page nothing at all', () => {
+    expect(formatsFor('hero.png')).toEqual([]);
+    expect(formatsFor('notes.pdf')).toEqual([]);
+  });
+
+  /* The admin page shows a spelling only when its name says what comes back:
+     the sniffing ones answer their URL without a tile of their own. */
+  it('tiles the pinned spellings, keeping the sniffing ones quiet', () => {
+    expect(tiled('deck.md')).toEqual(['.slides.html', '.doc.html', '.slides.pdf', '.doc.pdf', '.txt']);
+    expect(tiled('page.html')).toEqual(['.pdf', '.png', '.browser.png']);
+  });
+
+  it('waits only on what a browser has to draw, and only when the mode is pinned', () => {
+    const awaits = (source: string) => new Map(formatsFor(source).map((s) => [s.suffix, s.awaits]));
+    expect(awaits('deck.md')).toEqual(new Map([
+      ['.slides.html', null], ['.doc.html', null],
+      ['.slides.pdf', 'slides.pdf'], ['.doc.pdf', 'doc.pdf'],
+      ['.txt', null],
+      ['.html', null],
+      // Bare `.pdf` derives, but which key it lands under is not known until
+      // the sniff runs, so no tile could poll for it.
+      ['.pdf', null],
+    ]));
+    expect(awaits('page.html')).toEqual(new Map([
+      ['.pdf', 'page.pdf'], ['.png', 'page.full.png'],
+      ['.browser.png', 'page.browser.png'], ['.full.png', 'page.full.png'],
+    ]));
+  });
+
+  it('marks every spelling that reaches a browser, sniffing ones included', () => {
+    const derived = (source: string) => formatsFor(source).filter((s) => s.derived).map((s) => s.suffix);
+    expect(derived('deck.md')).toEqual(['.slides.pdf', '.doc.pdf', '.pdf']);
+    expect(derived('page.html')).toEqual(['.pdf', '.png', '.browser.png', '.full.png']);
+  });
+
+  it('answers the same set resolveExport enforces', () => {
+    const files = ['deck.md', 'page.html'];
+    for (const source of files) {
+      for (const spec of formatsFor(source)) {
+        const requested = `${stemOf(source)}${spec.suffix}`;
+        expect(resolveExport(files, requested)).toEqual({ source, format: spec.format });
+      }
+    }
+  });
+
+  it('stems a source down to what a suffix hangs off', () => {
+    expect(stemOf('deck.md')).toBe('deck');
+    expect(stemOf('notes.markdown')).toBe('notes');
+    expect(stemOf('a/b.page.html')).toBe('a/b.page');
+    expect(stemOf('hero.png')).toBe('hero.png');
+  });
+});
+
+describe('parseDerivedKey', () => {
+  const SPACE = 'acme';
+  const HASH = 'Xk92mQ7bTp01';
+  const strip = (key: string) => key.slice(derivedPrefix(SPACE, HASH).length);
+
+  /* The inverse has to cover the catalog exactly: a format the status route
+     cannot decompose reports "pending" forever, however well it renders. */
+  it('decomposes every key derivedKey can build', () => {
+    for (const source of ['deck.md', 'notes.markdown', 'a/b.name.md', 'page.html']) {
+      for (const spec of formatsFor(source)) {
+        if (!spec.mode || !spec.ext) continue;
+        const key = derivedKey(SPACE, HASH, source, spec.mode, spec.ext);
+        expect(parseDerivedKey(strip(key))).toEqual({ source, mode: spec.mode, ext: spec.ext });
+      }
+    }
+  });
+
+  it('reads a source whose own name ends in a tail it could have written', () => {
+    const key = derivedKey(SPACE, HASH, 'a.page.pdf.html', 'page', 'pdf');
+    expect(parseDerivedKey(strip(key))).toEqual({ source: 'a.page.pdf.html', mode: 'page', ext: 'pdf' });
+  });
+
+  it('rejects the check verdict, a bare tail, and anything else under the prefix', () => {
+    expect(parseDerivedKey('deck.md.check.json')).toBeNull();
+    expect(parseDerivedKey('slides.pdf')).toBeNull();
+    expect(parseDerivedKey('deck.md.doc.png')).toBeNull();
+  });
+
+  it('reads the check verdict back to its source, and only that', () => {
+    expect(parseCheckKey(strip(checkKey(SPACE, HASH, 'a/b.md')))).toBe('a/b.md');
+    expect(parseCheckKey('deck.md.slides.pdf')).toBeNull();
+    expect(parseCheckKey('check.json')).toBeNull();
+  });
+
+  it('recognises the vocabulary the tiles and the poll trade in', () => {
+    expect(isRenderedKey('slides.pdf')).toBe(true);
+    expect(isRenderedKey('page.browser.png')).toBe(true);
+    expect(isRenderedKey('slides.full.png')).toBe(false);
+    expect(isRenderedKey(undefined)).toBe(false);
+  });
+});
+
+/* The docs are what a model reads before it asks for a URL, so a row they list
+   and the catalog does not is a 404 waiting to happen, and a format the catalog
+   grows without a row is one nobody will ask for. */
+describe('the published docs list the catalog', () => {
+  const offered = (source: string) => formatsFor(source).map((s) => s.suffix);
+
+  it('the skill table holds every markdown spelling and no other', () => {
+    const doc = readFileSync('skills/share/SKILL.md', 'utf8');
+    const listed = [...doc.matchAll(/^\| `deck\.(\S+)` \|/gm)].map((m) => `.${m[1]}`);
+    // The source itself heads the table; the rest are the suffixes it answers.
+    expect(new Set(listed)).toEqual(new Set(['.md', ...offered('deck.md')]));
+  });
+
+  it('llms.txt holds both columns, the untiled spellings included', () => {
+    const doc = readFileSync('public/llms.txt', 'utf8');
+    const listed = (re: RegExp) => new Set([...doc.matchAll(re)].map((m) => `.${m[1]}`));
+    expect(listed(/^ {4}deck\.(\S+) /gm)).toEqual(new Set(['.md', ...offered('deck.md')]));
+    expect(listed(/^ {4}page\.(\S+) /gm)).toEqual(new Set(offered('page.html')));
   });
 });
 

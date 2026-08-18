@@ -279,10 +279,3 @@ body.locked .locked-only { display: block; }
 code.cmd { display: block; margin-top: var(--sp-2); padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--line); border-radius: var(--r-xs);
   background: var(--bg-raised); font-size: 13px; }
-
-.index-table { width: 100%; border-collapse: collapse;
-  font-family: var(--font-mono); font-size: 13px; }
-.index-table td { padding: var(--sp-2) var(--sp-3);
-  border-bottom: 1px solid var(--line); }
-.index-table td:last-child { text-align: right; color: var(--fg3); }
-.index-table a { color: var(--fg1); }
