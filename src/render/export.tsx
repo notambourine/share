@@ -19,7 +19,7 @@ import type { PDFOptions } from '@cloudflare/puppeteer';
 import { raw } from 'hono/html';
 import type { Env } from '../lib/types';
 import type { RenderMode } from '../lib/exportPath';
-import { DECK_THEME, TOKENS, LOCKUP } from '../brand';
+import { DECK_THEME, TOKENS, LOCKUP, token } from '../brand';
 import { renderDeck, renderMarkdown } from './markdown';
 
 /** 1152x648 is 16:9 at the same aspect as Marpit's 1280x720 slide box. */
@@ -48,7 +48,7 @@ export function pdfOptionsFor(mode: RenderMode, title: string): PDFOptions {
     displayHeaderFooter: true,
     headerTemplate: '<span></span>',
     footerTemplate: `${
-      <div style="width:100%;padding:0 16mm;font-size:7pt;font-family:sans-serif;color:#7A7A7A;display:flex;justify-content:space-between;">
+      <div style={`width:100%;padding:0 16mm;font-size:7pt;font-family:sans-serif;color:${token('--nt-mid')};display:flex;justify-content:space-between;`}>
         <span>{title}</span><span class="pageNumber"></span>
       </div>
     }`,
