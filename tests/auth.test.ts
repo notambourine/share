@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { authenticate, authenticateRaw, mintSession, sha256hex } from '../src/lib/auth';
 import { parseArtifactPath } from '../src/routes/mint';
+import { now } from '../src/lib/http';
 
 function req(auth?: string): Request {
   return new Request('https://share.example/up/acme', {
@@ -42,8 +43,8 @@ describe('authenticate', () => {
 });
 
 describe('session tokens', () => {
-  const future = Math.floor(Date.now() / 1000) + 600;
-  const past = Math.floor(Date.now() / 1000) - 600;
+  const future = now() + 600;
+  const past = now() - 600;
 
   it('a live session authenticates as its owner and is marked session', async () => {
     const e = await env({});

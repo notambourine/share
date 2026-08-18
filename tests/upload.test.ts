@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Env } from '../src/lib/types';
 import { upload } from '../src/routes/upload';
-import { serve } from '../src/routes/serve';
 import { adminConfig } from '../src/routes/admin';
 import { mintSession, sha256hex } from '../src/lib/auth';
+import { now } from '../src/lib/http';
 import type { TestEnv } from './bindings';
-import { DEFERRED, testEnv } from './bindings';
+import { fetchWorker, testEnv } from './bindings';
 
 const KEYS = { v1: 'unit-test-signing-secret' };
 const SPACE = 'acme';
@@ -27,7 +27,7 @@ async function put(env: Env, auth: string, query = '', accept = 'application/jso
 }
 
 const sessionBearer = async () =>
-  `Bearer ${await mintSession(KEYS, 'tom', Math.floor(Date.now() / 1000) + 300)}`;
+  `Bearer ${await mintSession(KEYS, 'tom', now() + 300)}`;
 
 describe('signed-tier upload mints its own link', () => {
   it('a session token gets a working signed URL with no vault token', async () => {
@@ -37,15 +37,12 @@ describe('signed-tier upload mints its own link', () => {
     const body = await res.json<{ url: string; hash: string; signedUrl: string; signedExp: number }>();
 
     const signed = new URL(body.signedUrl);
-    const [, space, hash, k, token, ...rest] = signed.pathname.split('/');
+    const [, space, hash, k] = signed.pathname.split('/');
     expect([space, hash, k]).toEqual([SPACE, body.hash, 'k']);
-    expect(body.signedExp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    expect(body.signedExp).toBeGreaterThan(now());
 
-    const file = rest.join('/');
-    const view = await serve(
-      new Request(body.signedUrl, { headers: { accept: '*/*' } }),
-      env, DEFERRED, space, hash, token, file,
-    );
+    // The router does the /k/ split, so the minted URL is handed over whole.
+    const view = await fetchWorker(env, new Request(body.signedUrl, { headers: { accept: '*/*' } }));
     expect(view.status).toBe(200);
     expect(await view.text()).toContain('hello');
   });
@@ -56,11 +53,8 @@ describe('signed-tier upload mints its own link', () => {
     const printed = (await res.text()).trim();
     expect(printed).toContain('/k/');
 
-    const [, space, hash, ...rest] = new URL(printed).pathname.split('/');
-    const view = await serve(
-      new Request(`https://share.test/${space}/${hash}/${rest.slice(2).join('/')}`),
-      env, DEFERRED, space, hash, null, rest.slice(2).join('/'),
-    );
+    const [, space, hash, , , ...rest] = new URL(printed).pathname.split('/');
+    const view = await fetchWorker(env, new Request(`https://share.test/${space}/${hash}/${rest.join('/')}`));
     expect(view.status).toBe(401);
   });
 
@@ -89,7 +83,7 @@ describe('put answers the admin link', () => {
     const env = await stubEnv();
     const res = await put(env, await sessionBearer(), '');
     const body = await res.json<{ hash: string; adminUrl: string; adminExp: number }>();
-    expect(body.adminExp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    expect(body.adminExp).toBeGreaterThan(now());
 
     const admin = new URL(body.adminUrl);
     expect(admin.pathname).toBe(`/${SPACE}/${body.hash}/`);

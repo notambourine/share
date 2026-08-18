@@ -3,6 +3,7 @@ import { ADMIN_SECS, mintAdminToken } from '../src/lib/admin';
 import { mintToken } from '../src/lib/sign';
 import { checkKey, derivedKey } from '../src/lib/exportPath';
 import { decodeSlideCheck } from '../src/lib/pdf';
+import { now } from '../src/lib/http';
 import { adminStatus } from '../src/routes/admin';
 import type { TestEnv } from './bindings';
 import { testEnv } from './bindings';
@@ -10,7 +11,7 @@ import { testEnv } from './bindings';
 const KEYS = { v1: 'unit-test-signing-secret' };
 const SPACE = 'acme';
 const HASH = 'Ab3dEf6hIj9k';
-const NOW = Math.floor(Date.now() / 1000);
+const NOW = now();
 const EXP = NOW + ADMIN_SECS;
 
 interface StatusBody {

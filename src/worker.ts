@@ -1,5 +1,6 @@
 import type { Env } from './lib/types';
 import { isValidSpace, isValidHash } from './lib/keys';
+import { parseRoute, pathSegments } from './lib/route';
 import { htmlResponse, textResponse, ROBOTS } from './lib/http';
 import { errorShell, homeShell } from './render/shell';
 import { serve } from './routes/serve';
@@ -83,12 +84,8 @@ export default {
       return staticAsset(request, env);
     }
 
-    let segs: string[];
-    try {
-      segs = path.split('/').filter(Boolean).map(decodeURIComponent);
-    } catch {
-      return notFound();
-    }
+    const segs = pathSegments(path);
+    if (!segs) return notFound();
 
     if (segs[0] === 'up') {
       if (request.method !== 'POST') return textResponse('POST only\n', 405);
@@ -139,22 +136,14 @@ export default {
       return textResponse('GET only\n', 405);
     }
 
-    let token: string | null = null;
-    let restSegs: string[];
-    if (segs[2] === 'k' && segs.length >= 4) {
-      token = segs[3];
-      restSegs = segs.slice(4);
-    } else {
-      restSegs = segs.slice(2);
-    }
+    const route = parseRoute(url, segs);
 
     // Relative assets need a base URL that ends in a slash; nudge bare prefixes.
-    if (restSegs.length === 0 && !path.endsWith('/')) {
+    if (route.rest === '' && !path.endsWith('/')) {
       return Response.redirect(`${url.origin}${path}/${url.search}`, 302);
     }
 
-    const rest = restSegs.join('/');
-    return serve(request, env, ctx, space, hash, token, rest);
+    return serve(request, env, ctx, route);
   },
 
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {

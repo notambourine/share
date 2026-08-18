@@ -91,6 +91,19 @@ export async function writeMeta(env: Env, meta: Meta, etag?: string): Promise<bo
   return head !== null;
 }
 
+/** Where one uploaded file's bytes live. `f/` is the payload prefix, which is
+    why normalizeUploadPath refuses an upload that claims that segment. */
+export function payloadKey(space: string, hash: string, path: string): string {
+  return `${space}/${hash}/f/${path}`;
+}
+
+export async function readPayload(
+  env: Env, space: string, hash: string, path: string,
+): Promise<string | null> {
+  const obj = await env.BUCKET.get(payloadKey(space, hash, path));
+  return obj ? obj.text() : null;
+}
+
 export function isExpired(meta: Meta, nowSecs: number): boolean {
   if (meta.expiresAt !== null && nowSecs > meta.expiresAt) return true;
   if (meta.idleTtl !== null && nowSecs > meta.lastAccess + meta.idleTtl) return true;
