@@ -14,6 +14,8 @@ import type { Child } from 'hono/jsx';
 import { raw } from 'hono/html';
 import type { Meta, MetaFile } from '../lib/types';
 import { kindOf, extOf } from '../lib/keys';
+import type { ExportSpec, RenderedKey } from '../lib/exportPath';
+import { formatsFor, stemOf } from '../lib/exportPath';
 import { fileSuffix } from '../lib/link';
 import { LOCKUP } from '../brand';
 
@@ -317,44 +319,42 @@ interface Tile {
       an html target renders on the request that asks for it, so it is ready the
       moment the upload lands. Nothing prerenders any more, so every tile that
       waits also says "click to generate" and its own GET fires the render. */
-  status?: { src: string; awaits: string };
+  status?: { src: string; awaits: RenderedKey };
 }
 
 function srcThumb(text: string): Child {
   return <span class="srctext">{text}</span>;
 }
 
-function mdStem(path: string): string {
-  return path.replace(/\.(md|markdown)$/i, '');
+/** The source spelling shows the markdown; everything else shows a page in the
+    shape it comes out. */
+function thumbFor(spec: ExportSpec): Child {
+  if (spec.format === 'txt') return srcThumb('---\nmarp: true\n---\n# the plan');
+  return spec.portrait ? THUMB_PORT : THUMB_LAND;
 }
 
-function htmlStem(path: string): string {
-  return path.replace(/\.html?$/i, '');
+/** One tile per spelling the catalog tiles: the two html targets pin a mode -
+    the same words read as slides or as a document - and are ready on arrival,
+    because the Worker renders them per request. Only what a browser has to draw
+    carries a status. Targets stay under the shipped grammar; none carry `c=`. */
+function exportTiles(path: string, tag: string): Tile[] {
+  const stem = encodeURI(stemOf(path));
+  return formatsFor(path).filter((spec) => spec.tile).map((spec) => ({
+    target: `${stem}${spec.suffix}`,
+    label: `${tag}${spec.label}`,
+    sub: spec.sub,
+    thumb: thumbFor(spec),
+    fmt: spec.badge ?? undefined,
+    status: spec.awaits ? { src: path, awaits: spec.awaits } : undefined,
+  }));
 }
 
-/** An uploaded page: the page itself plus its three click-to-generate exports. */
+/** An uploaded page leads with itself: the file is the artifact, where a
+    markdown source is only ever read through one of its spellings. */
 function pageTiles(path: string, tag: string): Tile[] {
-  const stem = encodeURI(htmlStem(path));
   return [
     { target: encodeURI(path), label: `${tag}page`, sub: 'the uploaded page, opens in a tab', thumb: THUMB_LAND, fmt: 'html' },
-    { target: `${stem}.pdf`, label: `${tag}pdf`, sub: 'print of the page', thumb: THUMB_PORT, fmt: 'pdf', status: { src: path, awaits: 'page.pdf' } },
-    { target: `${stem}.png`, label: `${tag}full shot`, sub: 'the whole page, one image', thumb: THUMB_PORT, fmt: 'png', status: { src: path, awaits: 'page.full.png' } },
-    { target: `${stem}.browser.png`, label: `${tag}browser shot`, sub: 'above the fold, 1280x720', thumb: THUMB_LAND, fmt: 'png', status: { src: path, awaits: 'page.browser.png' } },
-  ];
-}
-
-/** Five per markdown source. The two html targets pin a mode - the same words
-    read as slides or as a document - and both are ready on arrival, because the
-    Worker renders them per request. Only the PDFs wait on a browser. Tile targets
-    under the shipped grammar; none carry `c=`. */
-function mdTiles(path: string, tag: string): Tile[] {
-  const stem = encodeURI(mdStem(path));
-  return [
-    { target: `${stem}.slides.html`, label: `${tag}deck`, sub: 'every slide, one at a time', thumb: THUMB_LAND, fmt: 'html' },
-    { target: `${stem}.doc.html`, label: `${tag}document`, sub: 'the same words, as prose', thumb: THUMB_PORT, fmt: 'html' },
-    { target: `${stem}.slides.pdf`, label: `${tag}deck pdf`, sub: 'for email attachments', thumb: THUMB_LAND, fmt: 'pdf', status: { src: path, awaits: 'slides.pdf' } },
-    { target: `${stem}.doc.pdf`, label: `${tag}document pdf`, sub: 'same words, one page after another', thumb: THUMB_PORT, fmt: 'pdf', status: { src: path, awaits: 'doc.pdf' } },
-    { target: `${stem}.txt`, label: `${tag}source`, sub: 'the markdown itself', thumb: srcThumb('---\nmarp: true\n---\n# the plan') },
+    ...exportTiles(path, tag),
   ];
 }
 
@@ -369,9 +369,10 @@ function tilesFor(meta: Meta): Tile[] {
     // One upload, several files: the stem keys which tile belongs to which.
     const tag = meta.files.length > 1 ? `${fileName(f.path)} · ` : '';
     const encoded = encodeURI(f.path);
+    const stemTag = meta.files.length > 1 ? `${fileName(stemOf(f.path))} · ` : '';
     switch (kindOf(f.path)) {
       case 'md':
-        tiles.push(...mdTiles(f.path, meta.files.length > 1 ? `${fileName(mdStem(f.path))} · ` : ''));
+        tiles.push(...exportTiles(f.path, stemTag));
         break;
       case 'image':
         tiles.push(
@@ -380,7 +381,7 @@ function tilesFor(meta: Meta): Tile[] {
         );
         break;
       case 'html':
-        tiles.push(...pageTiles(f.path, meta.files.length > 1 ? `${fileName(htmlStem(f.path))} · ` : ''));
+        tiles.push(...pageTiles(f.path, stemTag));
         break;
       case 'code':
       case 'other':
@@ -424,38 +425,6 @@ function pressedTtl(meta: Meta): string | null {
   if (meta.expiresAt === null) return meta.idleTtl === null ? 'forever' : null;
   const secs = meta.expiresAt - meta.createdAt;
   return [7, 30, 90].map((d) => `${d}d`).find((d) => secs === Number.parseInt(d, 10) * 86400) ?? null;
-}
-
-/** The locked fs-index: the uploaded files plus each markdown's spellings. */
-function lockedRows(meta: Meta, base: string): Child[] {
-  const row = (target: string, name: string, note: string) => (
-    <tr><td><a href={`${base}${target}`}>{name}</a></td><td>{note}</td></tr>
-  );
-  const rows: Child[] = [];
-  const site = meta.files.some((f) => f.path === 'index.html');
-  for (const f of meta.files) {
-    rows.push(row(encodeURI(f.path), f.path, fmtSize(f.size)));
-    if (!site && kindOf(f.path) === 'md') {
-      const stem = mdStem(f.path);
-      const enc = encodeURI(stem);
-      rows.push(
-        row(`${enc}.pdf`, `${stem}.pdf`, 'pdf'),
-        row(`${enc}.slides.html`, `${stem}.slides.html`, 'deck'),
-        row(`${enc}.doc.html`, `${stem}.doc.html`, 'document'),
-        row(`${enc}.txt`, `${stem}.txt`, 'source'),
-      );
-    }
-    if (!site && kindOf(f.path) === 'html') {
-      const stem = htmlStem(f.path);
-      const enc = encodeURI(stem);
-      rows.push(
-        row(`${enc}.pdf`, `${stem}.pdf`, 'pdf'),
-        row(`${enc}.png`, `${stem}.png`, 'full shot'),
-        row(`${enc}.browser.png`, `${stem}.browser.png`, 'browser shot'),
-      );
-    }
-  }
-  return rows;
 }
 
 export interface AdminView {
@@ -548,10 +517,10 @@ export function adminShell(view: AdminView): string {
         </div>
         <div class="locked-only">
           <div class="panel">
-            <p class="cardlabel">index</p>
-            <table class="index-table">{lockedRows(meta, base)}</table>
-            <p class="note">The admin window for this page has closed. Everything above keeps
-              serving; to change the expiry or delete the share, re-open the admin link:</p>
+            <p class="cardlabel">this page</p>
+            <p class="note">The admin window for this page has closed. Every link you already
+              sent keeps serving; to change the expiry or delete the share, re-open the
+              admin link:</p>
             <code class="cmd">{remint}</code>
           </div>
         </div>

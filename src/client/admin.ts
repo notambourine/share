@@ -5,6 +5,8 @@
 
 import { parseObject, textAt, textsAt, numberAt, recordsAt, numbersAt, isJsonObject } from '../lib/json';
 import type { JsonObject } from '../lib/json';
+import { isRenderedKey } from '../lib/exportPath';
+import type { RenderedKey } from '../lib/exportPath';
 
 let c = new URLSearchParams(location.search).get('c');
 const actions = document.getElementById('actions');
@@ -136,7 +138,7 @@ if (!c || !actions) {
   const requested = new Set<Element>();
 
   interface Source {
-    rendered: string[];
+    rendered: RenderedKey[];
     overflow: number[] | null;
   }
 
@@ -150,7 +152,7 @@ if (!c || !actions) {
       if (path === null) continue;
       const check = row['check'];
       byPath.set(path, {
-        rendered: textsAt(row, 'rendered'),
+        rendered: textsAt(row, 'rendered').filter(isRenderedKey),
         overflow: isJsonObject(check) ? numbersAt(check, 'overflow') : null,
       });
     }
@@ -164,7 +166,7 @@ if (!c || !actions) {
       const s = byPath.get(tile.dataset.src ?? '');
       const st = tile.querySelector('.tstate');
       const key = tile.dataset.await;
-      if (!s || !st || !key) continue;
+      if (!s || !st || !isRenderedKey(key)) continue;
       const ready = s.rendered.includes(key);
       const slides = key.startsWith('slides.');
       if (slides && s.overflow !== null && s.overflow.length) {

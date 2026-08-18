@@ -49,7 +49,7 @@ describe('every shell escapes a hostile filename', () => {
     expect(out).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
   });
 
-  it('escapes it across the admin page, tiles and locked index alike', () => {
+  it('escapes it across the admin page, tiles and file list alike', () => {
     const out = adminShell({
       meta: meta([HOSTILE_PATH, 'deck.md']),
       origin: 'https://share.test',

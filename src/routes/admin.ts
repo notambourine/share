@@ -6,7 +6,8 @@ import { readMeta, readMetaTagged, writeMeta, isExpired } from '../lib/r2';
 import { parseDuration } from '../lib/keys';
 import { parseObject, textAt } from '../lib/json';
 import { jsonResponse, now } from '../lib/http';
-import { CACHE_VERSION } from '../lib/exportPath';
+import type { RenderedKey } from '../lib/exportPath';
+import { derivedPrefix, formatsFor, parseCheckKey, parseDerivedKey, renderedKey } from '../lib/exportPath';
 import { type SlideCheck, decodeSlideCheck } from '../lib/pdf';
 
 /**
@@ -49,9 +50,9 @@ export async function adminConfig(request: Request, env: Env, space: string, has
 
 interface SourceStatus {
   path: string;
-  /** `<mode>.<ext>` pairs whose render has landed, e.g. `slides.pdf`. Binary
+  /** The catalog keys whose render has landed, e.g. `slides.pdf`. Binary
       formats only: the html views render per request and never land anywhere. */
-  rendered: string[];
+  rendered: RenderedKey[];
   check: SlideCheck | null;
 }
 
@@ -77,20 +78,23 @@ export async function adminStatus(request: Request, env: Env, space: string, has
   // HTML sources ride along for the page exports; their check stays null.
   const sources = new Map<string, SourceStatus>();
   for (const f of meta.files) {
-    if (/\.(md|markdown|html?)$/i.test(f.path)) {
-      sources.set(f.path, { path: f.path, rendered: [], check: null });
-    }
+    if (formatsFor(f.path).length) sources.set(f.path, { path: f.path, rendered: [], check: null });
   }
 
-  const prefix = `${space}/${hash}/d/v${CACHE_VERSION}/`;
+  const prefix = derivedPrefix(space, hash);
   const checkKeys: [SourceStatus, string][] = [];
   for (const { key } of (await env.BUCKET.list({ prefix })).objects) {
     const rest = key.slice(prefix.length);
-    const m = /^(.*)\.(check\.json|(?:slides|doc)\.pdf|page\.(?:pdf|(?:browser|full)\.png))$/.exec(rest);
-    const status = m && sources.get(m[1]);
-    if (!status) continue;
-    if (m[2] === 'check.json') checkKeys.push([status, key]);
-    else status.rendered.push(m[2]);
+    const judged = parseCheckKey(rest);
+    if (judged !== null) {
+      const status = sources.get(judged);
+      if (status) checkKeys.push([status, key]);
+      continue;
+    }
+    const parsed = parseDerivedKey(rest);
+    if (!parsed) continue;
+    const status = sources.get(parsed.source);
+    if (status) status.rendered.push(renderedKey(parsed.mode, parsed.ext));
   }
   for (const [status, key] of checkKeys) {
     const obj = await env.BUCKET.get(key);
