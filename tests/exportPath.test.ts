@@ -10,7 +10,6 @@ import {
 describe('parseExportPath', () => {
   it('reads every suffix in the grammar', () => {
     expect(parseExportPath('deck.slides.html')).toEqual({ base: 'deck', format: 'slides-html' });
-    expect(parseExportPath('deck.html')).toEqual({ base: 'deck', format: 'html' });
     expect(parseExportPath('deck.doc.html')).toEqual({ base: 'deck', format: 'doc-html' });
     expect(parseExportPath('deck.pdf')).toEqual({ base: 'deck', format: 'pdf' });
     expect(parseExportPath('deck.slides.pdf')).toEqual({ base: 'deck', format: 'slides-pdf' });
@@ -18,16 +17,14 @@ describe('parseExportPath', () => {
     expect(parseExportPath('deck.txt')).toEqual({ base: 'deck', format: 'txt' });
     expect(parseExportPath('page.png')).toEqual({ base: 'page', format: 'png' });
     expect(parseExportPath('page.full.png')).toEqual({ base: 'page', format: 'full-png' });
-    expect(parseExportPath('page.browser.png')).toEqual({ base: 'page', format: 'browser-png' });
   });
 
-  it('takes the longest suffix, so .slides.html never reads as .html', () => {
+  it('takes the longest suffix, so .slides.pdf never reads as .pdf', () => {
     expect(parseExportPath('a.slides.html')?.format).toBe('slides-html');
     expect(parseExportPath('a.slides.pdf')?.format).toBe('slides-pdf');
     expect(parseExportPath('a.doc.html')?.format).toBe('doc-html');
     expect(parseExportPath('a.doc.pdf')?.format).toBe('doc-pdf');
     expect(parseExportPath('a.full.png')?.format).toBe('full-png');
-    expect(parseExportPath('a.browser.png')?.format).toBe('browser-png');
   });
 
   it('keeps nested paths intact', () => {
@@ -53,6 +50,14 @@ describe('resolveExport', () => {
     expect(resolveExport(files, 'deck.md.pdf')).toBeNull();
   });
 
+  /* The pinned spellings say which mode; a bare `.html` said nothing the
+     source itself did not, and served the same bytes as `.md`. */
+  it('the bare .html alias is gone, so only the pinned spellings resolve', () => {
+    expect(resolveExport(files, 'deck.html')).toBeNull();
+    expect(resolveExport(files, 'deck.slides.html')).toEqual({ source: 'deck.md', format: 'slides-html' });
+    expect(resolveExport(files, 'deck.doc.html')).toEqual({ source: 'deck.md', format: 'doc-html' });
+  });
+
   /* R12 says fail loudly rather than mangle; silently re-rendering over a real
      upload would be the quiet version of the same mistake. */
   it('lets a real uploaded file win its own name', () => {
@@ -73,12 +78,11 @@ describe('resolveExport', () => {
     expect(resolveExport(files, 'shot.png')).toBeNull();
   });
 
-  it('falls back to an .html source, which takes .pdf and the shots only', () => {
+  it('falls back to an .html source, which takes .pdf and the shot only', () => {
     const page = ['page.html', 'shot.png'];
     expect(resolveExport(page, 'page.pdf')).toEqual({ source: 'page.html', format: 'pdf' });
     expect(resolveExport(page, 'page.png')).toEqual({ source: 'page.html', format: 'png' });
     expect(resolveExport(page, 'page.full.png')).toEqual({ source: 'page.html', format: 'full-png' });
-    expect(resolveExport(page, 'page.browser.png')).toEqual({ source: 'page.html', format: 'browser-png' });
     // Markdown's family stays markdown-only.
     expect(resolveExport(page, 'page.txt')).toBeNull();
     expect(resolveExport(page, 'page.slides.pdf')).toBeNull();
@@ -102,13 +106,12 @@ describe('mode and extension', () => {
     expect(explicitMode('doc-pdf')).toBe('doc');
     expect(explicitMode('doc-html')).toBe('doc');
     expect(explicitMode('pdf')).toBeNull();
-    expect(explicitMode('html')).toBeNull();
   });
 
   /* The split that decides whether a request reaches a browser at all: an
      `.html` spelling renders in the Worker, a `.pdf` needs a print engine. */
   it('sorts the html spellings away from the ones that store an artifact', () => {
-    for (const f of ['slides-html', 'html', 'doc-html'] as const) {
+    for (const f of ['slides-html', 'doc-html'] as const) {
       expect(isLiveHtml('deck.md', f)).toBe(true);
     }
     for (const f of ['pdf', 'slides-pdf', 'doc-pdf', 'txt'] as const) {
@@ -117,7 +120,7 @@ describe('mode and extension', () => {
   });
 
   it('an uploaded HTML source never renders live: it is already a page', () => {
-    expect(isLiveHtml('page.html', 'html')).toBe(false);
+    expect(isLiveHtml('page.html', 'doc-html')).toBe(false);
     expect(isLiveHtml('page.htm', 'slides-html')).toBe(false);
   });
 });
@@ -138,10 +141,9 @@ describe('derivedKey', () => {
     expect(derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'doc', 'pdf')).not.toBe(sniffed);
   });
 
-  it('page mode keys the three outputs, bare .png sharing the full shot', () => {
+  it('page mode keys both outputs, bare .png sharing the full shot', () => {
     expect(pageExt('png')).toBe('full.png');
     expect(pageExt('full-png')).toBe('full.png');
-    expect(pageExt('browser-png')).toBe('browser.png');
     expect(pageExt('pdf')).toBe('pdf');
     expect(derivedKey('acme', 'Xk92mQ7bTp01', 'page.html', 'page', 'full.png'))
       .toBe(`acme/Xk92mQ7bTp01/d/v${CACHE_VERSION}/page.html.page.full.png`);
@@ -159,13 +161,13 @@ describe('formatsFor', () => {
 
   it('offers a markdown source its family and nothing else', () => {
     expect(suffixes('deck.md')).toEqual([
-      '.slides.html', '.doc.html', '.slides.pdf', '.doc.pdf', '.txt', '.html', '.pdf',
+      '.slides.html', '.doc.html', '.slides.pdf', '.doc.pdf', '.txt', '.pdf',
     ]);
     expect(suffixes('notes.markdown')).toEqual(suffixes('deck.md'));
   });
 
   it('offers an uploaded page the print and the shots', () => {
-    expect(suffixes('page.html')).toEqual(['.pdf', '.png', '.browser.png', '.full.png']);
+    expect(suffixes('page.html')).toEqual(['.pdf', '.png', '.full.png']);
     expect(suffixes('page.htm')).toEqual(suffixes('page.html'));
   });
 
@@ -178,7 +180,7 @@ describe('formatsFor', () => {
      the sniffing ones answer their URL without a tile of their own. */
   it('tiles the pinned spellings, keeping the sniffing ones quiet', () => {
     expect(tiled('deck.md')).toEqual(['.slides.html', '.doc.html', '.slides.pdf', '.doc.pdf', '.txt']);
-    expect(tiled('page.html')).toEqual(['.pdf', '.png', '.browser.png']);
+    expect(tiled('page.html')).toEqual(['.pdf', '.png']);
   });
 
   it('waits only on what a browser has to draw, and only when the mode is pinned', () => {
@@ -187,21 +189,19 @@ describe('formatsFor', () => {
       ['.slides.html', null], ['.doc.html', null],
       ['.slides.pdf', 'slides.pdf'], ['.doc.pdf', 'doc.pdf'],
       ['.txt', null],
-      ['.html', null],
       // Bare `.pdf` derives, but which key it lands under is not known until
       // the sniff runs, so no tile could poll for it.
       ['.pdf', null],
     ]));
     expect(awaits('page.html')).toEqual(new Map([
-      ['.pdf', 'page.pdf'], ['.png', 'page.full.png'],
-      ['.browser.png', 'page.browser.png'], ['.full.png', 'page.full.png'],
+      ['.pdf', 'page.pdf'], ['.png', 'page.full.png'], ['.full.png', 'page.full.png'],
     ]));
   });
 
   it('marks every spelling that reaches a browser, sniffing ones included', () => {
     const derived = (source: string) => formatsFor(source).filter((s) => s.derived).map((s) => s.suffix);
     expect(derived('deck.md')).toEqual(['.slides.pdf', '.doc.pdf', '.pdf']);
-    expect(derived('page.html')).toEqual(['.pdf', '.png', '.browser.png', '.full.png']);
+    expect(derived('page.html')).toEqual(['.pdf', '.png', '.full.png']);
   });
 
   it('answers the same set resolveExport enforces', () => {
@@ -258,7 +258,7 @@ describe('parseDerivedKey', () => {
 
   it('recognises the vocabulary the tiles and the poll trade in', () => {
     expect(isRenderedKey('slides.pdf')).toBe(true);
-    expect(isRenderedKey('page.browser.png')).toBe(true);
+    expect(isRenderedKey('page.full.png')).toBe(true);
     expect(isRenderedKey('slides.full.png')).toBe(false);
     expect(isRenderedKey(undefined)).toBe(false);
   });

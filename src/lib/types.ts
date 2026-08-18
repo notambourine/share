@@ -2,10 +2,10 @@
  * The Worker's own contracts.
  *
  * `Env` names the slice of each binding this code calls rather than the whole
- * `R2Bucket`, `KVNamespace`, `Fetcher`, and `ExecutionContext`. Those declare a
- * surface nothing here reaches, and a test that had to produce one whole could
- * only ever fake it through a cast. `BindingsFit` below is what keeps the
- * narrow contracts honest against the runtime.
+ * `R2Bucket` and `Fetcher`. Those declare a surface nothing here reaches, and a
+ * test that had to produce one whole could only ever fake it through a cast.
+ * `BindingsFit` below is what keeps the narrow contracts honest against the
+ * runtime.
  */
 
 import type { JsonValue } from './json';
@@ -42,28 +42,15 @@ export type StoredValue = string | Blob | ReadableStream | Uint8Array | null;
 export interface Store {
   get(key: string, options?: { range?: StoredRange }): Promise<StoredObject | null>;
   head(key: string): Promise<StoredHead | null>;
-  /** With `onlyIf`, a failed precondition resolves null and writes nothing. */
   put(key: string, value: StoredValue, options?: {
     httpMetadata?: StoredMetadata;
-    onlyIf?: { etagMatches: string };
   }): Promise<StoredHead | null>;
   list(options: { prefix: string; delimiter?: string; cursor?: string }): Promise<StoredPage>;
   delete(keys: string[]): Promise<void>;
 }
 
-/** Short links only: one string in, one string out, and an expiry KV enforces. */
-export interface LinkStore {
-  get(key: string): Promise<string | null>;
-  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
-}
-
 export interface AssetServer {
   fetch(request: Request): Promise<Response>;
-}
-
-/** The half of `ExecutionContext` a route uses: work that outlives the response. */
-export interface Deferrals {
-  waitUntil(promise: Promise<unknown>): void;
 }
 
 export interface AiMessage {
@@ -88,7 +75,6 @@ export interface AiRunner {
 
 export interface Env {
   BUCKET: Store;
-  LINKS: LinkStore;
   ASSETS: AssetServer;
   /** Workers AI, for `?transform=` on upload (src/transforms/). Optional: a
       deploy that predates the binding still uploads; only transforms 503. */
@@ -101,8 +87,6 @@ export interface Env {
   TOKENS: string;
   /** Secret. JSON map of key id ("v1") -> base64url signing secret. Highest id mints. */
   SIGNING_KEYS: string;
-  /** Secret. JSON map of space -> artifact-life days. Holds client names, so never in the repo. */
-  SPACE_TTLS?: string;
 }
 
 type Fits<From extends To, To> = From;
@@ -111,9 +95,7 @@ type Fits<From extends To, To> = From;
     rather than on the first request that calls the method R2 never had. */
 export type BindingsFit = [
   Fits<R2Bucket, Store>,
-  Fits<KVNamespace, LinkStore>,
   Fits<Fetcher, AssetServer>,
-  Fits<ExecutionContext, Deferrals>,
 ];
 
 export type Tier = 'open' | 'signed';
@@ -134,12 +116,8 @@ export interface Meta {
   uploader: string;
   /** Epoch seconds. */
   createdAt: number;
-  /** Epoch seconds, null = no fixed expiry. */
+  /** Epoch seconds, null = never expires. */
   expiresAt: number | null;
-  /** Seconds since last access, null = fixed expiry only. */
-  idleTtl: number | null;
-  /** Epoch seconds. Rewritten at most once per day, and only when idleTtl is set. */
-  lastAccess: number;
   /** The `?transform=` name the upload's text files went through, when one did. */
   transform?: string;
   files: MetaFile[];

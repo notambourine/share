@@ -4,7 +4,7 @@ const BASE62 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
 /** Top-level path segments the router owns; a space may not take these names. */
 export const RESERVED = new Set([
-  'up', 'sign', 'session', 'z', 'k', 'f', 'd', '_trash',
+  'up', 'sign', 'session', 'k', 'f', 'd', '_trash',
   'llms.txt', 'SKILL.md', 'robots.txt', 'favicon.ico', 'favicon.svg',
   'apple-touch-icon.png', 'apple-touch-icon-precomposed.png',
   'tokens.css', 'shell.css', 'print.css', 'render.js', 'admin.js', 'vendor', 'index.html',

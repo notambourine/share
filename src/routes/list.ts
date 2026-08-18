@@ -45,7 +45,6 @@ export async function listSpace(request: Request, env: Env, space: string): Prom
     uploader: m.uploader,
     createdAt: m.createdAt,
     expiresAt: m.expiresAt,
-    idleTtl: m.idleTtl,
     expired: isExpired(m, t),
     files: m.files.length,
     bytes: m.files.reduce((n, f) => n + f.size, 0),

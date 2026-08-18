@@ -33,7 +33,7 @@ function seededEnv(tier: 'open' | 'signed' = 'open'): TestEnv {
     objects: {
       [`${SPACE}/${HASH}/meta.json`]: JSON.stringify({
         space: SPACE, hash: HASH, tier, uploader: 'tom',
-        createdAt: NOW, expiresAt: null, idleTtl: null, lastAccess: NOW, files: FILES,
+        createdAt: NOW, expiresAt: null, files: FILES,
       }),
       [`${SPACE}/${HASH}/f/status`]: 'uptime',
       [`${SPACE}/${HASH}/f/note.md`]: '# hello\n',

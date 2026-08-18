@@ -430,15 +430,15 @@ function fmtLeft(secs: number): string {
   return `${Math.max(1, Math.ceil(secs / 60))}m`;
 }
 
-function expiryText(meta: Meta, t: number): string {
-  if (meta.expiresAt !== null) return `expires in ${fmtLeft(meta.expiresAt - t)}`;
-  if (meta.idleTtl !== null) return `expires ${fmtLeft(meta.idleTtl)} after last visit`;
-  return 'never expires';
+/** The countdown the admin page prints. Rendered server-side, here and on the
+    config write, so the page carries no second copy of the grammar. */
+export function expiryText(meta: Meta, t: number): string {
+  return meta.expiresAt === null ? 'never expires' : `expires in ${fmtLeft(meta.expiresAt - t)}`;
 }
 
 /** Which chip the stored expiry already is; null presses none. */
 function pressedTtl(meta: Meta): string | null {
-  if (meta.expiresAt === null) return meta.idleTtl === null ? 'forever' : null;
+  if (meta.expiresAt === null) return 'forever';
   const secs = meta.expiresAt - meta.createdAt;
   return [7, 30, 90].map((d) => `${d}d`).find((d) => secs === Number.parseInt(d, 10) * 86400) ?? null;
 }
@@ -450,16 +450,20 @@ export interface AdminView {
       links must travel, so they ride a view token, never this page's `?c=`. */
   kSeg: string;
   now: number;
+  /** Epoch seconds this page's `?c=` dies. The page counts down from it rather
+      than taking the credential apart. */
+  adminExp: number;
 }
 
 /**
  * The admin page: format tiles, TTL chips, delete. Served only behind a live
  * `?c=` (src/routes/serve.ts); the token itself appears nowhere in the markup -
  * public/admin.js reads it from location.search and calls the write routes.
- * The locked block is the client-side degrade when the countdown dies.
+ * The locked block is the client-side degrade when the countdown dies: the
+ * links keep serving, so it says how to re-open rather than restating them.
  */
 export function adminShell(view: AdminView): string {
-  const { meta, origin, kSeg, now: t } = view;
+  const { meta, origin, kSeg, now: t, adminExp } = view;
   const base = `${origin}/${meta.space}/${meta.hash}/${kSeg}`;
   const artifact = `${meta.space}/${meta.hash}`;
   const single = meta.files.length === 1 ? meta.files[0] : null;
@@ -477,7 +481,7 @@ export function adminShell(view: AdminView): string {
       <>
         <span class="pill pill-admin admin-only">admin</span>
         <span class="spacer"></span>
-        <span class="pill admin-only" data-countdown></span>
+        <span class="pill admin-only" data-countdown data-exp={adminExp}></span>
       </>
     ),
     body: (

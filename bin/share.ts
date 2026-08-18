@@ -8,16 +8,14 @@
 
    nt-share install                                     (put nt-share on PATH)
    nt-share put <space> <file|dir ...> [--tier signed] [--ttl <dur>|forever]
-                                       [--ttl-idle <dur>] [--sign-ttl <dur>] [--short]
+                                       [--sign-ttl <dur>]
                                        [--transform agenda|renewal|performance|presentation|deck]
    nt-share put <space> --clip [--name shot.png]        (the image on the clipboard)
-   nt-share sign <space>/<hash> [--ttl 30d] [--short]   (re-sign an older artifact)
-   nt-share short <space>/<hash> [--ttl 30d]
+   nt-share sign <space>/<hash> [--ttl 30d]             (re-sign an older artifact)
    nt-share admin <space>/<hash>                        (re-open the 5-minute admin link)
    nt-share check <space>/<hash> [--json]               (renders landed, and whether a slide clips)
    nt-share ls <space>
    nt-share rm <space>/<hash>
-   nt-share session [--ttl 5m] [--print]  (optional pre-mint, max 1h; --print echoes the token for curl)
 
    $SHARE_TOKEN takes a raw token or an op:// reference and skips the vault
    lookup. $SHARE_TOKEN_REF moves the vault item. $SHARE_URL points at a dev
@@ -37,6 +35,8 @@ import process from 'node:process';
    so reaching into src/ resolves at runtime too. The poster suffix is a
    contract with the Worker; both ends read it from the one declaration. */
 import { posterPath } from '../src/lib/poster.ts';
+import type { JsonObject } from '../src/lib/json.ts';
+import { isJsonObject, numberAt, numbersAt, parseObject, recordsAt, textAt, textsAt } from '../src/lib/json.ts';
 
 const BASE = (process.env.SHARE_URL ?? 'https://share.notambourine.com').replace(/\/$/, '');
 const REF = process.env.SHARE_TOKEN_REF ?? 'op://Employee/share-token/credential';
@@ -58,45 +58,14 @@ function die(msg: string): never {
   process.exit(1);
 }
 
-/* The server's JSON, decoded rather than asserted. A field the CLI prints has
-   to exist before it is printed, or `undefined` reaches a terminal as a link. */
-type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
-
-function fields(body: string): { [key: string]: Json } {
-  const record = decode(body);
-  return record ?? die(`the server did not answer with a JSON object:\n${body.trim()}`);
+/* The server's JSON, decoded rather than asserted, through the same readers the
+   Worker writes it with. A field the CLI prints has to exist before it is
+   printed, or `undefined` reaches a terminal as a link. */
+function fields(body: string): JsonObject {
+  return parseObject(body) ?? die(`the server did not answer with a JSON object:\n${body.trim()}`);
 }
 
-function decode(body: string): { [key: string]: Json } | null {
-  let parsed: Json;
-  try {
-    /* SAFETY: JSON.parse is typed `any`; Json is the grammar it can return,
-       and every read below narrows before use. */
-    parsed = JSON.parse(body) as Json;
-  } catch {
-    return null;
-  }
-  return isRecord(parsed) ? parsed : null;
-}
-
-function isRecord(value: Json): value is { [key: string]: Json } {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isText(value: Json): value is string {
-  return typeof value === 'string';
-}
-
-function isNumber(value: Json): value is number {
-  return typeof value === 'number';
-}
-
-function textAt(record: { [key: string]: Json }, key: string): string | null {
-  const value = record[key];
-  return isText(value) ? value : null;
-}
-
-function required(record: { [key: string]: Json }, key: string): string {
+function required(record: JsonObject, key: string): string {
   return textAt(record, key) ?? die(`the server answered without a ${key}`);
 }
 
@@ -109,18 +78,16 @@ interface SourceStatus {
 }
 
 function decodeStatus(body: string): SourceStatus[] {
-  const sources = fields(body).sources;
-  if (!Array.isArray(sources)) die(`the server answered without sources:\n${body.trim()}`);
-  return sources.filter(isRecord).map((row) => {
-    const check = row.check;
-    const clip = isRecord(check) ? check : null;
-    const slides = clip && isNumber(clip.slides) ? clip.slides : 0;
-    const overflow = clip && Array.isArray(clip.overflow) ? clip.overflow.filter(isNumber) : null;
+  const sources = recordsAt(fields(body), 'sources');
+  if (!sources) die(`the server answered without sources:\n${body.trim()}`);
+  return sources.map((row) => {
+    const check = row['check'];
+    const clip = isJsonObject(check) ? check : null;
     return {
       path: required(row, 'path'),
-      rendered: Array.isArray(row.rendered) ? row.rendered.filter(isText) : [],
-      slides,
-      overflow,
+      rendered: textsAt(row, 'rendered'),
+      slides: clip ? numberAt(clip, 'slides') ?? 0 : 0,
+      overflow: clip ? numbersAt(clip, 'overflow') : null,
     };
   });
 }
@@ -138,17 +105,17 @@ function verdict(s: SourceStatus): string {
 
 /** null rather than a die: a stale cache file is a re-mint, not an error. */
 function decodeSession(body: string): Session | null {
-  const record = decode(body);
+  const record = parseObject(body);
   if (!record) return null;
   const token = textAt(record, 'token');
   const name = textAt(record, 'name');
-  const expiresAt = record.expiresAt;
-  if (token === null || name === null || !isNumber(expiresAt)) return null;
+  const expiresAt = numberAt(record, 'expiresAt');
+  if (token === null || name === null || expiresAt === null) return null;
   return { token, name, expiresAt };
 }
 
 /** A flag that takes no value; anything else here would eat the next argument. */
-const BARE = new Set(['short', 'print', 'clip', 'json']);
+const BARE = new Set(['clip', 'json']);
 
 /** Boolean flags land as "1", so every value is a string. */
 function parseArgs(argv: string[]) {
@@ -203,8 +170,8 @@ async function cachedSession(): Promise<string | null> {
   return session.expiresAt - 30 > Date.now() / 1000 ? session.token : null;
 }
 
-async function mintSession(ttl?: string): Promise<Session> {
-  const answer = await api(`/session${ttl ? `?ttl=${ttl}` : ''}`, { method: 'POST' }, vaultToken());
+async function mintSession(): Promise<Session> {
+  const answer = await api('/session', { method: 'POST' }, vaultToken());
   const session = decodeSession(answer) ?? die(`the server did not answer with a session:\n${answer.trim()}`);
   await mkdir(join(CACHE, '..'), { recursive: true, mode: 0o700 });
   await writeFile(CACHE, `${JSON.stringify(session)}\n`, { mode: 0o600 });
@@ -479,12 +446,6 @@ switch (cmd) {
     }
     break;
   }
-  case 'session': {
-    const json = await mintSession(flags.ttl);
-    if (flags.print) console.log(json.token);
-    console.error(`session for ${json.name}, expires ${new Date(json.expiresAt * 1000).toISOString()}; cached at ${CACHE}`);
-    break;
-  }
   case 'put': {
     const [space, ...paths] = rest;
     if (!space || (paths.length === 0 && !flags.clip)) {
@@ -509,36 +470,29 @@ switch (cmd) {
     if (count === 0) die('nothing to upload');
     const q = new URLSearchParams();
     if (flags.ttl) q.set('ttl', flags.ttl);
-    if (flags['ttl-idle']) q.set('idle', flags['ttl-idle']);
     if (flags.tier) q.set('tier', flags.tier);
     if (flags['sign-ttl']) q.set('sign', flags['sign-ttl']);
-    if (flags.short) q.set('short', '1');
     // The server owns the name list and 400s an unknown one, so no copy here.
     if (flags.transform) q.set('transform', flags.transform);
     const made = fields(await upload(
       `/up/${space}${q.size ? `?${q}` : ''}`, { method: 'POST', body: form },
     ));
     console.log(textAt(made, 'signedUrl') ?? required(made, 'url'));
-    const shortUrl = textAt(made, 'short');
-    if (shortUrl) console.log(shortUrl);
     // stderr, labeled: stdout is the links you hand over, so a pipe never
     // grabs the write credential. `nt-share admin` re-opens it after 5 min.
     const adminUrl = textAt(made, 'adminUrl');
     if (adminUrl) console.error(`admin (5 min): ${adminUrl}`);
     break;
   }
-  case 'sign':
-  case 'short': {
+  case 'sign': {
     const [path] = rest;
-    if (!path) die(`usage: nt-share ${cmd} <space>/<hash>`);
+    if (!path) die('usage: nt-share sign <space>/<hash>');
     const signed = fields(await api('/sign', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ path, ttl: flags.ttl, short: cmd === 'short' || !!flags.short }),
+      body: JSON.stringify({ path, ttl: flags.ttl }),
     }, vaultToken()));
-    console.log(cmd === 'short' ? required(signed, 'short') : required(signed, 'url'));
-    const alsoShort = cmd === 'sign' ? textAt(signed, 'short') : null;
-    if (alsoShort) console.log(alsoShort);
+    console.log(required(signed, 'url'));
     break;
   }
   case 'admin': {
@@ -590,5 +544,5 @@ switch (cmd) {
     break;
   }
   default:
-    die('commands: install, put, sign, short, admin, check, ls, rm, session; see https://share.notambourine.com/llms.txt');
+    die('commands: install, put, sign, admin, check, ls, rm; see https://share.notambourine.com/llms.txt');
 }

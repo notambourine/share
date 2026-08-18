@@ -20,18 +20,17 @@ const DAY = 86400;
 interface SeedOptions {
   tier?: 'open' | 'signed';
   createdAt?: number;
-  idleTtl?: number | null;
   tokens?: string;
   files?: { path: string; size: number; type: string }[];
 }
 
 function seededEnv({
-  tier = 'open', createdAt = NOW, idleTtl = null, tokens,
+  tier = 'open', createdAt = NOW, tokens,
   files = [{ path: 'deck.md', size: 6, type: 'text/markdown' }],
 }: SeedOptions = {}): TestEnv {
   const meta = JSON.stringify({
     space: SPACE, hash: HASH, tier, uploader: 'tom',
-    createdAt, expiresAt: null, idleTtl, lastAccess: NOW,
+    createdAt, expiresAt: null,
     files,
   });
   return testEnv({
@@ -130,30 +129,30 @@ function configReq(c: string | null, body: string): Request {
 }
 
 describe('POST /<space>/<hash>/config', () => {
-  it('writes the ttl, owns expiry outright, and answers a fresh token', async () => {
-    const env = seededEnv({ idleTtl: 7 * DAY });
+  it('writes the ttl and answers a fresh token plus the rendered countdown', async () => {
+    const env = seededEnv();
     // Minted a minute ago: the slide shows as a later exp on the answer. The
     // token is a deterministic HMAC, so same-second bytes would be identical.
     const sent = await mintAdminToken(KEYS, SPACE, HASH, NOW + ADMIN_SECS - 60);
     const res = await adminConfig(configReq(sent, '{"ttl":"30d"}'), env, SPACE, HASH);
     expect(res.status).toBe(200);
-    const body = await res.json<{ c: string; expiresAt: number }>();
+    const body = await res.json<{ c: string; exp: number; expiresAt: number; expiry: string }>();
     expect(body.expiresAt).toBe(NOW + 30 * DAY);
+    // The page prints this rather than re-deriving it from expiresAt.
+    expect(body.expiry).toBe('expires in 30d');
+    expect(body.exp).toBe(EXP);
     expect(Number(body.c.split('.')[1])).toBeGreaterThan(Number(sent.split('.')[1]));
     expect((await verifyAdminToken(KEYS, SPACE, HASH, body.c, NOW)).ok).toBe(true);
-    const meta = storedMeta(env);
-    expect(meta.expiresAt).toBe(NOW + 30 * DAY);
-    expect(meta.idleTtl).toBeNull();
+    expect(storedMeta(env).expiresAt).toBe(NOW + 30 * DAY);
   });
 
   it('forever clears the expiry', async () => {
-    const env = seededEnv({ idleTtl: 7 * DAY });
+    const env = seededEnv();
     const sent = await mintAdminToken(KEYS, SPACE, HASH, EXP);
     const res = await adminConfig(configReq(sent, '{"ttl":"forever"}'), env, SPACE, HASH);
     expect(res.status).toBe(200);
-    const meta = storedMeta(env);
-    expect(meta.expiresAt).toBeNull();
-    expect(meta.idleTtl).toBeNull();
+    expect(storedMeta(env).expiresAt).toBeNull();
+    expect((await res.json<{ expiry: string }>()).expiry).toBe('never expires');
   });
 
   it('a ttl the artifact has outlived counts from the write, not from upload', async () => {
@@ -182,27 +181,6 @@ describe('POST /<space>/<hash>/config', () => {
     const sent = await mintAdminToken(KEYS, SPACE, HASH, EXP);
     expect((await adminConfig(configReq(sent, 'not json'), env, SPACE, HASH)).status).toBe(400);
     expect((await adminConfig(configReq(sent, '{"ttl":"soon"}'), env, SPACE, HASH)).status).toBe(400);
-  });
-
-  it('survives losing the meta write race once', async () => {
-    const env = seededEnv({ idleTtl: 7 * DAY });
-    const sent = await mintAdminToken(KEYS, SPACE, HASH, EXP);
-    const realPut = env.BUCKET.put.bind(env.BUCKET);
-    let raced = false;
-    env.BUCKET.put = async (key, value, options) => {
-      // First conditional attempt: a lastAccess touch sneaks in ahead of it.
-      if (!raced && options?.onlyIf) {
-        raced = true;
-        const touched = { ...storedMeta(env), lastAccess: NOW + 1 };
-        await realPut(key, JSON.stringify(touched), {});
-      }
-      return realPut(key, value, options);
-    };
-    const res = await adminConfig(configReq(sent, '{"ttl":"30d"}'), env, SPACE, HASH);
-    expect(res.status).toBe(200);
-    const meta = storedMeta(env);
-    expect(meta.expiresAt).toBe(NOW + 30 * DAY);
-    expect(meta.lastAccess).toBe(NOW + 1); // the retry re-read, so the touch survived too
   });
 });
 
@@ -326,11 +304,11 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     const html = await (await fetchWorker(env, pageReq(token))).text();
     expect(html).toContain('page.pdf');
     expect(html).toContain('page.png');
-    expect(html).toContain('page.browser.png');
+    expect(html).not.toContain('page.browser.png');
     expect(html).toContain('data-src="page.html" data-await="page.full.png" data-gen="1"');
-    // Three exports generate on click; the page tile itself awaits nothing.
-    expect(html.match(/data-gen/g)).toHaveLength(3);
-    expect(html.match(/data-await/g)).toHaveLength(3);
+    // Two exports generate on click; the page tile itself awaits nothing.
+    expect(html.match(/data-gen/g)).toHaveLength(2);
+    expect(html.match(/data-await/g)).toHaveLength(2);
   });
 
   it('a folder with an index.html reads as one site tile', async () => {

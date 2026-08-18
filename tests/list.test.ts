@@ -23,7 +23,7 @@ interface Row {
 function metaFor(hash: string, createdAt: number, expiresAt: number | null): string {
   return JSON.stringify({
     space: SPACE, hash, tier: 'open', uploader: 'tom',
-    createdAt, expiresAt, idleTtl: null, lastAccess: createdAt,
+    createdAt, expiresAt,
     files: [{ path: 'note.md', size: 6, type: 'text/markdown' }],
   });
 }

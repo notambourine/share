@@ -1,7 +1,6 @@
-import type { Env, Meta } from './types';
+import type { Meta } from './types';
 import type { SigningKeys } from './sign';
 import { mintToken } from './sign';
-import { genSlug } from './keys';
 
 /** A lone file links straight at itself rather than at a one-row index. */
 export function fileSuffix(meta: Meta): string {
@@ -17,25 +16,11 @@ export interface ArtifactLink {
   url: string;
   /** Epoch seconds; 0 = no expiry. */
   exp: number;
-  short?: string;
 }
 
-/** `short` parks a `/z/<id>` redirect that expires with the link it wraps. */
 export async function mintArtifactLink(
-  env: Env, keys: SigningKeys, origin: string, meta: Meta,
-  exp: number, t: number, short = false,
+  keys: SigningKeys, origin: string, meta: Meta, exp: number,
 ): Promise<ArtifactLink> {
   const token = await mintToken(keys, `${meta.space}/${meta.hash}`, exp);
-  const url = `${origin}/${meta.space}/${meta.hash}/k/${token}/${fileSuffix(meta)}`;
-  const out: ArtifactLink = { url, exp };
-  if (short) {
-    const id = genSlug(8);
-    await env.LINKS.put(
-      `z/${id}`,
-      JSON.stringify({ target: url }),
-      exp === 0 ? {} : { expirationTtl: Math.max(60, exp - t) },
-    );
-    out.short = `${origin}/z/${id}`;
-  }
-  return out;
+  return { url: `${origin}/${meta.space}/${meta.hash}/k/${token}/${fileSuffix(meta)}`, exp };
 }

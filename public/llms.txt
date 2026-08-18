@@ -50,9 +50,7 @@ Multiple `-F f=@...` fields keep their relative paths, so a folder with an
 Query parameters:
   tier=open|signed   default open; signed requires a minted /k/ token to view
   ttl=<dur>|forever  fixed artifact expiry, default 90d (e.g. 7d, 12h, 4w)
-  idle=<dur>         expire this long after last access instead of a fixed date
   sign=<dur>|forever signed tier only: link life, default 30d
-  short              signed tier only: also mint a /z/<id> shortlink
   transform=<name>   reformat each .md/.txt through Workers AI before storing:
                      agenda, renewal, performance, presentation, or deck. The
                      server owns the format, so send raw notes, never a
@@ -61,8 +59,8 @@ Query parameters:
                      model call failed and nothing stored: retry without it.
 
 A signed-tier upload returns the signed link, not the bare one, because the
-bare one 401s. With `Accept: application/json` it comes back as signedUrl,
-signedExp, and short, alongside url and hash. The JSON answer also carries
+bare one 401s. With `Accept: application/json` it comes back as signedUrl and
+signedExp, alongside url and hash. The JSON answer also carries
 adminUrl and adminExp: the artifact's admin link (see Admin link), live for
 5 minutes, for the uploader only - never a link to hand over. The plain-text
 answer stays the one hand-over URL.
@@ -71,11 +69,10 @@ answer stays the one hand-over URL.
 
     curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
       -H "Content-Type: application/json" \
-      -d '{"path":"<space>/<hash>","ttl":"30d","short":true}' \
+      -d '{"path":"<space>/<hash>","ttl":"30d"}' \
       https://share.notambourine.com/sign
 
-Returns {url, exp, short?}. ttl defaults to 30d; "forever" never expires.
-short:true also mints a /z/<id> shortlink that 302s to the signed URL.
+Returns {url, exp}. ttl defaults to 30d; "forever" never expires.
 
 ## Admin link
 
@@ -91,10 +88,10 @@ over. It authorizes two writes:
     POST /<space>/<hash>/config?c=<token>    {"ttl":"30d"} or {"ttl":"forever"}
     DELETE /<space>/<hash>/?c=<token>        same soft delete as Revoke below
 
-The config write answers {c, expiresAt}: a fresh 5-minute token (each edit
-restarts the clock; adopt the new c) and the expiry it committed. The ttl
-counts from upload and takes over expiry entirely, clearing any idle rule; a
-ttl the artifact has already outlived counts from the write instead.
+The config write answers {c, exp, expiresAt, expiry}: a fresh 5-minute token
+with the epoch it dies (each edit restarts the clock; adopt the new c) plus the
+expiry it committed, rendered. The ttl counts from upload; a ttl the artifact
+has already outlived counts from the write instead.
 
 Opened in a browser, the url serves an admin page: format links to hand over
 (they carry no c=), the expiry chips, and delete. An invalid or expired c=
@@ -106,8 +103,8 @@ serves the plain view, never a 401.
       https://share.notambourine.com/<space>/
 
 JSON array, newest first: hash, url, tier, uploader, createdAt, expiresAt,
-idleTtl, expired, files (count), bytes. Times are epoch seconds; expiresAt
-null means no fixed expiry. Without the Bearer header this path returns 404.
+expired, files (count), bytes. Times are epoch seconds; expiresAt null means
+never expires. Without the Bearer header this path returns 404.
 
 ## Revoke
 
@@ -137,14 +134,13 @@ over the export.
 
     deck.md              branded page, deck or document decided from the content
     deck.txt             the source, text/plain, always
-    deck.html            the same page, at a URL that carries an extension
     deck.slides.html     branded page, always a deck
     deck.doc.html        branded page, always a document
     deck.pdf             PDF, deck or document decided from the content
     deck.slides.pdf      PDF, always a deck
     deck.doc.pdf         PDF, always a document
 
-Bare .md, .pdf, and .html read the content to choose: `marp: true` front matter
+Bare .md and .pdf read the content to choose: `marp: true` front matter
 or `---` slide separators mean deck, anything else means document. Name
 .slides.* or .doc.* when you want to decide instead of guessing. When one
 upload holds both deck.md and deck.markdown, the .md spelling wins the base
@@ -159,7 +155,6 @@ An uploaded HTML page exports too: uploaded `page.html`, ask for
     page.pdf             PDF of the page, plain A4
     page.png             screenshot, the whole page at 1280 wide
     page.full.png        the same object, spelled out
-    page.browser.png     screenshot, above the fold, 1280x720
 
 PNG is HTML-only; markdown keeps its own family above. When one upload holds
 both deck.md and deck.html, markdown wins the base and deck.png is a 404.

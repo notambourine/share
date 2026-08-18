@@ -1,7 +1,7 @@
-import type { Deferrals, Env } from '../lib/types';
+import type { Env } from '../lib/types';
 import { DEFAULT_LINK_DAYS } from '../lib/types';
 import type { ParsedRoute } from '../lib/route';
-import { payloadKey, readPayload, readMetaTagged, writeMeta, isExpired } from '../lib/r2';
+import { payloadKey, readPayload, readMeta, isExpired } from '../lib/r2';
 import { mintToken, parseSigningKeys, verifyToken } from '../lib/sign';
 import { verifyAdminToken } from '../lib/admin';
 import { viewModeFor } from '../lib/negotiate';
@@ -11,8 +11,6 @@ import { rawBytes } from '../lib/bytes';
 import { fileShell, dirShell, errorShell, adminShell, type ShellCommon } from '../render/shell';
 import { renderCode, renderSource } from '../render/markdown';
 import { htmlResponse, now } from '../lib/http';
-
-const DAY = 86400;
 
 /** Past this a shell would carry more bytes than a download costs, and
     highlighting them would spend real CPU on a file nobody reads in a browser.
@@ -47,14 +45,12 @@ async function codeView(
 export async function serve(
   request: Request,
   env: Env,
-  ctx: Deferrals,
   route: ParsedRoute,
 ): Promise<Response> {
   const { space, hash, token, rest } = route;
-  const tagged = await readMetaTagged(env, space, hash);
+  const meta = await readMeta(env, space, hash);
   const t = now();
-  if (!tagged || isExpired(tagged.meta, t)) return htmlResponse(errorShell(404), 404);
-  const { meta, etag } = tagged;
+  if (!meta || isExpired(meta, t)) return htmlResponse(errorShell(404), 404);
 
   const url = new URL(request.url);
 
@@ -63,15 +59,16 @@ export async function serve(
      view, never a 401 of its own. Root only - a file path ignores c=. */
   if (rest === '') {
     const c = url.searchParams.get('c');
-    const keys = c && parseSigningKeys(env);
-    if (c && keys && (await verifyAdminToken(keys, space, hash, c, t)).ok) {
+    const keys = c ? parseSigningKeys(env) : null;
+    const v = c && keys ? await verifyAdminToken(keys, space, hash, c, t) : null;
+    if (v?.ok && keys) {
       /* The page's links must travel, so on the signed tier they ride a fresh
          view token at the /sign default life - the admin holder is the
          uploader, and handing out links is the page's job. */
       const kSeg = meta.tier === 'signed'
         ? `k/${await mintToken(keys, `${space}/${hash}`, t + DEFAULT_LINK_DAYS * 86400)}/`
         : '';
-      return htmlResponse(adminShell({ meta, origin: route.origin, kSeg, now: t }));
+      return htmlResponse(adminShell({ meta, origin: route.origin, kSeg, now: t, adminExp: v.exp }));
     }
   }
 
@@ -81,13 +78,6 @@ export async function serve(
     if (!keys) return htmlResponse(errorShell(401), 401);
     const v = await verifyToken(keys, `${space}/${hash}`, token, t);
     if (!v.ok) return htmlResponse(errorShell(401), 401);
-  }
-
-  // Idle-TTL uploads pay the bookkeeping: at most one meta rewrite per day.
-  // Conditional on the etag read above, so it can never clobber an admin TTL
-  // edit that landed in between; losing a day's touch to that race is nothing.
-  if (meta.idleTtl !== null && t - meta.lastAccess > DAY) {
-    ctx.waitUntil(writeMeta(env, { ...meta, lastAccess: t }, etag));
   }
 
   let filePath = rest;

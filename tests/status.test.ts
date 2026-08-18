@@ -21,7 +21,7 @@ interface StatusBody {
 function seededEnv(extra: Record<string, string> = {}, files?: { path: string; size: number; type: string }[]): TestEnv {
   const meta = JSON.stringify({
     space: SPACE, hash: HASH, tier: 'open', uploader: 'tom',
-    createdAt: NOW, expiresAt: null, idleTtl: null, lastAccess: NOW,
+    createdAt: NOW, expiresAt: null,
     files: files ?? [
       { path: 'deck.md', size: 6, type: 'text/markdown' },
       { path: 'notes.md', size: 6, type: 'text/markdown' },

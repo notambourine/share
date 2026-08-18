@@ -37,19 +37,14 @@ async function send(url: string, init?: RequestInit): Promise<JsonObject | null>
   return parseObject(await r.text());
 }
 
-function expOf(token: string): number {
-  /* exp rides inside the token (v<n>.<exp>.<sig>). */
-  return Number.parseInt(token.split('.')[1] ?? '', 10) || 0;
-}
-
 if (!c || !actions) {
   lock();
 } else {
-  const token = c;
-  /* Countdown: zero degrades to the locked fs-index; the server enforces the
-     same clock. */
+  /* Countdown: zero degrades to the locked panel; the server enforces the same
+     clock. The exp is handed over as data rather than read out of the token -
+     this file never takes a credential apart. */
   const badge = document.querySelector('[data-countdown]');
-  let exp = expOf(token);
+  let exp = badge instanceof HTMLElement ? Number(badge.dataset.exp) || 0 : 0;
 
   function tick(): void {
     const left = Math.max(0, exp - Math.floor(Date.now() / 1000));
@@ -61,11 +56,12 @@ if (!c || !actions) {
   tick();
   setInterval(tick, 1000);
 
-  /* Sliding window: each config write answers a fresh token; adopt it so the
-     address bar, the next write, and the countdown all agree. */
-  function adopt(fresh: string): void {
+  /* Sliding window: each config write answers a fresh token and the epoch it
+     dies; adopt both so the address bar, the next write, and the countdown all
+     agree. */
+  function adopt(fresh: string, freshExp: number): void {
     c = fresh;
-    exp = expOf(fresh);
+    exp = freshExp;
     history.replaceState(null, '', `${location.pathname}?c=${fresh}`);
     tick();
   }
@@ -99,14 +95,6 @@ if (!c || !actions) {
     });
   }
 
-  function expText(at: number | null): string {
-    if (at === null) return 'never expires';
-    const left = at - Math.floor(Date.now() / 1000);
-    if (left >= 86400) return `expires in ${Math.ceil(left / 86400)}d`;
-    if (left >= 3600) return `expires in ${Math.ceil(left / 3600)}h`;
-    return `expires in ${Math.max(1, Math.ceil(left / 60))}m`;
-  }
-
   for (const chip of document.querySelectorAll('[data-ttl]')) {
     chip.addEventListener('click', () => {
       if (!(chip instanceof HTMLElement)) return;
@@ -116,12 +104,13 @@ if (!c || !actions) {
       }).then((out) => {
         if (!out) return;
         const fresh = textAt(out, 'c');
-        if (fresh) adopt(fresh);
+        if (fresh) adopt(fresh, numberAt(out, 'exp') ?? 0);
         for (const o of document.querySelectorAll('[data-ttl]')) {
           o.setAttribute('aria-pressed', String(o === chip));
         }
         const el = document.querySelector('[data-exp]');
-        if (el) el.textContent = expText(numberAt(out, 'expiresAt'));
+        const expiry = textAt(out, 'expiry');
+        if (el && expiry) el.textContent = expiry;
       });
     });
   }

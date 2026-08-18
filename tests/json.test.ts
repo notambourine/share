@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Serializable } from '../src/lib/json';
-import { decodeNumberMap, decodeTextMap, parseObject } from '../src/lib/json';
+import { decodeTextMap, parseObject } from '../src/lib/json';
 import { decodeMeta } from '../src/lib/r2';
 
 const META = {
   space: 'acme', hash: 'Xk92mQ7bTp01', tier: 'open', uploader: 'tom',
-  createdAt: 100, expiresAt: null, idleTtl: null, lastAccess: 100,
+  createdAt: 100, expiresAt: null,
   files: [{ path: 'deck.md', size: 8, type: 'text/markdown; charset=utf-8' }],
 };
 
@@ -32,15 +32,6 @@ describe('decodeTextMap', () => {
   });
 });
 
-describe('decodeNumberMap', () => {
-  /* SPACE_TTLS holds retention per space, so a typo in one entry must leave
-     every other space on the number its owner set. */
-  it('drops only the entry it cannot read', () => {
-    expect(decodeNumberMap(json({ acme: 30, other: '7d' }))).toEqual({ acme: 30 });
-    expect(decodeNumberMap('nonsense')).toEqual({});
-  });
-});
-
 describe('decodeMeta', () => {
   it('reads a record this Worker wrote', () => {
     expect(decodeMeta(json(META))).toEqual(META);
@@ -61,11 +52,9 @@ describe('decodeMeta', () => {
     expect(decodeMeta(json({ ...META, files: 'deck.md' }))).toBeNull();
   });
 
-  /* Both are nullable in the record, and null is the answer that means "no
-     fixed expiry". Reading it as a missing field would trash live uploads. */
+  /* null is the answer that means "never expires". Reading it as a missing
+     field would trash live uploads. */
   it('keeps a null expiry as a null expiry', () => {
-    const forever = decodeMeta(json({ ...META, expiresAt: null, idleTtl: null }));
-    expect(forever?.expiresAt).toBeNull();
-    expect(forever?.idleTtl).toBeNull();
+    expect(decodeMeta(json({ ...META, expiresAt: null }))?.expiresAt).toBeNull();
   });
 });

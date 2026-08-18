@@ -8,7 +8,6 @@ import { parseSigningKeys } from '../lib/sign';
 import { mintArtifactLink, publicUrl } from '../lib/link';
 import { mintAdminLink } from '../lib/admin';
 import { payloadKey, writeMeta } from '../lib/r2';
-import { decodeNumberMap } from '../lib/json';
 import { jsonResponse, textResponse, wantsJson, now } from '../lib/http';
 import { MAX_TRANSFORM_BYTES, TRANSFORMS, runTransform, transformable } from '../transforms';
 
@@ -17,11 +16,6 @@ const MAX_FILES = 200;
 interface UploadEntry {
   path: string;
   blob: File;
-}
-
-function artifactDays(env: Env, space: string): number {
-  const days = decodeNumberMap(env.SPACE_TTLS ?? '{}')[space];
-  return days !== undefined && days > 0 ? days : DEFAULT_ARTIFACT_DAYS;
 }
 
 export async function upload(
@@ -57,7 +51,6 @@ export async function upload(
      its admin link. */
   let linkExp = 0;
   const keys: SigningKeys | null = parseSigningKeys(env);
-  const short = url.searchParams.has('short');
   if (tier === 'signed') {
     const signParam = url.searchParams.get('sign');
     const secs = signParam ? parseDuration(signParam) : DEFAULT_LINK_DAYS * 86400;
@@ -68,19 +61,13 @@ export async function upload(
   }
 
   let expiresAt: number | null;
-  let idleTtl: number | null = null;
-  const idleParam = url.searchParams.get('idle');
   const ttlParam = url.searchParams.get('ttl');
-  if (idleParam) {
-    idleTtl = parseDuration(idleParam);
-    if (!idleTtl) return textResponse('bad idle duration\n', 400);
-    expiresAt = null;
-  } else if (ttlParam) {
+  if (ttlParam) {
     const secs = parseDuration(ttlParam);
     if (secs === null) return textResponse('bad ttl\n', 400);
     expiresAt = secs === 0 ? null : t + secs;
   } else {
-    expiresAt = t + artifactDays(env, space) * 86400;
+    expiresAt = t + DEFAULT_ARTIFACT_DAYS * 86400;
   }
 
   let form: FormData;
@@ -155,7 +142,7 @@ export async function upload(
 
   const meta: Meta = {
     space, hash, tier, uploader,
-    createdAt: t, expiresAt, idleTtl, lastAccess: t,
+    createdAt: t, expiresAt,
     ...(transform !== null && { transform }),
     files,
   };
@@ -166,7 +153,7 @@ export async function upload(
      the browser budget and a brand edit needs no backfill. */
   const link = publicUrl(url.origin, meta);
   const signed = tier === 'signed' && keys
-    ? await mintArtifactLink(env, keys, url.origin, meta, linkExp, t, short) : null;
+    ? await mintArtifactLink(keys, url.origin, meta, linkExp) : null;
   // The sender's second link: TTL chips and delete, live 5 minutes from now.
   const admin = keys && await mintAdminLink(keys, url.origin, space, hash, t);
 
@@ -174,7 +161,7 @@ export async function upload(
     return jsonResponse({
       url: link, hash, tier, expiresAt, files: files.map((f) => f.path),
       ...(transform !== null && { transform }),
-      ...(signed && { signedUrl: signed.url, signedExp: signed.exp, short: signed.short }),
+      ...(signed && { signedUrl: signed.url, signedExp: signed.exp }),
       ...(admin && { adminUrl: admin.url, adminExp: admin.exp }),
     }, 201);
   }

@@ -10,7 +10,7 @@ const DECK = '# One\n\ntext\n\n---\n\n# Two\n';
 function metaFor(files: MetaFile[]): string {
   const meta: Meta = {
     space: SPACE, hash: HASH, tier: 'open', uploader: 'test',
-    createdAt: 0, expiresAt: null, idleTtl: null, lastAccess: 0, files,
+    createdAt: 0, expiresAt: null, files,
   };
   return JSON.stringify(meta);
 }
@@ -44,7 +44,7 @@ describe('page exports (uploaded HTML)', () => {
 
   it('a cold .png or .pdf answers 202, never HTML at 200', async () => {
     const env = pageWorld();
-    for (const path of ['page.png', 'page.pdf', 'page.browser.png']) {
+    for (const path of ['page.png', 'page.pdf']) {
       const res = await ask(env, path);
       expect(res.status).toBe(202);
       expect(res.headers.get('retry-after')).toBe('5');
@@ -157,11 +157,6 @@ describe('format suffixes', () => {
     expect(html).not.toContain('data-marpit-svg');
   });
 
-  it('a bare .html sniffs the mode, the way a bare .pdf does', async () => {
-    const html = await (await ask(world(), 'deck.html')).text();
-    expect(html).toContain('data-kind="slides"');
-  });
-
   it('.txt is the source bytes as text/plain, always', async () => {
     const env = world();
     const res = await ask(env, 'deck.txt');
@@ -180,13 +175,18 @@ describe('format suffixes', () => {
     expect(res.headers.get('content-type')).not.toContain('text/html');
   });
 
-  /* For .html a live shell is still a page a person can read. */
-  it('a cold .html degrades to the live shell', async () => {
+  /* An `.html` spelling is a live render, so it is a page a person can read
+     however cold the PDF cache is. */
+  it('a cold .slides.html still serves the live shell', async () => {
     const env = world();
-    const res = await ask(env, 'deck.html');
+    const res = await ask(env, 'deck.slides.html');
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(await res.text()).toContain('data-kind="slides"');
+  });
+
+  it('the bare .html alias is gone: .md is the one unpinned spelling', async () => {
+    expect((await ask(world(), 'deck.html')).status).toBe(404);
   });
 
   it('a real uploaded file wins its own name', async () => {
