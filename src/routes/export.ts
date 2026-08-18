@@ -22,6 +22,7 @@ import {
 import { render, renderPage, type Artifacts, type PageArtifacts } from '../lib/pdf';
 import { printHtml, pdfOptionsFor } from '../render/export';
 import { rawBytes } from '../lib/bytes';
+import { payloadKey, readPayload } from '../lib/r2';
 import { errorShell } from '../render/shell';
 import { htmlResponse, ROBOTS } from '../lib/http';
 
@@ -34,10 +35,6 @@ export interface ExportTarget {
   /** The requested URL, so the `/k/` segment and the directory ride along. */
   url: URL;
   size: number;
-}
-
-function readSource(env: Env, space: string, hash: string, source: string): Promise<string | null> {
-  return env.BUCKET.get(`${space}/${hash}/f/${source}`).then((o) => (o ? o.text() : null));
 }
 
 function baseName(source: string): string {
@@ -153,14 +150,14 @@ export async function exportArtifact(
   /* `.txt` is the source's own bytes as text/plain, always: it renders
      nothing and survives being pasted where a query string would not. */
   if (format === 'txt') {
-    return rawBytes(request, env, `${space}/${hash}/f/${source}`, downloadName(source, 'txt'), false);
+    return rawBytes(request, env, payloadKey(space, hash, source), downloadName(source, 'txt'), false);
   }
 
   let mode = explicitMode(format);
   let markdown: string | null = null;
 
   if (!mode) {
-    markdown = await readSource(env, space, hash, source);
+    markdown = await readPayload(env, space, hash, source);
     if (markdown === null) return htmlResponse(errorShell(404), 404);
     mode = sniffDeck(markdown) ? 'slides' : 'doc';
   }
@@ -169,7 +166,7 @@ export async function exportArtifact(
   const name = downloadName(source, 'pdf');
   if (await env.BUCKET.head(key)) return rawBytes(request, env, key, name, false);
 
-  if (markdown === null) markdown = await readSource(env, space, hash, source);
+  if (markdown === null) markdown = await readPayload(env, space, hash, source);
   if (markdown === null) return htmlResponse(errorShell(404), 404);
 
   const out = await produce(env, space, hash, source, mode, markdown, url);

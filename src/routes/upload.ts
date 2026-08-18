@@ -7,7 +7,7 @@ import type { SigningKeys } from '../lib/sign';
 import { parseSigningKeys } from '../lib/sign';
 import { mintArtifactLink, publicUrl } from '../lib/link';
 import { mintAdminLink } from '../lib/admin';
-import { writeMeta } from '../lib/r2';
+import { payloadKey, writeMeta } from '../lib/r2';
 import { decodeNumberMap } from '../lib/json';
 import { jsonResponse, textResponse, wantsJson, now } from '../lib/http';
 import { MAX_TRANSFORM_BYTES, TRANSFORMS, runTransform, transformable } from '../transforms';
@@ -141,7 +141,7 @@ export async function upload(
   }
 
   for (const { path, blob } of entries) {
-    await env.BUCKET.put(`${space}/${hash}/f/${path}`, blob, {
+    await env.BUCKET.put(payloadKey(space, hash, path), blob, {
       httpMetadata: { contentType: contentTypeFor(path) },
     });
   }

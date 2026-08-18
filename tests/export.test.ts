@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Env, Meta, MetaFile } from '../src/lib/types';
-import { serve } from '../src/routes/serve';
 import { derivedKey } from '../src/lib/exportPath';
-import { DEFERRED, testEnv } from './bindings';
+import { fetchWorker, testEnv } from './bindings';
 
 const SPACE = 'acme';
 const HASH = 'Xk92mQ7bTp01';
@@ -34,8 +33,9 @@ function get(path: string, accept = BROWSER): Request {
   return new Request(`https://share.test/${SPACE}/${HASH}/${path}`, { headers: { accept } });
 }
 
-const ask = (env: Env, path: string, accept?: string) =>
-  serve(get(path, accept), env, DEFERRED, SPACE, HASH, null, path);
+/* Through the dispatcher, so the path the router parses and the path the
+   assertions name are the same string travelling one way. */
+const ask = (env: Env, path: string, accept?: string) => fetchWorker(env, get(path, accept));
 
 describe('page exports (uploaded HTML)', () => {
   const PAGE: MetaFile = { path: 'page.html', size: 9, type: 'text/html; charset=utf-8' };

@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Env } from '../src/lib/types';
 import { upload } from '../src/routes/upload';
-import { serve } from '../src/routes/serve';
 import { posterParent, posterPath } from '../src/lib/poster';
 import { sha256hex } from '../src/lib/auth';
 import type { TestEnv } from './bindings';
-import { DEFERRED, testEnv } from './bindings';
+import { fetchWorker, testEnv } from './bindings';
 
 const SPACE = 'acme';
 const AUTH = 'Bearer raw-token';
@@ -28,11 +27,11 @@ async function putFiles(env: Env, names: string[]) {
   return res.json<{ hash: string; files: string[] }>();
 }
 
-const get = (env: Env, hash: string, rest: string, ua: string) => serve(
+const get = (env: Env, hash: string, rest: string, ua: string) => fetchWorker(
+  env,
   new Request(`https://share.test/${SPACE}/${hash}/${rest}`, {
     headers: { accept: '*/*', 'user-agent': ua },
   }),
-  env, DEFERRED, SPACE, hash, null, rest,
 );
 
 describe('poster naming', () => {

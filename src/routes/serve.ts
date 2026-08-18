@@ -1,6 +1,7 @@
 import type { Deferrals, Env } from '../lib/types';
 import { DEFAULT_LINK_DAYS } from '../lib/types';
-import { readMetaTagged, writeMeta, isExpired } from '../lib/r2';
+import type { ParsedRoute } from '../lib/route';
+import { payloadKey, readPayload, readMetaTagged, writeMeta, isExpired } from '../lib/r2';
 import { mintToken, parseSigningKeys, verifyToken } from '../lib/sign';
 import { verifyAdminToken } from '../lib/admin';
 import { viewModeFor } from '../lib/negotiate';
@@ -19,10 +20,6 @@ const DAY = 86400;
     `?raw` still hands over every byte. */
 const MAX_INLINE_BYTES = 1024 * 1024;
 
-function sourceText(env: Env, space: string, hash: string, path: string): Promise<string | null> {
-  return env.BUCKET.get(`${space}/${hash}/f/${path}`).then((o) => (o ? o.text() : null));
-}
-
 /**
  * A markdown source, rendered here rather than in the reader's browser. `mode`
  * null means the content decides, which is the bare `.md` URL; the `.html`
@@ -31,7 +28,7 @@ function sourceText(env: Env, space: string, hash: string, path: string): Promis
 async function markdownView(
   env: Env, space: string, hash: string, mode: 'slides' | 'doc' | null, opts: ShellOpts,
 ): Promise<Response> {
-  const text = await sourceText(env, space, hash, opts.path);
+  const text = await readPayload(env, space, hash, opts.path);
   if (text === null) return htmlResponse(errorShell(404), 404);
   if ((mode ?? (sniffDeck(text) ? 'slides' : 'doc')) === 'doc') {
     return htmlResponse(fileShell('md', { ...opts, content: renderMarkdown(text) }));
@@ -43,7 +40,7 @@ async function markdownView(
 async function codeView(
   env: Env, space: string, hash: string, opts: ShellOpts,
 ): Promise<Response> {
-  const text = await sourceText(env, space, hash, opts.path);
+  const text = await readPayload(env, space, hash, opts.path);
   if (text === null) return htmlResponse(errorShell(404), 404);
   return htmlResponse(fileShell('code', { ...opts, content: renderCode(text, opts.path) }));
 }
@@ -52,11 +49,9 @@ export async function serve(
   request: Request,
   env: Env,
   ctx: Deferrals,
-  space: string,
-  hash: string,
-  token: string | null,
-  rest: string,
+  route: ParsedRoute,
 ): Promise<Response> {
+  const { space, hash, token, rest } = route;
   const tagged = await readMetaTagged(env, space, hash);
   const t = now();
   if (!tagged || isExpired(tagged.meta, t)) return htmlResponse(errorShell(404), 404);
@@ -77,7 +72,7 @@ export async function serve(
       const kSeg = meta.tier === 'signed'
         ? `k/${await mintToken(keys, `${space}/${hash}`, t + DEFAULT_LINK_DAYS * 86400)}/`
         : '';
-      return htmlResponse(adminShell({ meta, origin: url.origin, kSeg, now: t }));
+      return htmlResponse(adminShell({ meta, origin: route.origin, kSeg, now: t }));
     }
   }
 
@@ -110,7 +105,7 @@ export async function serve(
     /* A poster is not a row of its own, so it resolves off the parent that
        owns it - and always as bytes, because og:image is what asks. */
     if (meta.files.some((f) => f.poster === filePath)) {
-      return rawBytes(request, env, `${space}/${hash}/f/${filePath}`, filePath, false);
+      return rawBytes(request, env, payloadKey(space, hash, filePath), filePath, false);
     }
     /* Exact match first, then the format suffixes, so a file uploaded as
        `notes.pdf` serves its own bytes instead of re-rendering `notes`. */
@@ -121,12 +116,11 @@ export async function serve(
     /* An `.html` spelling is a mode override, not an artifact: it renders here
        and stores nothing, so only `.pdf`, `.png`, and `.txt` reach the export. */
     if (isLiveHtml(wanted.source, wanted.format)) {
-      const dir = url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1);
       return markdownView(env, space, hash, explicitMode(wanted.format), {
         path: wanted.source,
-        rawHref: `${url.origin}${dir}${encodeURI(wanted.source)}?raw`,
+        rawHref: `${route.dir}${encodeURI(wanted.source)}?raw`,
         size: src.size,
-        pageHref: `${url.origin}${url.pathname}`,
+        pageHref: route.page,
       });
     }
     return exportArtifact(request, env, {
@@ -137,17 +131,12 @@ export async function serve(
   const mode = viewModeFor(
     filePath, request.headers.get('accept'), url.searchParams, request.headers.get('user-agent'),
   );
-  const rawHref = `${url.origin}${url.pathname}${url.pathname.endsWith('/') ? 'index.html' : ''}?raw`;
-  /* Built from the segments rather than sliced off the pathname: the poster is
-     a sibling of the file, not of the URL, and a request under a subdirectory
-     would otherwise hang it off the wrong base. */
-  const root = `${url.origin}/${space}/${hash}/${token ? `k/${token}/` : ''}`;
   const opts = {
     path: filePath,
-    rawHref,
+    rawHref: `${route.page}${route.page.endsWith('/') ? 'index.html' : ''}?raw`,
     size: file.size,
-    pageHref: `${url.origin}${url.pathname}`,
-    ...(file.poster && { posterHref: `${root}${encodeURI(file.poster)}?raw` }),
+    pageHref: route.page,
+    ...(file.poster && { posterHref: `${route.root}${encodeURI(file.poster)}?raw` }),
   };
 
   switch (mode) {
@@ -166,6 +155,6 @@ export async function serve(
         : markdownView(env, space, hash, null, opts);
     case 'shell-download': return htmlResponse(fileShell('download', opts));
     default:
-      return rawBytes(request, env, `${space}/${hash}/f/${filePath}`, filePath, mode === 'attachment');
+      return rawBytes(request, env, payloadKey(space, hash, filePath), filePath, mode === 'attachment');
   }
 }

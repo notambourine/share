@@ -12,6 +12,7 @@ import type {
   StoredHead, StoredObject, StoredPage, StoredValue,
 } from '../src/lib/types';
 import type { JsonValue } from '../src/lib/json';
+import worker from '../src/worker';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -148,6 +149,34 @@ export const DEFERRED: Deferrals = {
 
 export function noAssets(): AssetServer {
   return { fetch: async () => new Response('') };
+}
+
+/* The default export asks for the whole ExecutionContext where every route
+   takes `Deferrals`. Building the rest of it would be inventing a runtime, so
+   the gap is a cast: a route that reached past waitUntil breaks here, loudly,
+   instead of in production.
+   SAFETY: waitUntil is the only member the handlers touch. */
+const asCtx = (deferrals: Deferrals): ExecutionContext => deferrals as ExecutionContext;
+
+/**
+ * Through the front door: the dispatch order in src/worker.ts is the security
+ * model - an uploaded file named `config`, `admin`, or `status` keeps its GET -
+ * and only a test that crosses this seam can hold it.
+ */
+export function fetchWorker(env: Env, request: Request): Promise<Response> {
+  return worker.fetch(request, env, asCtx(DEFERRED));
+}
+
+const SCHEDULE: ScheduledController = { scheduledTime: 0, cron: '0 3 * * *', noRetry() { /* no retry to skip */ } };
+
+/** The nightly cron, same seam. The sweep runs inside waitUntil, so this awaits
+    what the handler deferred rather than returning before it ran. */
+export async function scheduledWorker(env: Env): Promise<void> {
+  const deferred: Promise<unknown>[] = [];
+  await worker.scheduled(SCHEDULE, env, asCtx({
+    waitUntil(promise) { deferred.push(promise); },
+  }));
+  await Promise.all(deferred);
 }
 
 export interface TestEnv extends Env {

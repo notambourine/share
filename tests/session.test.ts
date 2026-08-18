@@ -3,6 +3,7 @@ import { session } from '../src/routes/session';
 import { del } from '../src/routes/del';
 import { upload } from '../src/routes/upload';
 import { authenticate, mintSession, sha256hex } from '../src/lib/auth';
+import { now } from '../src/lib/http';
 import type { Env } from '../src/lib/types';
 import { testEnv } from './bindings';
 
@@ -30,7 +31,7 @@ describe('POST /session', () => {
     expect(res.status).toBe(201);
     const body = await res.json<{ token: string; name: string; expiresAt: number }>();
     expect(body.name).toBe('tom');
-    expect(body.expiresAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    expect(body.expiresAt).toBeGreaterThan(now());
     const verb = new Request('https://share.example/up/acme', {
       method: 'POST', headers: { authorization: `Bearer ${body.token}` },
     });
@@ -42,7 +43,7 @@ describe('POST /session', () => {
   it('rejects anonymous callers and session tokens', async () => {
     const env = await makeEnv();
     expect((await session(post(null), env)).status).toBe(401);
-    const sess = await mintSession(KEYS, 'tom', Math.floor(Date.now() / 1000) + 600);
+    const sess = await mintSession(KEYS, 'tom', now() + 600);
     expect((await session(post(`Bearer ${sess}`), env)).status).toBe(401);
   });
 
@@ -57,7 +58,7 @@ describe('POST /session', () => {
 
 describe('session scope and expiry messages', () => {
   const bearer = async (exp: number) => `Bearer ${await mintSession(KEYS, 'tom', exp)}`;
-  const t = Math.floor(Date.now() / 1000);
+  const t = now();
 
   it('an expired session on upload 401s with the reason', async () => {
     const env = await makeEnv();

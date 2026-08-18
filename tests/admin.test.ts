@@ -2,18 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { ADMIN_SECS, mintAdminToken, verifyAdminToken } from '../src/lib/admin';
 import { mintToken, verifyToken } from '../src/lib/sign';
 import { sha256hex, mintSession } from '../src/lib/auth';
+import { now } from '../src/lib/http';
 import { decodeMeta } from '../src/lib/r2';
 import { adminConfig, adminRemint } from '../src/routes/admin';
 import { del } from '../src/routes/del';
-import { serve } from '../src/routes/serve';
 import type { TestEnv } from './bindings';
-import { DEFERRED, testEnv } from './bindings';
+import { fetchWorker, testEnv } from './bindings';
 
 const KEYS = { v1: 'unit-test-signing-secret' };
 const SPACE = 'acme';
 const HASH = 'Ab3dEf6hIj9k';
 const VIEW_PREFIX = `${SPACE}/${HASH}`;
-const NOW = Math.floor(Date.now() / 1000);
+const NOW = now();
 const EXP = NOW + ADMIN_SECS;
 const DAY = 86400;
 
@@ -252,7 +252,7 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
   it('a live token serves the page, and the token leaks into no link', async () => {
     const env = seededEnv();
     const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
-    const res = await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '');
+    const res = await fetchWorker(env, pageReq(token));
     expect(res.status).toBe(200);
     const html = await res.text();
     // Five tiles for a single markdown upload: two live views, two PDFs, the source.
@@ -272,20 +272,20 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
 
   it('missing, expired, or view token falls through to today\'s view', async () => {
     const env = seededEnv();
-    const bare = await (await serve(pageReq(null), env, DEFERRED, SPACE, HASH, null, '')).text();
+    const bare = await (await fetchWorker(env, pageReq(null))).text();
     expect(bare).not.toContain('data-ttl');
     const stale = await mintAdminToken(KEYS, SPACE, HASH, NOW - 1);
-    const staleRes = await serve(pageReq(stale), env, DEFERRED, SPACE, HASH, null, '');
+    const staleRes = await fetchWorker(env, pageReq(stale));
     expect(staleRes.status).toBe(200);
     expect(await staleRes.text()).toBe(bare);
     const view = await mintToken(KEYS, VIEW_PREFIX, EXP);
-    expect(await (await serve(pageReq(view), env, DEFERRED, SPACE, HASH, null, '')).text()).toBe(bare);
+    expect(await (await fetchWorker(env, pageReq(view))).text()).toBe(bare);
   });
 
   it('signed tier: a live c= wins the 401 and the links ride a fresh /k/', async () => {
     const env = seededEnv({ tier: 'signed' });
     const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
-    const res = await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '');
+    const res = await fetchWorker(env, pageReq(token));
     expect(res.status).toBe(200);
     const html = await res.text();
     const k = /\/k\/(v1\.\d+\.[A-Za-z0-9_-]{22})\/deck\.slides\.html/.exec(html);
@@ -293,7 +293,7 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     expect((await verifyToken(KEYS, VIEW_PREFIX, k![1], NOW)).ok).toBe(true);
     // Expired c= falls through to the tier's own answer.
     const stale = await mintAdminToken(KEYS, SPACE, HASH, NOW - 1);
-    expect((await serve(pageReq(stale), env, DEFERRED, SPACE, HASH, null, '')).status).toBe(401);
+    expect((await fetchWorker(env, pageReq(stale))).status).toBe(401);
   });
 
   it('c= never wins a file path, only the artifact root', async () => {
@@ -302,14 +302,14 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     const req = new Request(`https://share.example/${SPACE}/${HASH}/deck.md?c=${token}`, {
       headers: { accept: 'text/html' },
     });
-    const html = await (await serve(req, env, DEFERRED, SPACE, HASH, null, 'deck.md')).text();
+    const html = await (await fetchWorker(env, req)).text();
     expect(html).not.toContain('data-ttl');
   });
 
   it('markdown tiles carry the hooks the status poll paints', async () => {
     const env = seededEnv();
     const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
-    const html = await (await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '')).text();
+    const html = await (await fetchWorker(env, pageReq(token))).text();
     expect(html).toContain('data-src="deck.md" data-await="slides.pdf"');
     expect(html).toContain('data-src="deck.md" data-await="doc.pdf"');
     /* Only the PDFs wait on a browser. The two html tiles render per request, so
@@ -323,7 +323,7 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
   it('an uploaded page gets its click-to-generate export tiles', async () => {
     const env = seededEnv({ files: [{ path: 'page.html', size: 9, type: 'text/html' }] });
     const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
-    const html = await (await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '')).text();
+    const html = await (await fetchWorker(env, pageReq(token))).text();
     expect(html).toContain('page.pdf');
     expect(html).toContain('page.png');
     expect(html).toContain('page.browser.png');
@@ -342,7 +342,7 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
       ],
     });
     const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
-    const html = await (await serve(pageReq(token), env, DEFERRED, SPACE, HASH, null, '')).text();
+    const html = await (await fetchWorker(env, pageReq(token))).text();
     expect(html).toContain('>site<');
     expect(html).not.toContain('hotlink'); // never a tile per asset
     expect(html).toContain('index.html'); // the plain file list still names them
@@ -352,10 +352,11 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
 describe('view routes with an admin token', () => {
   it('the /k/ slot refuses an admin token where a view token works', async () => {
     const env = seededEnv({ tier: 'signed' });
-    const req = new Request(`https://share.example/${SPACE}/${HASH}/deck.md`);
+    const at = (token: string) =>
+      new Request(`https://share.example/${SPACE}/${HASH}/k/${token}/deck.md`);
     const admin = await mintAdminToken(KEYS, SPACE, HASH, EXP);
-    expect((await serve(req, env, DEFERRED, SPACE, HASH, admin, 'deck.md')).status).toBe(401);
+    expect((await fetchWorker(env, at(admin))).status).toBe(401);
     const view = await mintToken(KEYS, VIEW_PREFIX, EXP);
-    expect((await serve(req, env, DEFERRED, SPACE, HASH, view, 'deck.md')).status).toBe(200);
+    expect((await fetchWorker(env, at(view))).status).toBe(200);
   });
 });
