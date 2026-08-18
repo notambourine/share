@@ -45,6 +45,19 @@ describe('the inlined stylesheet survives verbatim', () => {
     expect(html).not.toContain('&quot;1&quot;');
   });
 
+  /* The sheets are fetched from the origin, so the cache is keyed by it: a
+     second hostname must get its own stylesheet, not the first one's. */
+  it('builds one stylesheet per origin', async () => {
+    const perOrigin = testEnv({
+      assets: { fetch: async (req: Request) => new Response(`/* ${new URL(req.url).origin} */`) },
+    });
+    const html = (origin: string) => printHtml(perOrigin, {
+      origin, baseHref: `${origin}/a/`, title: 't', markdown: MARKDOWN, mode: 'doc',
+    });
+    expect(await html('https://one.test')).toContain('/* https://one.test */');
+    expect(await html('https://two.test')).toContain('/* https://two.test */');
+  });
+
   it('keeps the @page rule the paper size depends on', async () => {
     expect(await print('slides')).toContain('@page{size:1152px 648px;margin:0;}');
     expect(await print('doc')).toContain('@page{size:A4;margin:18mm 16mm 20mm 16mm;}');

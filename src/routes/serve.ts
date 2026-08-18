@@ -5,12 +5,11 @@ import { payloadKey, readPayload, readMetaTagged, writeMeta, isExpired } from '.
 import { mintToken, parseSigningKeys, verifyToken } from '../lib/sign';
 import { verifyAdminToken } from '../lib/admin';
 import { viewModeFor } from '../lib/negotiate';
-import { explicitMode, isLiveHtml, resolveExport, sniffDeck } from '../lib/exportPath';
+import { explicitMode, isLiveHtml, resolveExport } from '../lib/exportPath';
 import { exportArtifact } from './export';
 import { rawBytes } from '../lib/bytes';
-import { fileShell, dirShell, errorShell, adminShell, type ShellOpts } from '../render/shell';
-import { renderCode, renderDeck, renderMarkdown } from '../render/markdown';
-import { DECK_THEME } from '../brand';
+import { fileShell, dirShell, errorShell, adminShell, type ShellCommon } from '../render/shell';
+import { renderCode, renderSource } from '../render/markdown';
 import { htmlResponse, now } from '../lib/http';
 
 const DAY = 86400;
@@ -23,26 +22,26 @@ const MAX_INLINE_BYTES = 1024 * 1024;
 /**
  * A markdown source, rendered here rather than in the reader's browser. `mode`
  * null means the content decides, which is the bare `.md` URL; the `.html`
- * spellings pass the mode they pin.
+ * spellings pass the mode they pin. Which shell it lands in follows the mode
+ * the render resolved, never the one asked for.
  */
 async function markdownView(
-  env: Env, space: string, hash: string, mode: 'slides' | 'doc' | null, opts: ShellOpts,
+  env: Env, space: string, hash: string, mode: 'slides' | 'doc' | null, opts: ShellCommon,
 ): Promise<Response> {
   const text = await readPayload(env, space, hash, opts.path);
   if (text === null) return htmlResponse(errorShell(404), 404);
-  if ((mode ?? (sniffDeck(text) ? 'slides' : 'doc')) === 'doc') {
-    return htmlResponse(fileShell('md', { ...opts, content: renderMarkdown(text) }));
-  }
-  const { html, css } = renderDeck(text, DECK_THEME);
-  return htmlResponse(fileShell('slides', { ...opts, content: html, deckCss: css }));
+  const out = renderSource(text, mode);
+  return htmlResponse(out.mode === 'slides'
+    ? fileShell(opts, { kind: 'slides', html: out.html, css: out.css })
+    : fileShell(opts, { kind: 'md', html: out.html }));
 }
 
 async function codeView(
-  env: Env, space: string, hash: string, opts: ShellOpts,
+  env: Env, space: string, hash: string, opts: ShellCommon,
 ): Promise<Response> {
   const text = await readPayload(env, space, hash, opts.path);
   if (text === null) return htmlResponse(errorShell(404), 404);
-  return htmlResponse(fileShell('code', { ...opts, content: renderCode(text, opts.path) }));
+  return htmlResponse(fileShell(opts, { kind: 'code', html: renderCode(text, opts.path) }));
 }
 
 export async function serve(
@@ -131,29 +130,32 @@ export async function serve(
   const mode = viewModeFor(
     filePath, request.headers.get('accept'), url.searchParams, request.headers.get('user-agent'),
   );
+  /* Hung off the artifact root, not the request path: the poster is a sibling
+     of the file, so a request under a subdirectory would otherwise base it
+     wrong. Only the video and svg shells read it. */
+  const poster = file.poster ? { posterHref: `${route.root}${encodeURI(file.poster)}?raw` } : {};
   const opts = {
     path: filePath,
     rawHref: `${route.page}${route.page.endsWith('/') ? 'index.html' : ''}?raw`,
     size: file.size,
     pageHref: route.page,
-    ...(file.poster && { posterHref: `${route.root}${encodeURI(file.poster)}?raw` }),
   };
 
   switch (mode) {
-    case 'shell-image': return htmlResponse(fileShell('image', opts));
-    case 'shell-video': return htmlResponse(fileShell('video', opts));
-    case 'shell-svg': return htmlResponse(fileShell('svg', opts));
+    case 'shell-image': return htmlResponse(fileShell(opts, { kind: 'image' }));
+    case 'shell-video': return htmlResponse(fileShell(opts, { kind: 'video', ...poster }));
+    case 'shell-svg': return htmlResponse(fileShell(opts, { kind: 'svg', ...poster }));
     /* Both read their bytes to render them, so both fall back to the download
        card rather than inline a file too big to read in a browser anyway. */
     case 'shell-code':
       return file.size > MAX_INLINE_BYTES
-        ? htmlResponse(fileShell('download', opts))
+        ? htmlResponse(fileShell(opts, { kind: 'download' }))
         : codeView(env, space, hash, opts);
     case 'shell-md':
       return file.size > MAX_INLINE_BYTES
-        ? htmlResponse(fileShell('download', opts))
+        ? htmlResponse(fileShell(opts, { kind: 'download' }))
         : markdownView(env, space, hash, null, opts);
-    case 'shell-download': return htmlResponse(fileShell('download', opts));
+    case 'shell-download': return htmlResponse(fileShell(opts, { kind: 'download' }));
     default:
       return rawBytes(request, env, payloadKey(space, hash, filePath), filePath, mode === 'attachment');
   }

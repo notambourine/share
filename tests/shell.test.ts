@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { fileShell, dirShell, adminShell, errorShell, homeShell } from '../src/render/shell';
+import { fileShell, dirShell, adminShell, errorShell, homeShell, type ShellView } from '../src/render/shell';
 import type { Meta } from '../src/lib/types';
+
+const DECK: ShellView = { kind: 'slides', html: '<div></div>', css: '' };
 
 /* An uploader names the file, and every shell puts that name in markup - in
    text, in a `download=`, in a `data-raw=`. Nothing in the render layer escapes
@@ -29,7 +31,7 @@ function meta(paths: string[]): Meta {
 
 describe('every shell escapes a hostile filename', () => {
   it('escapes it in the file shell, in text and in attributes', () => {
-    const out = fileShell('other', { path: HOSTILE, rawHref: `/acme/h/${ATTR_BREAK}`, size: 17 });
+    const out = fileShell({ path: HOSTILE, rawHref: `/acme/h/${ATTR_BREAK}`, size: 17 }, { kind: 'download' });
     expect(out).toContain('&lt;img src=x onerror=alert(1)&gt;.txt');
     expect(out).not.toContain('<img src=x');
     // The break-out attempt lands as data, not as a second attribute.
@@ -38,7 +40,7 @@ describe('every shell escapes a hostile filename', () => {
   });
 
   it('escapes it in the og tags a crawler reads', () => {
-    const out = fileShell('image', { path: HOSTILE, rawHref: '/x?raw', pageHref: `https://share.test/${ATTR_BREAK}` });
+    const out = fileShell({ path: HOSTILE, rawHref: '/x?raw', pageHref: `https://share.test/${ATTR_BREAK}` }, { kind: 'image' });
     expect(out).toContain('og:title" content="&lt;img src=x onerror=alert(1)&gt;.txt"');
     expect(out).not.toContain('onload="alert(1)"');
   });
@@ -77,20 +79,20 @@ describe('the shells still render what the client scripts select on', () => {
   });
 
   it('keeps data-kind on the body, and no data-raw, because nothing fetches', () => {
-    const out = fileShell('slides', { path: 'deck.md', rawHref: '/acme/h/deck.md?raw' });
+    const out = fileShell({ path: 'deck.md', rawHref: '/acme/h/deck.md?raw' }, DECK);
     expect(out).toContain('data-kind="slides"');
     expect(out).not.toContain('data-raw');
   });
 
   it('gives the deck nav its prev, next, and count hooks', () => {
-    const out = fileShell('slides', { path: 'deck.md', rawHref: '/x?raw' });
+    const out = fileShell({ path: 'deck.md', rawHref: '/x?raw' }, DECK);
     for (const attr of ['data-prev', 'data-next', 'data-count']) {
       expect(out).toContain(attr);
     }
   });
 
   it('puts a copy button on an artifact page but not on the landing page', () => {
-    expect(fileShell('code', { path: 'a.ts', rawHref: '/x?raw' })).toContain('data-copy');
+    expect(fileShell({ path: 'a.ts', rawHref: '/x?raw' }, { kind: 'code', html: '<pre></pre>' })).toContain('data-copy');
     expect(homeShell()).not.toContain('data-copy');
   });
 });
@@ -99,12 +101,12 @@ describe('the shells keep their doctype and their chrome', () => {
   it('opens every page with a doctype', () => {
     expect(homeShell().startsWith('<!doctype html>')).toBe(true);
     expect(errorShell(404).startsWith('<!doctype html>')).toBe(true);
-    expect(fileShell('image', { path: 'a.png', rawHref: '/x?raw' }).startsWith('<!doctype html>')).toBe(true);
+    expect(fileShell({ path: 'a.png', rawHref: '/x?raw' }, { kind: 'image' }).startsWith('<!doctype html>')).toBe(true);
   });
 
   it('gives the landing page a manifest and an artifact page none', () => {
     expect(homeShell()).toContain('rel="manifest"');
-    expect(fileShell('image', { path: 'a.png', rawHref: '/x?raw' })).not.toContain('rel="manifest"');
+    expect(fileShell({ path: 'a.png', rawHref: '/x?raw' }, { kind: 'image' })).not.toContain('rel="manifest"');
   });
 
   it('presses the chip the stored expiry already is', () => {

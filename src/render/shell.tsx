@@ -95,19 +95,36 @@ function fileName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1) || path;
 }
 
-export interface ShellOpts {
+/** What every file shell knows about the file, whatever it shows. */
+export interface ShellCommon {
   path: string;
   /** The same pathname plus ?raw, so signed /k/ segments ride along. */
   rawHref: string;
   size?: number;
   /** Absolute URL of this page, for og:url. */
   pageHref?: string;
+}
+
+/**
+ * What the page shows. Each arm carries exactly what its markup needs, so the
+ * markup can read it without a fallback: a rendered shell always has its html,
+ * a deck always has its theme, and a download card has neither.
+ */
+export type ShellView =
+  | { kind: 'image' }
   /** Absolute bytes of the poster frame, when the upload carried one. */
-  posterHref?: string;
-  /** Already-rendered markup for the `md`, `slides`, and `code` shells. */
-  content?: string;
-  /** Marpit's theme output, scoped to this deck's sections. */
-  deckCss?: string;
+  | { kind: 'video' | 'svg'; posterHref?: string }
+  | { kind: 'md' | 'code'; html: string }
+  | { kind: 'slides'; html: string; css: string }
+  | { kind: 'download' };
+
+/** The card's picture. An image is its own poster, a video shows the frame the
+    upload carried, and a document has none - the shells that render markup get
+    the bare `summary` card. */
+function ogImage(rawHref: string, view: ShellView): string | undefined {
+  if (view.kind === 'image') return rawHref;
+  if (view.kind === 'video' || view.kind === 'svg') return view.posterHref;
+  return undefined;
 }
 
 /**
@@ -116,7 +133,7 @@ export interface ShellOpts {
  * the size, and the image is a frame rather than the lockup, because a card
  * that shows every artifact identically tells the reader nothing.
  */
-function ogTags(o: ShellOpts, image: string | undefined): Child[] {
+function ogTags(o: ShellCommon, image: string | undefined): Child[] {
   const ext = extOf(o.path).toUpperCase();
   const desc = [ext, o.size ? fmtSize(o.size) : '', 'shared via NoTambourine']
     .filter(Boolean).join(' · ');
@@ -144,15 +161,14 @@ function caption(name: string, size?: number): Child {
   return <p class="caption">{size ? `${name} · ${fmtSize(size)}` : name}</p>;
 }
 
-export function fileShell(kind: string, o: ShellOpts): string {
+export function fileShell(o: ShellCommon, view: ShellView): string {
   const { path, rawHref, size } = o;
   const name = fileName(path);
   /* `data-kind` is all the client needs now that nothing fetches: the deck nav
      is the only script left, and it keys off the slides it can see. */
-  const bodyAttrs = { 'data-kind': kind };
-  // An image is its own poster; everything else shows a frame or nothing.
-  const og = ogTags(o, kind === 'image' ? rawHref : o.posterHref);
-  switch (kind) {
+  const bodyAttrs = { 'data-kind': view.kind };
+  const og = ogTags(o, ogImage(rawHref, view));
+  switch (view.kind) {
     case 'image':
       return layout({
         title: name,
@@ -174,7 +190,7 @@ export function fileShell(kind: string, o: ShellOpts): string {
           <>
             {/* The same frame the card shows: it paints before the first byte of
                 video arrives, so the page is never a black rectangle. */}
-            <figure class="media"><video controls poster={o.posterHref} src={rawHref}></video></figure>
+            <figure class="media"><video controls poster={view.posterHref} src={rawHref}></video></figure>
             {caption(name, size)}
           </>
         ),
@@ -200,7 +216,7 @@ export function fileShell(kind: string, o: ShellOpts): string {
         body: (
           <div class="doc code">
             {caption(name, size)}
-            {raw(o.content ?? '')}
+            {raw(view.html)}
           </div>
         ),
       });
@@ -209,16 +225,16 @@ export function fileShell(kind: string, o: ShellOpts): string {
         title: name,
         head: [og, CODE_CSS],
         bodyAttrs,
-        body: <article class="doc prose">{raw(o.content ?? '')}</article>,
+        body: <article class="doc prose">{raw(view.html)}</article>,
       });
     case 'slides':
       return layout({
         title: name,
-        head: [og, CODE_CSS, <style>{raw(o.deckCss ?? '')}</style>],
+        head: [og, CODE_CSS, <style>{raw(view.css)}</style>],
         bodyAttrs,
         body: (
           <>
-            <div class="deck">{raw(o.content ?? '')}</div>
+            <div class="deck">{raw(view.html)}</div>
             <nav class="deck-nav" hidden>
               <button type="button" data-prev aria-label="previous slide">prev</button>
               <span class="caption" data-count></span>
@@ -227,7 +243,7 @@ export function fileShell(kind: string, o: ShellOpts): string {
           </>
         ),
       });
-    default:
+    case 'download':
       return layout({
         title: name,
         head: og,
