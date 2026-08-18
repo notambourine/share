@@ -3,7 +3,6 @@
   "ignorePatterns": [
     "node_modules/**",
     "public/vendor/**",
-    "upstream/**",
     "tools/oxlint/anti-slop/**"
   ],
   "jsPlugins": [

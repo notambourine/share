@@ -12,8 +12,12 @@ node_modules/
 .claude/*
 !.claude/settings.json
 
-# Built from src/client/ by `npm run build:client`, which Workers Builds runs
-# before it deploys. Committing them would give this code two sources of truth.
+# Built by `npm run build:client`, which Workers Builds runs before it deploys.
+# Committing any of it would give this repo a second source of truth: the three
+# bundles come from src/client/, the two directories from the version of
+# @notambourine/brand-kit that package.json pins.
 /public/render.js
 /public/admin.js
 /public/print.js
+/public/fonts/
+/public/logo/

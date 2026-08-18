@@ -2,13 +2,14 @@
  * Two checks the bundle cannot make for itself.
  *
  * `tokens.css` and the deck theme need no check at all: src/brand.ts imports
- * them out of the submodule, so bumping the pin is the whole update and a stale
+ * them out of the dep, so bumping the version is the whole update and a stale
  * copy cannot exist. What is left is everything that could not be an import.
  *
- * 1. The fonts and the logo. They are copied into public/ because a static
- *    asset server is the right thing to serve a woff2, a png, and an .ico, so
- *    they can go stale in the one way an import cannot. Hashed against the
- *    submodule, offline, no lock file.
+ * 1. The fonts and the logo, which a static asset server serves off disk rather
+ *    than out of the bundle. `npm run vendor` writes them during the build, so
+ *    this is not a drift check any more - it is the proof that the build step
+ *    ran and wrote the kit's bytes. Hashed against the dep, offline, no
+ *    lock file. Run it after `npm run build:client`, or public/ is not there yet.
  *
  * 2. Every color this repo writes itself. shell.css, print.css, nt-code.css,
  *    and the print footer in export.ts are share's own CSS, where a hand-picked
@@ -21,7 +22,7 @@
  *    no longer defines is the failure with no symptom: CSS falls through to the
  *    fallback, or to nothing, and the page still renders. The deck theme shipped
  *    for months reading `var(--fg-mute)`, which tokens.css has never defined.
- *    This is the contract a submodule bump has to clear.
+ *    This is the contract a version bump has to clear.
  */
 import { createHash } from 'node:crypto';
 import { readFile, glob } from 'node:fs/promises';
@@ -65,18 +66,9 @@ for (const [from, to] of copies) {
   try {
     same = await sha(from) === await sha(to);
   } catch {
-    same = false; // a file the kit added and `npm run vendor` has not copied yet
+    same = false; // public/ is not built yet, or the copy stopped short
   }
   if (!same) fails.push(`${to} differs from ${from}. Run \`npm run vendor\`.`);
-}
-
-/* A hash check only sees files the kit still ships. Renaming one leaves the old
-   copy behind, still served, with nothing upstream to compare it against. */
-const wanted = new Set(copies.map(([, to]) => to));
-for await (const e of glob(join(root, 'public/{fonts,logo}/**/*'), { withFileTypes: true })) {
-  if (!e.isFile()) continue;
-  const path = relative(root, join(e.parentPath, e.name)).split('\\').join('/');
-  if (!wanted.has(path)) fails.push(`${path} is not a file the golden set ships. Delete it.`);
 }
 
 const tokensCss = await readFile(join(root, TOKENS), 'utf8');
@@ -106,9 +98,9 @@ if (fails.length) {
   console.error('brand: drift\n');
   for (const f of fails) console.error(`  - ${f}`);
   console.error('\nColors come from a var() off the golden set. If one is genuinely new,');
-  console.error('add it in notambourine/brand-kit first, then bump the submodule.');
+  console.error('add it in notambourine/brand-kit first, then bump the dep.');
   process.exit(1);
 }
 
-console.log(`brand: ${copies.length} copied files match the golden set; every color is one`);
+console.log(`brand: ${copies.length} built files match the golden set; every color is one`);
 console.log(`       of its ${allowed.size}, every var() reads one of its ${defined.size} tokens`);
