@@ -25,7 +25,10 @@ import { renderSource } from './markdown';
 /** 1152x648 is 16:9 at the same aspect as Marpit's 1280x720 slide box. */
 const DECK_PAGE = { width: '1152px', height: '648px' };
 
-const DOC_MARGIN = { top: '18mm', right: '16mm', bottom: '20mm', left: '16mm' };
+/* The side margins are the document's measure, because print.css sets none: at
+   10.5pt JetBrains Mono, 24mm gutters leave 162mm of text, which is 71
+   characters. 16mm gave 78, past the readable ceiling. */
+const DOC_MARGIN = { top: '18mm', right: '24mm', bottom: '20mm', left: '24mm' };
 
 export function pdfOptionsFor(mode: RenderMode, title: string): PDFOptions {
   if (mode === 'slides') {
@@ -48,7 +51,7 @@ export function pdfOptionsFor(mode: RenderMode, title: string): PDFOptions {
     displayHeaderFooter: true,
     headerTemplate: '<span></span>',
     footerTemplate: `${
-      <div style={`width:100%;padding:0 16mm;font-size:7pt;font-family:sans-serif;color:${token('--nt-mid')};display:flex;justify-content:space-between;`}>
+      <div style={`width:100%;padding:0 ${DOC_MARGIN.left};font-size:7pt;font-family:sans-serif;color:${token('--nt-mid')};display:flex;justify-content:space-between;`}>
         <span>{title}</span><span class="pageNumber"></span>
       </div>
     }`,

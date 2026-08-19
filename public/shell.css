@@ -75,12 +75,13 @@ body {
   align-self: center;
 }
 /* The document view: print.css's `.print-doc` on the dark canvas, so the same
-   words read the same way on screen and on paper. The measure is print's 46em
-   and the markers its pink. A document reads top-down, so this is the one shell
-   that opts out of the stage's centering. */
+   words read the same way on screen and on paper. 40em of JetBrains Mono is 66
+   characters, which is the brand's measure; the PDF reaches the same band off
+   its page box, because print.css sets no width. A document reads top-down, so
+   this is the one shell that opts out of the stage's centering. */
 body[data-kind="md"] .stage { justify-content: flex-start; }
 
-.doc.prose { max-width: 46em; }
+.doc.prose { max-width: 40em; }
 .doc.prose :is(h1, h2, h3, h4) { margin-top: var(--sp-8); margin-bottom: var(--sp-3); }
 .doc.prose :is(h1, h2, h3, h4):first-child { margin-top: 0; }
 .doc.prose p, .doc.prose li { margin-bottom: var(--sp-3); }
@@ -295,8 +296,8 @@ body.locked .locked-only { display: block; }
 .panel { background: var(--bg-card); border: 1px solid var(--line);
   border-radius: var(--r-md); padding: var(--sp-6); }
 .cardlabel { font-family: var(--font-accent); font-size: var(--fs-label);
-  font-weight: var(--fw-semibold); letter-spacing: var(--ls-allcaps);
-  text-transform: uppercase; color: var(--fg3); margin: 0 0 var(--sp-4); }
+  font-weight: var(--fw-semibold); color: var(--fg2);
+  margin: 0 0 var(--sp-4); }
 .note { color: var(--fg3); font-size: var(--fs-caption); margin: var(--sp-3) 0 0; }
 
 .chiprow { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }

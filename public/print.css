@@ -18,15 +18,10 @@ body {
   line-height: 1.55;
 }
 
-/* The PDF takes its gutter from the page box. The `.html` snapshot is the same
-   document read on screen, where it needs a measure and a margin of its own. */
-@media screen {
-  .print-doc body {
-    max-width: 46em;
-    margin: 0 auto;
-    padding: var(--sp-12) var(--sp-6);
-  }
-}
+/* No screen measure here. This sheet only ever reaches a PDF - src/lib/pdf.ts
+   drives it through `page.pdf()`, which emulates print, and the shot path
+   navigates an uploaded URL instead - so the gutter is the page box in
+   src/render/export.tsx and nothing else. */
 
 .print-doc h1 { font-size: 20pt; }
 .print-doc h2 { font-size: 15pt; }
