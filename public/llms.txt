@@ -121,6 +121,11 @@ The same URL renders for browsers and serves raw bytes to everything else
 the branded shell, ?view=source shows
 uploaded HTML highlighted instead of executed.
 
+Fenced code blocks come out highlighted, and a ```mermaid fence comes out
+drawn: flowchart, sequence, state, class, ER, and xychart, as inline SVG in
+the brand's colors, on the page and in the PDF. A type the renderer has no
+layout for (pie, gantt, mindmap) falls back to showing its own source.
+
 Decks render with Marp. --- splits slides, and Marp directives apply:
 <!-- _class: lead --> centers a title slide, <!-- paginate: true --> numbers
 them. Arrow keys move between slides and the #n fragment links to one.

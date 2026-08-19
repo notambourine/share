@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@notambourine/brand-kit": "1.0.0",
+    "beautiful-mermaid": "1.1.3",
     "hono": "^4.13.2"
   }
 }

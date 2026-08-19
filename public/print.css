@@ -61,7 +61,9 @@ body {
   font-size: 0.85em;
 }
 
-.print-doc pre {
+/* `:not(.nt-diagram)`: a ```mermaid fence lands in a `<pre>` too (see
+   nt-code.css), and a drawn diagram wants none of the code-block box. */
+.print-doc pre:not(.nt-diagram) {
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--r-sm);

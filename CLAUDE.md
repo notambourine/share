@@ -19,11 +19,17 @@
   `@cloudflare/workers-types`; `tsconfig.client.json` owns it and `npm run types`
   checks all three projects. It may import from `src/lib/` - that is the point,
   and it is why no client file restates `splitFrontMatter` or a JSON decoder.
-- Markdown, decks, and highlighting render in the Worker, in
+- Markdown, decks, highlighting, and mermaid render in the Worker, in
   `src/render/markdown.ts`, which the live shells and the print page both call.
   Never add a parser under `public/` or a second render path: a page arrives as
   markup, and `src/client/` holds interaction only - the deck nav and the copy
   button. Never reintroduce a `?raw` fetch to fill a shell.
+- Mermaid is `src/render/mermaid.ts`, over `beautiful-mermaid`, which lays a
+  diagram out from metric tables and needs no DOM. Never reach for upstream
+  mermaid: it measures through `getBBox()`, so it could only run in the viewer.
+  The SVG's colors are `var()`s off the golden set, which is what lets one
+  render serve the dark shell and the light PDF; none may name the token it
+  sets, because a custom property that reads itself is a cycle.
 - Nothing renders at upload. An html view is rendered by the request that asks
   for it and stores nothing, so a brand edit reaches every link ever made with
   nothing to invalidate. Only `.pdf` and `.png` reach the `BROWSER` binding, and

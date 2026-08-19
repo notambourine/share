@@ -118,7 +118,9 @@ body[data-kind="md"] .stage { justify-content: flex-start; }
 }
 .doc.prose th { color: var(--fg1); font-weight: var(--fw-semibold); }
 
-.doc pre {
+/* `:not(.nt-diagram)`: a ```mermaid fence lands in a `<pre>` too (see
+   nt-code.css), and a drawn diagram wants none of the code-block box. */
+.doc pre:not(.nt-diagram) {
   background: var(--bg-card);
   border: 1px solid var(--line-soft);
   border-radius: var(--r-md);

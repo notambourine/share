@@ -1,6 +1,7 @@
-/* highlight.js class names on NoTambourine tokens. Ours, not vendored: the
-   library itself is imported into the Worker, which emits these classes from
-   src/render/markdown.ts, so this is the only half a browser still fetches.
+/* highlight.js class names on NoTambourine tokens, and the diagram a ```mermaid
+   fence draws. Ours, not vendored: both libraries are imported into the Worker,
+   which emit these classes from src/render/markdown.ts, so this is the only
+   half a browser still fetches.
 
    Semantic tokens, never a literal, because this sheet renders on both grounds:
    the screen shell links it on the dark canvas, and src/render/export.tsx
@@ -22,3 +23,20 @@
 .hljs-deletion { color: var(--accent-text, #E75A7C); text-decoration: line-through; }
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: var(--fw-semibold, 600); }
+
+/* A diagram rides in a `<pre>` because that is the only shape markdown-it hands
+   back untouched (src/render/mermaid.ts). It is not a code block, so shell.css
+   and print.css both spell their `pre` box `:not(.nt-diagram)` rather than have
+   this file undo one. */
+pre.nt-diagram { margin: var(--sp-6) 0; break-inside: avoid; }
+/* The svg carries its own width and height, so `max-width` is what lets a wide
+   diagram shrink to the measure instead of pushing the page sideways. The
+   corner is the code block's: the diagram paints its own ground, and a figure
+   on the same surface as the code above it should be cut the same way. */
+svg.nt-mermaid {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: var(--r-md);
+}

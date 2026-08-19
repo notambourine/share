@@ -17,6 +17,7 @@ import { marked } from 'marked';
 import { Marpit } from '@marp-team/marpit';
 import hljs from '@highlightjs/cdn-assets/es/highlight.min.js';
 import { type RenderMode, sniffDeck, splitFrontMatter } from '../lib/exportPath';
+import { renderMermaid } from './mermaid';
 import { DECK_THEME } from '../brand';
 
 /* Marpit defaults markdown-it to the commonmark preset, which has GFM tables and
@@ -45,11 +46,19 @@ function langOf(info: string | undefined): string | null {
 }
 
 /**
- * One code block, wrapped. markdown-it uses a returned string verbatim when it
- * opens with `<pre`, so this is also what keeps `nt-code.css` working: the theme
+ * One fenced block. ```mermaid draws; everything else is code, wrapped. Both
+ * arms open with `<pre`, which is the string markdown-it takes verbatim, and
+ * the code arm's wrapper is also what keeps `nt-code.css` working: the theme
  * keys off `.hljs`, which markdown-it's own wrapper would not add.
+ *
+ * A diagram the renderer cannot draw falls through to the code arm rather than
+ * to an error, so the reader still gets the source they would have seen before.
  */
 function fence(code: string, info: string): string {
+  if ((info ?? '').trim().toLowerCase() === 'mermaid') {
+    const svg = renderMermaid(code);
+    if (svg !== null) return svg;
+  }
   const lang = langOf(info);
   const cls = lang ? `hljs language-${lang}` : 'hljs';
   let body: string;
