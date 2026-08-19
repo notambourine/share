@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { mintSession, sha256hex } from '../src/lib/auth';
-import { now } from '../src/lib/http';
+import { now } from '../src/lib/clock';
 import { fetchWorker, testEnv } from './bindings';
 import type { TestEnv } from './bindings';
 

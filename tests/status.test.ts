@@ -3,7 +3,7 @@ import { ADMIN_SECS, mintAdminToken } from '../src/lib/admin';
 import { mintToken } from '../src/lib/sign';
 import { checkKey, derivedKey } from '../src/lib/exportPath';
 import { decodeSlideCheck } from '../src/lib/pdf';
-import { now } from '../src/lib/http';
+import { now } from '../src/lib/clock';
 import { adminStatus } from '../src/routes/admin';
 import type { TestEnv } from './bindings';
 import { testEnv } from './bindings';

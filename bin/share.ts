@@ -35,6 +35,7 @@ import process from 'node:process';
    so reaching into src/ resolves at runtime too. The poster suffix is a
    contract with the Worker; both ends read it from the one declaration. */
 import { posterPath } from '../src/lib/poster.ts';
+import { now } from '../src/lib/clock.ts';
 import type { JsonObject } from '../src/lib/json.ts';
 import { isJsonObject, numberAt, numbersAt, parseObject, recordsAt, textAt, textsAt } from '../src/lib/json.ts';
 
@@ -167,7 +168,7 @@ async function cachedSession(): Promise<string | null> {
   }
   const session = decodeSession(cached);
   if (!session) return null;
-  return session.expiresAt - 30 > Date.now() / 1000 ? session.token : null;
+  return session.expiresAt - 30 > now() ? session.token : null;
 }
 
 async function mintSession(): Promise<Session> {

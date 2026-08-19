@@ -6,6 +6,7 @@
 import { parseObject, textAt, textsAt, numberAt, recordsAt, numbersAt, isJsonObject } from '../lib/json';
 import type { JsonObject } from '../lib/json';
 import { isRenderedKey } from '../lib/exportPath';
+import { now } from '../lib/clock';
 import type { RenderedKey } from '../lib/exportPath';
 
 let c = new URLSearchParams(location.search).get('c');
@@ -47,7 +48,7 @@ if (!c || !actions) {
   let exp = badge instanceof HTMLElement ? Number(badge.dataset.exp) || 0 : 0;
 
   function tick(): void {
-    const left = Math.max(0, exp - Math.floor(Date.now() / 1000));
+    const left = Math.max(0, exp - now());
     const m = Math.floor(left / 60);
     const s = `0${left % 60}`.slice(-2);
     if (badge) badge.textContent = `this link: ${m}:${s} left`;

@@ -3,7 +3,7 @@ import type { Env } from '../src/lib/types';
 import { upload } from '../src/routes/upload';
 import { adminConfig } from '../src/routes/admin';
 import { mintSession, sha256hex } from '../src/lib/auth';
-import { now } from '../src/lib/http';
+import { now } from '../src/lib/clock';
 import type { TestEnv } from './bindings';
 import { fetchWorker, testEnv } from './bindings';
 

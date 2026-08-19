@@ -10,7 +10,8 @@ import { exportArtifact } from './export';
 import { rawBytes } from '../lib/bytes';
 import { fileShell, dirShell, errorShell, adminShell, type ShellCommon } from '../render/shell';
 import { renderCode, renderSource } from '../render/markdown';
-import { htmlResponse, now } from '../lib/http';
+import { htmlResponse } from '../lib/http';
+import { now } from '../lib/clock';
 
 /** Past this a shell would carry more bytes than a download costs, and
     highlighting them would spend real CPU on a file nobody reads in a browser.

@@ -67,7 +67,3 @@ export function textResponse(text: string, status = 200): Response {
 export function wantsJson(request: Request): boolean {
   return (request.headers.get('accept') ?? '').includes('application/json');
 }
-
-export function now(): number {
-  return Math.floor(Date.now() / 1000);
-}

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ADMIN_SECS, mintAdminToken, verifyAdminToken } from '../src/lib/admin';
 import { mintToken, verifyToken } from '../src/lib/sign';
 import { sha256hex, mintSession } from '../src/lib/auth';
-import { now } from '../src/lib/http';
+import { now } from '../src/lib/clock';
 import { decodeMeta } from '../src/lib/r2';
 import { adminConfig, adminRemint } from '../src/routes/admin';
 import { del } from '../src/routes/del';

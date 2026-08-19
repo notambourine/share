@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { ADMIN_SECS, mintAdminToken } from '../src/lib/admin';
 import { mintToken } from '../src/lib/sign';
-import { now } from '../src/lib/http';
+import { now } from '../src/lib/clock';
 import { DECK_THEME, TOKENS } from '../src/brand';
 import type { TestEnv } from './bindings';
 import { fetchWorker, testEnv } from './bindings';

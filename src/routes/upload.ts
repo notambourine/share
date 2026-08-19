@@ -6,7 +6,8 @@ import { authorize } from '../lib/auth';
 import { mintArtifactLink, publicUrl } from '../lib/link';
 import { mintAdminLink } from '../lib/admin';
 import { payloadKey, writeMeta } from '../lib/r2';
-import { jsonResponse, textResponse, wantsJson, now } from '../lib/http';
+import { jsonResponse, textResponse, wantsJson } from '../lib/http';
+import { now } from '../lib/clock';
 import { MAX_TRANSFORM_BYTES, TRANSFORMS, runTransform, transformable } from '../transforms';
 
 const MAX_FILES = 200;
