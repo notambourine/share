@@ -1,9 +1,9 @@
 /** The nightly cron destroys nothing it cannot name, so what it walks and what
     it skips is the whole test. */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { sweep } from '../src/sweep';
-import { now } from '../src/lib/http';
+import { now } from '../src/lib/clock';
 import { scheduledWorker, testEnv } from './bindings';
 import type { TestEnv } from './bindings';
 
@@ -51,6 +51,22 @@ describe('sweep', () => {
     const env = testEnv({ objects: { [`acme/${DEAD}/meta.json`]: 'not json' } });
     expect(await sweep(env)).toEqual({ scanned: 1, trashed: 0 });
     expect(env.BUCKET.objects.has(`acme/${DEAD}/meta.json`)).toBe(true);
+  });
+
+  /* The clock is a plain read, not an injected seam, and this is the case that
+     proves a pinned one costs nothing: `Date` alone is faked, because faking
+     queueMicrotask too would hang the awaits below. */
+  it('an artifact lives through its expiry second and dies on the next', async () => {
+    const t = now();
+    const env = testEnv({ objects: { [`acme/${DEAD}/meta.json`]: metaFor('acme', DEAD, t) } });
+    vi.useFakeTimers({ toFake: ['Date'], now: t * 1000 });
+    try {
+      expect(await sweep(env)).toEqual({ scanned: 1, trashed: 0 });
+      vi.setSystemTime((t + 1) * 1000);
+      expect(await sweep(env)).toEqual({ scanned: 1, trashed: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('runs off the cron handler, which defers it', async () => {

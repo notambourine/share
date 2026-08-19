@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { now } from '../src/lib/clock';
 
 /* Spawns the real CLI, so the Windows CI leg proves the cache path and the
    path handling work off-POSIX, not just that they parse.
@@ -44,7 +45,7 @@ function aFile() {
   return path;
 }
 
-const live = () => ({ token: 'tom.v1.9.x', name: 'tom', expiresAt: Math.floor(Date.now() / 1000) + 300 });
+const live = () => ({ token: 'tom.v1.9.x', name: 'tom', expiresAt: now() + 300 });
 
 describe('credential resolution', () => {
   it('put runs off the cached session without touching 1Password', () => {

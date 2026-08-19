@@ -1,7 +1,8 @@
 import type { SigningKeys } from './sign';
 import { constantTimeEqual, mintToken, parseSigningKeys, verifyToken } from './sign';
 import { decodeTextMap } from './json';
-import { jsonResponse, now, textResponse } from './http';
+import { jsonResponse, textResponse } from './http';
+import { now } from './clock';
 
 const enc = new TextEncoder();
 

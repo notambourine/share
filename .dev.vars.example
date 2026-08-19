@@ -12,6 +12,3 @@ TOKENS={"dev":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae"
 
 # JSON map of key id -> signing secret. Highest v<n> mints; older ids still verify.
 SIGNING_KEYS={"v1":"dev-signing-secret"}
-
-# Optional JSON map of space -> artifact-life days (client names stay out of the repo).
-SPACE_TTLS={}

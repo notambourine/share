@@ -1,7 +1,8 @@
 import type { Env, Meta } from '../lib/types';
 import { authorize } from '../lib/auth';
 import { readMeta } from '../lib/r2';
-import { jsonResponse, htmlResponse, now } from '../lib/http';
+import { jsonResponse, htmlResponse } from '../lib/http';
+import { now } from '../lib/clock';
 import { errorShell } from '../render/shell';
 import { publicUrl } from '../lib/link';
 import { isExpired } from '../lib/r2';

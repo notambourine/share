@@ -1,7 +1,7 @@
 import type { Env } from './lib/types';
 import { TRASH_PREFIX } from './lib/types';
 import { readMeta, isExpired, moveToTrash } from './lib/r2';
-import { now } from './lib/http';
+import { now } from './lib/clock';
 
 /**
  * Nightly cron: an R2 lifecycle rule cannot read a date out of meta.json, so

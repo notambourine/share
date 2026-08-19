@@ -1,7 +1,8 @@
 import type { Env } from '../lib/types';
 import { authorize, mintSession, SESSION_DEFAULT_SECS, SESSION_MAX_SECS } from '../lib/auth';
 import { parseDuration } from '../lib/keys';
-import { jsonResponse, now } from '../lib/http';
+import { jsonResponse } from '../lib/http';
+import { now } from '../lib/clock';
 
 /**
  * POST /session: trade the raw vault token for a short-lived session token.

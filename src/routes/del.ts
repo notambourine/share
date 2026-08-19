@@ -3,7 +3,8 @@ import { authorize } from '../lib/auth';
 import { verifyAdminToken } from '../lib/admin';
 import { parseSigningKeys } from '../lib/sign';
 import { moveToTrash } from '../lib/r2';
-import { now, textResponse, ROBOTS } from '../lib/http';
+import { textResponse, ROBOTS } from '../lib/http';
+import { now } from '../lib/clock';
 
 /** The `?c=` admin token authorizes exactly this artifact's delete, nothing
     wider, so it never touches the vault map. Keys it cannot parse are a silent

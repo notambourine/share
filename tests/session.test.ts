@@ -3,7 +3,7 @@ import { session } from '../src/routes/session';
 import { del } from '../src/routes/del';
 import { upload } from '../src/routes/upload';
 import { authenticate, mintSession, sha256hex } from '../src/lib/auth';
-import { now } from '../src/lib/http';
+import { now } from '../src/lib/clock';
 import type { Env } from '../src/lib/types';
 import { testEnv } from './bindings';
 

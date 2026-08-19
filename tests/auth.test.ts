@@ -5,7 +5,7 @@ import {
   SESSION_EXPIRED_PHRASE, sha256hex,
 } from '../src/lib/auth';
 import { parseArtifactPath } from '../src/routes/mint';
-import { now } from '../src/lib/http';
+import { now } from '../src/lib/clock';
 
 function req(auth?: string): Request {
   return new Request('https://share.example/up/acme', {
@@ -90,8 +90,8 @@ describe('session tokens', () => {
 /* The scope rule has one home now, so it gets one table: every need against
    every credential state, asserting the status and the body byte for byte. */
 describe('authorize', () => {
-  const future = Math.floor(Date.now() / 1000) + 600;
-  const past = Math.floor(Date.now() / 1000) - 600;
+  const future = now() + 600;
+  const past = now() - 600;
   const SCOPE = 'unauthorized: a session token only authorizes /up; run this verb with the vault token';
   const EXPIRED = 'unauthorized: session expired; POST /session to mint a new one';
 

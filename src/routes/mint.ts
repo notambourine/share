@@ -5,7 +5,8 @@ import { readMeta, isExpired } from '../lib/r2';
 import { mintArtifactLink, publicUrl } from '../lib/link';
 import { isValidSpace, isValidHash, parseDuration } from '../lib/keys';
 import { parseObject, textAt } from '../lib/json';
-import { jsonResponse, now } from '../lib/http';
+import { jsonResponse } from '../lib/http';
+import { now } from '../lib/clock';
 
 interface SignBody {
   path: string | null;
