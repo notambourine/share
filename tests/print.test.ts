@@ -60,7 +60,7 @@ describe('the inlined stylesheet survives verbatim', () => {
 
   it('keeps the @page rule the paper size depends on', async () => {
     expect(await print('slides')).toContain('@page{size:1152px 648px;margin:0;}');
-    expect(await print('doc')).toContain('@page{size:A4;margin:18mm 16mm 20mm 16mm;}');
+    expect(await print('doc')).toContain('@page{size:A4;margin:18mm 24mm 20mm 24mm;}');
   });
 });
 

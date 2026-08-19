@@ -1,23 +1,28 @@
-/* What a fenced block looks like: highlight.js class names on NoTambourine
-   tokens, and the diagram a ```mermaid fence draws. Ours, not vendored: both
-   libraries are imported into the Worker, which emits these classes from
-   src/render/markdown.ts, so this is the only half a browser still fetches.
-   Linked by every shell that renders markdown and inlined by the PDF export,
-   which is why a diagram reads the same on screen and on paper. */
+/* highlight.js class names on NoTambourine tokens, and the diagram a ```mermaid
+   fence draws. Ours, not vendored: both libraries are imported into the Worker,
+   which emit these classes from src/render/markdown.ts, so this is the only
+   half a browser still fetches.
+
+   Semantic tokens, never a literal, because this sheet renders on both grounds:
+   the screen shell links it on the dark canvas, and src/render/export.tsx
+   inlines it under `.theme-light` for the PDF. Every colour here is one the
+   light theme remaps to its text-grade tone, so paper gets 5:1 with no second
+   sheet restating the palette. The fallbacks are each token's own dark value,
+   for a snapshot opened with no tokens.css beside it. */
 .hljs { color: var(--fg2, #C9C9CE); background: transparent; }
 .hljs-comment, .hljs-quote { color: var(--fg3, #8A8A92); font-style: italic; }
 .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section,
-.hljs-doctag, .hljs-meta { color: #E75A7C; }
-.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute { color: #58C9B9; }
-.hljs-number, .hljs-symbol, .hljs-bullet, .hljs-link { color: #F5A6BB; }
+.hljs-doctag, .hljs-meta { color: var(--accent-text, #E75A7C); }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute { color: var(--support-fg, #8FDCD0); }
+.hljs-number, .hljs-symbol, .hljs-bullet, .hljs-link { color: var(--accent-fg, #F5A6BB); }
 .hljs-title, .hljs-name, .hljs-type, .hljs-class .hljs-title,
 .hljs-function .hljs-title { color: var(--fg1, #F5F5F7); }
 .hljs-attr, .hljs-variable, .hljs-template-variable,
-.hljs-selector-attr, .hljs-selector-pseudo { color: #C9C9CE; }
-.hljs-built_in, .hljs-builtin-name { color: #58C9B9; }
-.hljs-deletion { color: #E75A7C; text-decoration: line-through; }
+.hljs-selector-attr, .hljs-selector-pseudo { color: var(--fg2, #C9C9CE); }
+.hljs-built_in, .hljs-builtin-name { color: var(--support-fg, #8FDCD0); }
+.hljs-deletion { color: var(--accent-text, #E75A7C); text-decoration: line-through; }
 .hljs-emphasis { font-style: italic; }
-.hljs-strong { font-weight: 600; }
+.hljs-strong { font-weight: var(--fw-semibold, 600); }
 
 /* A diagram rides in a `<pre>` because that is the only shape markdown-it hands
    back untouched (src/render/mermaid.ts). It is not a code block, so shell.css
