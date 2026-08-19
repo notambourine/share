@@ -70,15 +70,14 @@ jobs:
       - run: npm run brand
         if: matrix.os == 'ubuntu-latest'
 
-  # Claude Code keys a plugin's cache dir by the `version` string in
-  # .claude-plugin/plugin.json, not by commit SHA (that fallback applies only to
-  # a manifest with no version). An installed 0.1.0 therefore never re-clones
-  # while main ships 0.1.0, and every consumer runs a frozen skill. This job is
-  # the only thing standing between an edit here and that silent staleness.
+  # The rule and its reasoning live in scripts/plugin-version.sh, which the
+  # PreToolUse hook in .claude/settings.json also runs before a `git push`. This
+  # job is the authoritative copy: the hook only covers a Claude session.
   plugin-version:
     if: github.event_name == 'pull_request'
-    # ubuntu-slim: this gate only shells out to git, jq, and sed, all on slim's
-    # image, and finishes inside the first billed minute at a third the rate.
+    # ubuntu-slim: the gate only shells out to git, jq, and sed, all on slim's
+    # image, and finishes inside the first billed minute at a third the rate. It
+    # is called directly rather than through npm, which slim does not carry.
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
@@ -88,34 +87,6 @@ jobs:
           # The base branch has to be a real ref to diff against.
           fetch-depth: 0
 
-      - env:
-          BASE: ${{ github.base_ref }}
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin "$BASE"
-
-          # The installed surface only. src/, public/, and tests/ ride the Worker
-          # deploy, which is fresh on every push and needs no bump.
-          changed=$(git diff --name-only "origin/$BASE...HEAD" -- skills bin .claude-plugin)
-          if [ -z "$changed" ]; then
-            echo "no change to the installed surface; no bump needed"
-            exit 0
-          fi
-
-          old=$(git show "origin/$BASE:.claude-plugin/plugin.json" | jq -r .version)
-          new=$(jq -r .version .claude-plugin/plugin.json)
-
-          if [ "$new" = "$old" ]; then
-            echo "::error file=.claude-plugin/plugin.json::installed surface changed but version is still $old - bump it"
-            printf '%s\n' "$changed" | sed 's/^/  /'
-            exit 1
-          fi
-
-          # A cache dir is never overwritten, so a version that goes sideways or
-          # backwards can land on a name someone already has and stay stale.
-          if [ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -1)" != "$new" ]; then
-            echo "::error file=.claude-plugin/plugin.json::version must go up: $old -> $new"
-            exit 1
-          fi
-
-          echo "version $old -> $new"
+      # GITHUB_BASE_REF is already the base branch on a pull_request, and the
+      # script reads it, so nothing interpolates into the shell here.
+      - run: ./scripts/plugin-version.sh

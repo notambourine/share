@@ -5,5 +5,18 @@
     "TOMFILES_SILENCE_SOCKET_TREE": "1",
     "TOMFILES_SILENCE_HARDEN_RUNNER": "1",
     "TOMFILES_SILENCE_SFW": "1"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -e '.tool_input.command | test(\"git\\\\s+push\")' >/dev/null 2>&1 || exit 0; \"$CLAUDE_PROJECT_DIR/scripts/plugin-version.sh\" >&2 || exit 2"
+          }
+        ]
+      }
+    ]
   }
 }
