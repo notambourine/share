@@ -19,7 +19,7 @@
  * a brand edit reaches every share link ever made with nothing to invalidate.
  * Re-rendering a PDF costs a browser minute, so that one stays deliberate.
  */
-export const CACHE_VERSION = 3;
+export const CACHE_VERSION = 4;
 
 export type ExportFormat =
   | 'slides-html' | 'doc-html' | 'pdf' | 'slides-pdf' | 'doc-pdf' | 'txt'
