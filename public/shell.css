@@ -94,7 +94,7 @@ body[data-kind="md"] .stage { justify-content: flex-start; }
 .doc.prose blockquote {
   margin: var(--sp-4) 0;
   padding-left: var(--sp-4);
-  border-left: 2px solid var(--nt-mint);
+  border-left: 2px solid var(--support);
   color: var(--fg3);
 }
 
@@ -259,12 +259,12 @@ body.locked .locked-only { display: block; }
 .thumb .b.title { background: var(--fg1); width: 75%; height: 7px; }
 .thumb .b.t1 { width: 90%; } .thumb .b.t2 { width: 70%; } .thumb .b.t3 { width: 80%; }
 .thumb .fmt { position: absolute; right: 8px; bottom: 6px;
-  font-family: var(--font-accent); font-size: 10px; font-weight: var(--fw-semibold);
-  letter-spacing: 0.08em; color: var(--fg3); text-transform: uppercase; }
+  font-family: var(--font-accent); font-size: var(--fs-badge); font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-allcaps); color: var(--fg3); text-transform: uppercase; }
 .thumb .srctext { font-family: var(--font-mono); font-size: 10px; color: var(--fg3);
   line-height: 1.6; text-align: left; white-space: pre-line; }
 .tlabel { display: flex; flex-direction: column; gap: 2px; }
-.tlabel .t { font-family: var(--font-accent); font-size: 14px;
+.tlabel .t { font-family: var(--font-accent); font-size: var(--fs-small);
   font-weight: var(--fw-semibold); color: var(--fg1); }
 .tlabel .s { font-size: var(--fs-caption); color: var(--fg3); }
 
@@ -294,8 +294,8 @@ body.locked .locked-only { display: block; }
 @media (max-width: 700px) { .cols { grid-template-columns: 1fr; } }
 .panel { background: var(--bg-card); border: 1px solid var(--line);
   border-radius: var(--r-md); padding: var(--sp-6); }
-.cardlabel { font-family: var(--font-accent); font-size: 13px;
-  font-weight: var(--fw-semibold); letter-spacing: 0.08em;
+.cardlabel { font-family: var(--font-accent); font-size: var(--fs-label);
+  font-weight: var(--fw-semibold); letter-spacing: var(--ls-allcaps);
   text-transform: uppercase; color: var(--fg3); margin: 0 0 var(--sp-4); }
 .note { color: var(--fg3); font-size: var(--fs-caption); margin: var(--sp-3) 0 0; }
 
@@ -310,4 +310,4 @@ body.locked .locked-only { display: block; }
 
 code.cmd { display: block; margin-top: var(--sp-2); padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--line); border-radius: var(--r-xs);
-  background: var(--bg-raised); font-size: 13px; }
+  background: var(--bg-raised); font-size: var(--fs-mono); }

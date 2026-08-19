@@ -48,19 +48,27 @@ body {
 }
 
 .print-doc ul, .print-doc ol { margin: 0 0 0.9em; padding-left: 1.4em; }
-.print-doc li::marker { color: var(--nt-pink); }
+/* The semantic tokens, not the raw pink: `.theme-light` rides on `html` here,
+   so these resolve to the golden set's text-grade tones, which is what carries
+   5:1 on paper. The bright accent is a screen colour and a logo colour. */
+.print-doc li::marker { color: var(--accent-text); }
+/* Matched to `.doc.prose` in shell.css: the box is the marker, and a strike
+   reads as struck. A document must not read one way on screen and another in
+   its own PDF. */
+.print-doc li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.4em; }
+.print-doc :is(del, s) { color: var(--fg3); }
 
-.print-doc a { color: var(--nt-pink); border-bottom: none; }
+.print-doc a { color: var(--accent-text); border-bottom: none; }
 
 .print-doc code {
-  background: var(--nt-pink-tint);
-  color: var(--nt-pink-press);
+  background: var(--accent-soft);
+  color: var(--accent-fg);
   font-size: 0.85em;
 }
 
 .print-doc pre {
-  background: var(--nt-paper);
-  border: 1px solid var(--nt-line);
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: var(--r-sm);
   padding: 0.8em 1em;
   font-size: 8.5pt;
@@ -70,24 +78,17 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
-.print-doc pre code { background: none; color: var(--nt-ink-85); padding: 0; font-size: 1em; }
+.print-doc pre code { background: none; color: var(--fg2); padding: 0; font-size: 1em; }
 
-/* nt-code.css is the screen theme, so its non-token colors are picked for a
-   near-black surface and go faint on paper. Only the hard-coded ones need
-   restating; the rest already ride --fg1/--fg2/--fg3, which .theme-light moves. */
-.print-doc :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section,
-  .hljs-doctag, .hljs-meta, .hljs-number, .hljs-symbol, .hljs-bullet,
-  .hljs-link, .hljs-deletion) { color: var(--nt-pink-press); }
-.print-doc :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute,
-  .hljs-built_in, .hljs-builtin-name) { color: var(--nt-mint-press); }
-.print-doc :is(.hljs-attr, .hljs-variable, .hljs-template-variable,
-  .hljs-selector-attr, .hljs-selector-pseudo) { color: var(--nt-ink-70); }
+/* No hljs block here. nt-code.css rides semantic tokens, so `.theme-light`
+   already moves every syntax colour to its text-grade tone; restating them was
+   a second copy of the palette that could only ever drift from the first. */
 
 .print-doc blockquote {
   margin: 0 0 1em;
   padding-left: 1em;
-  border-left: 2px solid var(--nt-mint);
-  color: var(--nt-ink-70);
+  border-left: 2px solid var(--support);
+  color: var(--fg2);
 }
 
 .print-doc table {
@@ -100,20 +101,22 @@ body {
 .print-doc th, .print-doc td {
   text-align: left;
   padding: 0.4em 0.6em;
-  border-bottom: 1px solid var(--nt-line);
+  border-bottom: 1px solid var(--line);
 }
-.print-doc th { color: var(--nt-ink); font-weight: 600; }
+.print-doc th { color: var(--fg1); font-weight: var(--fw-semibold); }
 
 .print-doc img { max-width: 100%; break-inside: avoid; }
-.print-doc hr { border: 0; border-top: 1px solid var(--nt-line); margin: 1.6em 0; }
+.print-doc hr { border: 0; border-top: 1px solid var(--line); margin: 1.6em 0; }
 
 /* The lockup rides the first page only; Chrome's own footer carries the page
    number, because headless Chrome implements no `@bottom-center` margin box. */
 .print-mark {
+  /* The one pink on paper that stays the bright accent: a mark is artwork, so
+     it takes the logo colour rather than the text-grade tone. */
   color: var(--nt-pink);
   margin-bottom: 1.6em;
   padding-bottom: 0.6em;
-  border-bottom: 1px solid var(--nt-line);
+  border-bottom: 1px solid var(--line);
 }
 /* 26pt of lockup puts the wordmark at about the 13pt it reads at as type: most
    of the box is crescent, so the letters take roughly half of any height set. */
