@@ -96,6 +96,10 @@ vault token into the conversation.
   directives work:
   `<!-- _class: lead -->` for a title slide, `<!-- paginate: true -->` for
   slide numbers.
+- A ```mermaid fence is drawn server-side, in brand colors, on the page and in
+  the PDF: flowchart, sequence, state, class, ER, and xychart. Other types
+  (pie, gantt, mindmap) show their source instead, so pick one of the six.
+  Every other fence comes out highlighted; tag it with its language.
 - Full HTTP API: https://share.notambourine.com/llms.txt
 
 ## Export formats
