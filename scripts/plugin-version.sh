@@ -30,9 +30,9 @@ if ! git rev-parse --verify -q "origin/$base" >/dev/null; then
 	exit 0
 fi
 
-# The installed surface only. src/, public/, and tests/ ride the Worker deploy,
-# which is fresh on every push and needs no bump.
-changed=$(git diff --name-only "origin/$base...HEAD" -- skills bin .claude-plugin)
+# Installed surface only; src/ and tests/ ride the always-fresh Worker deploy.
+# Tree against tip, not the merge-base a squash-merged parent leaves behind.
+changed=$(git diff --name-only "origin/$base" HEAD -- skills bin .claude-plugin)
 if [ -z "$changed" ]; then
 	echo "no change to the installed surface; no bump needed"
 	exit 0
