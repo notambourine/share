@@ -29,9 +29,10 @@ import { readFile, glob } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { root, BRAND, brandCopies } from './brand.mjs';
 
-/* vars.css, not tokens.css: tokens.css is three @import lines, and every value
-   the audit compares against is declared in vars.css. */
-const TOKENS = `${BRAND}/vars.css`;
+/* Not tokens.css, which is only @import lines: these are the two files that
+   declare anything. vars.css holds every value; logo-vars.css holds the artwork
+   as data URIs, which the deck theme reads for its running lockup. */
+const TOKENS = [`${BRAND}/vars.css`, `${BRAND}/logo-vars.css`];
 const SCAN = [
   'public/*.css', 'public/vendor/**/*.css', 'public/*.svg', 'public/logo/*.svg',
   /* .tsx as well as .ts: the render layer is JSX, and a glob that missed it
@@ -71,7 +72,7 @@ for (const [from, to] of copies) {
   if (!same) fails.push(`${to} differs from ${from}. Run \`npm run vendor\`.`);
 }
 
-const tokensCss = await readFile(join(root, TOKENS), 'utf8');
+const tokensCss = (await Promise.all(TOKENS.map((p) => readFile(join(root, p), 'utf8')))).join('\n');
 const allowed = colorsIn(tokensCss);
 const defined = new Set([...tokensCss.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((m) => m[1]));
 
