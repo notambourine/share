@@ -138,4 +138,6 @@ curl the suffixes to check they respond.
 Run `nt-share check <space>/<hash>` after sharing a deck: it names the slides
 whose content clips and exits 1 when any does. Fix the source, then `rm` the
 artifact and `put` a fresh one - a share is immutable, so there is no edit in
-place, and the URL changes. Rerun `check` if a render still reads `(pending)`.
+place, and the URL changes. It exits 1 on a clip and 2 while a render is still
+`(pending)`, because nothing measured is not the same as nothing wrong: rerun
+`check` until it exits 0.

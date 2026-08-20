@@ -88,7 +88,13 @@ Deploys themselves are hands-off after step 2.
    *Delete objects*, age 90 days. Leave public access off; the Worker binding
    is the only read path; the bucket stays private.
 2. **Connect the repo**: Workers & Pages → Create → Workers → import this
-   repository. Defaults are correct (deploy command `npx wrangler deploy`).
+   repository. The deploy command's default `npx wrangler deploy` is correct,
+   but the build command is empty and this Worker does not run without it: set
+   Settings → Build → *Build command* to `npm run build:client`. Skip it and
+   every file that build writes into `public/` 404s, so a deck renders a blank
+   slide, a PDF export never finishes, and there are no fonts and no favicon.
+   Workers Builds ignores a `build.command` in `wrangler.jsonc`, so this
+   dashboard field is the only place the build lives.
    Every push to `main` deploys; the cron trigger ships with the config.
 3. **Secrets**: on the Worker: Settings → Variables and Secrets, each as type
    *Secret* (values are JSON strings; the Worker parses them):
