@@ -17,13 +17,12 @@ import { kindOf, extOf } from '../lib/keys';
 import type { ExportSpec, RenderedKey } from '../lib/exportPath';
 import { formatsFor, stemOf } from '../lib/exportPath';
 import { fileSuffix } from '../lib/link';
+import { fmtSize } from '../lib/format';
 import { LOCKUP } from '../brand';
 
-export function fmtSize(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
+/* Re-exported because the routes import it from here; it lives in lib/ so the
+   CLI can print the same sizes without reaching into the render layer. */
+export { fmtSize };
 
 /* The golden set's icons, served out of public/logo/. The manifest rides the
    landing page alone: every other shell is one client artifact, and a manifest
@@ -260,6 +259,26 @@ export function fileShell(o: ShellCommon, view: ShellView): string {
   }
 }
 
+/**
+ * The spellings a listed file answers to, as links beside it. The same catalog
+ * the admin tiles read, so a format is added in exportPath.ts and shows up in
+ * both places. Relative hrefs, so a signed artifact's `/k/` segment rides along
+ * in the resolved URL and this never has to know the tier.
+ *
+ * A bare `.md` sniffs deck-or-document from its own content, which a recipient
+ * cannot guess; naming every spelling is what lets them pick.
+ */
+function spellings(path: string): Child | null {
+  const offered = formatsFor(path).filter((spec) => spec.tile);
+  if (offered.length === 0) return null;
+  const stem = encodeURI(stemOf(path));
+  return (
+    <span class="spellings">
+      {offered.map((spec) => <a href={`${stem}${spec.suffix}`}>{spec.label}</a>)}
+    </span>
+  );
+}
+
 export function dirShell(hash: string, files: MetaFile[]): string {
   return layout({
     title: hash,
@@ -269,7 +288,10 @@ export function dirShell(hash: string, files: MetaFile[]): string {
         <ul class="files">
           {files.map((f) => (
             <li>
-              <a href={encodeURI(f.path)}>{f.path}</a>
+              <span class="fname">
+                <a href={encodeURI(f.path)}>{f.path}</a>
+                {spellings(f.path)}
+              </span>
               <span class="caption">{fmtSize(f.size)}</span>
             </li>
           ))}

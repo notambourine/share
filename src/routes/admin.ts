@@ -111,6 +111,12 @@ export async function adminStatus(request: Request, env: Env, space: string, has
   }
 
   return jsonResponse({
+    tier: meta.tier,
+    /* Every path, not just the renderable ones: `nt-share fix` lands its repair
+       as a new artifact, and a deck's images have to ride along or the fix
+       quietly drops them. Sender-only material, which is why it answers here
+       rather than on the public listing. */
+    files: meta.files.map((f) => f.path),
     sources: [...sources.values()].map(({ path, rendered, check }) => ({ path, rendered: rendered.sort(), check })),
   });
 }

@@ -180,6 +180,17 @@ body[data-kind="md"] .stage { justify-content: flex-start; }
 }
 .files li + li { border-top: 1px solid var(--line-soft); }
 
+/* The row is filename over its spellings, with the size held to the right, so
+   the two columns stay a flex pair however many spellings a file offers. */
+.fname { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.spellings { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.spellings a {
+  font-family: var(--font-accent);
+  font-size: var(--fs-caption);
+  color: var(--fg3);
+}
+.spellings a:hover { color: var(--accent-text); border-bottom-color: var(--accent-text); }
+
 /* Marpit sizes each slide from its own viewBox, so the deck only has to cap
    the width and let the aspect ratio do the rest. */
 .deck { width: min(100%, calc((100vh - 140px) * 16 / 9)); margin: 0 auto; }

@@ -14,7 +14,8 @@
    nt-share sign <space>/<hash> [--ttl 30d]             (re-sign an older artifact)
    nt-share admin <space>/<hash>                        (re-open the 5-minute admin link)
    nt-share check <space>/<hash> [--json]               (renders landed, and whether a slide clips)
-   nt-share ls <space>
+   nt-share fix <space>/<hash>                          (trim the slides that clip; lands a new link)
+   nt-share ls <space> [--json]
    nt-share rm <space>/<hash>
 
    $SHARE_TOKEN takes a raw token or an op:// reference and skips the vault
@@ -36,8 +37,12 @@ import process from 'node:process';
    contract with the Worker; both ends read it from the one declaration. */
 import { posterPath } from '../src/lib/poster.ts';
 import { now } from '../src/lib/clock.ts';
+import { fmtSize } from '../src/lib/format.ts';
+/* The export catalog, so `ls` names every spelling an artifact answers to
+   without this file holding a second copy of the suffix list. */
+import { formatsFor, stemOf } from '../src/lib/exportPath.ts';
 import type { JsonObject } from '../src/lib/json.ts';
-import { isJsonObject, numberAt, numbersAt, parseObject, recordsAt, textAt, textsAt } from '../src/lib/json.ts';
+import { isJsonObject, numberAt, numbersAt, parseJson, parseObject, recordsAt, textAt, textsAt } from '../src/lib/json.ts';
 
 const BASE = (process.env.SHARE_URL ?? 'https://share.notambourine.com').replace(/\/$/, '');
 // guarddog env-read: an op:// locator for the token, never the token itself.
@@ -92,6 +97,24 @@ function decodeStatus(body: string): SourceStatus[] {
       overflow: clip ? numbersAt(clip, 'overflow') : null,
     };
   });
+}
+
+/** The list route answers with an array rather than an object, so it needs its
+    own narrowing on the way in; a row that is not an object is dropped. */
+function decodeList(body: string): JsonObject[] {
+  const value = parseJson(body);
+  if (value === null || !Array.isArray(value)) {
+    die(`the server did not answer with a JSON array:\n${body.trim()}`);
+  }
+  return value.filter(isJsonObject);
+}
+
+/** A live admin credential for an artifact this token owns, minted rather than
+    pasted, so `check` and `fix` both run unattended. */
+async function adminC(artifact: string, token: string): Promise<string> {
+  const link = fields(await api(`/${artifact}/admin`, { method: 'POST' }, token));
+  return new URL(required(link, 'url')).searchParams.get('c')
+    ?? die('the admin link carried no ?c=');
 }
 
 /** Nothing rendered yet reads as pending; a deck says whether it clips. */
@@ -518,9 +541,7 @@ switch (cmd) {
     if (!path?.includes('/')) die('usage: nt-share check <space>/<hash> [--json]');
     const artifact = path.replace(/\/$/, '');
     const token = vaultToken();
-    const link = fields(await api(`/${artifact}/admin`, { method: 'POST' }, token));
-    const c = new URL(required(link, 'url')).searchParams.get('c')
-      ?? die('the admin link carried no ?c=');
+    const c = await adminC(artifact, token);
     const body = await api(`/${artifact}/status?c=${encodeURIComponent(c)}`, {}, token);
     if (flags.json) {
       console.log(body.trim());
@@ -532,7 +553,7 @@ switch (cmd) {
     for (const s of sources) console.log(`${s.path.padEnd(width)}  ${verdict(s)}`);
     // Exit 1 so a loop can branch on a clipped deck without parsing the report.
     if (sources.some((s) => s.overflow && s.overflow.length > 0)) {
-      console.error('a slide clips: fix the source, then rm and put a fresh deck - never edit in place');
+      console.error(`a slide clips: \`nt-share fix ${artifact}\` trims them, or edit the source and put a fresh deck`);
       process.exit(1);
     }
     /* Exit 2, because nothing measured is not the same as nothing wrong: a deck
@@ -546,10 +567,93 @@ switch (cmd) {
     }
     break;
   }
+  /* The repair verb. A share is immutable, so this lands a NEW artifact at a new
+     URL rather than editing one: the old link keeps working until it is `rm`ed,
+     which is what makes the fix safe to run on a deck already sent.
+
+     Same credential as `put`, because that is what this is - the Worker runs the
+     bounded repair prompt and stores the answer. The admin page reports which
+     slides clip and prints this command; it never runs it, so no 5-minute link
+     gains the authority to mint an artifact or spend the AI budget. */
+  case 'fix': {
+    const [path] = rest;
+    if (!path?.includes('/')) die('usage: nt-share fix <space>/<hash> [--tier signed] [--ttl <dur>]');
+    const artifact = path.replace(/\/$/, '');
+    const [space] = artifact.split('/');
+    const token = vaultToken();
+    const c = await adminC(artifact, token);
+    const body = await api(`/${artifact}/status?c=${encodeURIComponent(c)}`, {}, token);
+
+    const clipped = decodeStatus(body).filter((s) => s.overflow && s.overflow.length > 0);
+    if (clipped.length === 0) {
+      console.error('nothing clips; rerun `nt-share check` if a render still reads (pending)');
+      break;
+    }
+    if (clipped.length > 1) die('more than one deck clips here; split them into their own artifacts');
+    const deck = clipped[0];
+    const overflow = deck.overflow ?? [];
+
+    /* A view link to read the bytes back: the serve route takes a URL token and
+       never a Bearer, so the vault token alone cannot GET a file. Ten minutes,
+       because it exists for the next few requests only. */
+    const signed = fields(await api('/sign', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: artifact, ttl: '10m' }),
+    }, token));
+    const base = required(signed, 'url').replace(/\/$/, '');
+
+    /* Every file rides along, not just the deck: this is a fresh upload, and
+       re-uploading the markdown alone would silently drop a deck's images. */
+    const form = new FormData();
+    for (const file of textsAt(fields(body), 'files')) {
+      const res = await fetch(`${base}/${encodeURI(file)}?raw`);
+      if (!res.ok) die(`could not read ${file} back: ${res.status}`);
+      form.append('f', new Blob([await res.arrayBuffer()]), file);
+    }
+
+    const q = new URLSearchParams({ transform: 'fix', slides: overflow.join(',') });
+    q.set('tier', flags.tier ?? textAt(fields(body), 'tier') ?? 'open');
+    if (flags.ttl) q.set('ttl', flags.ttl);
+    if (flags['sign-ttl']) q.set('sign', flags['sign-ttl']);
+    const made = fields(await upload(`/up/${space}?${q}`, { method: 'POST', body: form }));
+
+    console.log(textAt(made, 'signedUrl') ?? required(made, 'url'));
+    const label = overflow.length === 1 ? `slide ${overflow[0]}` : `slides ${overflow.join(', ')}`;
+    console.error(`trimmed ${label} of ${deck.path}; the old link works until you rm it`);
+    console.error(`verify: nt-share check ${space}/${required(made, 'hash')}`);
+    const fixAdmin = textAt(made, 'adminUrl');
+    if (fixAdmin) console.error(`admin (5 min): ${fixAdmin}`);
+    break;
+  }
   case 'ls': {
     const [space] = rest;
-    if (!space) die('usage: nt-share ls <space>');
-    console.log((await api(`/${space}/`, {}, vaultToken())).trim());
+    if (!space) die('usage: nt-share ls <space> [--json]');
+    const body = await api(`/${space}/`, {}, vaultToken());
+    if (flags.json) {
+      console.log(body.trim());
+      break;
+    }
+    /* Every spelling each artifact answers to, so picking one costs no second
+       command. Derived from the same catalog the Worker draws its tiles from:
+       the server sends which paths export, never the suffixes themselves, so
+       adding a format in exportPath.ts reaches this listing with no edit here. */
+    for (const row of decodeList(body)) {
+      const bytes = numberAt(row, 'bytes') ?? 0;
+      const files = numberAt(row, 'files') ?? 0;
+      const state = row['expired'] === true ? '  EXPIRED' : '';
+      console.log(`${required(row, 'url')}   ${textAt(row, 'tier') ?? '?'}   ${files} ${
+        files === 1 ? 'file' : 'files'}, ${fmtSize(bytes)}${state}`);
+      for (const src of textsAt(row, 'sources')) {
+        const specs = formatsFor(src).filter((s) => s.tile);
+        if (specs.length === 0) continue;
+        const stem = stemOf(src);
+        const width = Math.max(...specs.map((s) => stem.length + s.suffix.length));
+        for (const spec of specs) {
+          console.log(`    ${`${stem}${spec.suffix}`.padEnd(width)}  ${spec.label} - ${spec.sub}`);
+        }
+      }
+    }
     break;
   }
   case 'rm': {
@@ -560,5 +664,5 @@ switch (cmd) {
     break;
   }
   default:
-    die('commands: install, put, sign, admin, check, ls, rm; see https://share.notambourine.com/llms.txt');
+    die('commands: install, put, sign, admin, check, fix, ls, rm; see https://share.notambourine.com/llms.txt');
 }

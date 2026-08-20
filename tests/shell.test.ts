@@ -121,3 +121,27 @@ describe('the shells keep their doctype and their chrome', () => {
     expect(forever).toContain('data-ttl="7d" aria-pressed="false"');
   });
 });
+
+/* The artifact root is what a recipient lands on, and a bare `.md` sniffs
+   deck-or-document from its own content - which they cannot guess. Naming every
+   spelling beside the file is what lets them pick. */
+describe('the directory listing offers each source its spellings', () => {
+  it('lists every tiled format for a markdown file, relative so a /k/ segment rides along', () => {
+    const out = dirShell('LCLC7zhWhmP4', [
+      { path: 'deck.md', size: 20, type: 'text/markdown' },
+      { path: 'chart.png', size: 9, type: 'image/png' },
+    ]);
+    for (const href of ['deck.slides.html', 'deck.doc.html', 'deck.slides.pdf', 'deck.doc.pdf', 'deck.txt']) {
+      expect(out).toContain(`href="${href}"`);
+    }
+    // Relative, never absolute: an absolute href would drop a signed segment.
+    expect(out).not.toContain('href="/deck.slides.html"');
+    // A png exports nothing, so it gets its name and no spellings.
+    expect(out).toContain('href="chart.png"');
+  });
+
+  it('gives a file that exports nothing no spelling row at all', () => {
+    const out = dirShell('LCLC7zhWhmP4', [{ path: 'notes.zip', size: 4, type: 'application/zip' }]);
+    expect(out).not.toContain('spellings');
+  });
+});

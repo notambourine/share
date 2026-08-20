@@ -1,6 +1,6 @@
 ---
 name: share
-version: 0.15.0
+version: 0.16.0
 description: Share a generated artifact (report, code sample, deck, screenshot, folder, HTML prototype) as a branded unguessable link on share.notambourine.com. Use when the user asks to "share", "send", or "get a link for" a file or directory, or to list or revoke existing shares.
 ---
 
@@ -20,7 +20,8 @@ the frame the CLI cut at upload.
     nt-share sign <space>/<hash> [--ttl <dur>]           # re-sign an older artifact
     nt-share admin <space>/<hash>                        # re-open the 5-minute admin link
     nt-share check <space>/<hash> [--json]               # renders landed, and whether a slide clips
-    nt-share ls <space>
+    nt-share fix <space>/<hash> [--tier signed]          # trim the slides that clip; lands a new link
+    nt-share ls <space> [--json]                         # every share, with each artifact's spellings
     nt-share rm <space>/<hash>                           # revoke; lands within 10 min
 
 A `<dur>` is a number plus `m`, `h`, `d`, or `w`: `7d`, `12h`, `4w`. Defaults:
@@ -36,9 +37,11 @@ A folder keeps its relative paths, and one with an
 `index.html` links straight at that file rather than at a one-row index;
 anything else links the folder root. An empty folder is a 400.
 
-`ls` prints JSON, newest first, one row per artifact: `hash`, `url`, `tier`,
-`uploader`, `createdAt`, `expiresAt`, `expired`, `files` (count),
-`bytes`. Read `expiresAt` there to confirm a TTL; do not curl the artifact.
+`ls` prints one block per artifact, newest first: the URL, tier, and size, then
+every spelling each renderable file answers to. `--json` gives the rows raw -
+`hash`, `url`, `tier`, `uploader`, `createdAt`, `expiresAt`, `expired`, `files`
+(count), `bytes`, and `sources` (the paths that export). Read `expiresAt` there
+to confirm a TTL; do not curl the artifact.
 
 `--clip` uploads the image sitting on the OS clipboard as a PNG, no file on
 disk: use it when someone says "share this screenshot" and names no path. It
@@ -90,12 +93,21 @@ vault token into the conversation.
   `agenda`, `renewal`, and `performance` come out as documents;
   `presentation` and `deck` as Marp decks. A `.txt` is stored as `.md`. On a
   502, retry once without the flag and say the transform failed.
+  It reformats and does not rewrite: the prompt asks for the author's own
+  sentences to survive, so what comes back should still sound like the notes
+  that went in. If it reads rewritten, that is a prompt bug worth reporting,
+  not something to fix by pre-formatting.
 - Markdown renders as a deck when the content says so - `marp: true` or `---`
   separators - and as a document otherwise; `.doc.html` and `.slides.html` pin
   it either way. Decks run through Marp, so `---` splits slides and Marp
-  directives work:
-  `<!-- _class: lead -->` for a title slide, `<!-- paginate: true -->` for
-  slide numbers.
+  directives work: `<!-- _class: lead -->` for the cover, `divider` for a
+  section break, `quote` for a pull quote, `split` to run a list in two
+  columns, `<!-- paginate: true -->` for slide numbers, and
+  `<!-- footer: acme -->` for a running footer. `<p class="eyebrow">01 &middot;
+  the model</p>` gets the numbered pink label - write it in sentence case, the
+  theme does the capitals. Every slide carries the lockup already, so never
+  write a `<style>` block or pick a colour: a share is immutable, and a hex
+  typed into a deck is a brand value nothing can correct later.
 - A ```mermaid fence is drawn server-side, in brand colors, on the page and in
   the PDF: flowchart, sequence, state, class, ER, and xychart. Other types
   (pie, gantt, mindmap) show their source instead, so pick one of the six.
@@ -122,6 +134,10 @@ Bare `.md` and `.pdf` read the content to choose: `marp: true` front matter or
 `---` slide separators mean deck, anything else means document. You cannot guess
 a sniff, so send `.slides.*` or `.doc.*` when the mode matters.
 
+The artifact root lists every spelling beside each file, and `nt-share ls
+<space>` prints the same set per artifact, so a recipient picks a mode instead
+of guessing what a bare `.md` sniffs to.
+
 The `.html` spellings answer immediately - the Worker renders them per request.
 Only the PDFs go through a browser.
 
@@ -136,8 +152,17 @@ rendering and lands on its own. Hand the URL over as `put` printed it - never
 curl the suffixes to check they respond.
 
 Run `nt-share check <space>/<hash>` after sharing a deck: it names the slides
-whose content clips and exits 1 when any does. Fix the source, then `rm` the
-artifact and `put` a fresh one - a share is immutable, so there is no edit in
-place, and the URL changes. It exits 1 on a clip and 2 while a render is still
-`(pending)`, because nothing measured is not the same as nothing wrong: rerun
-`check` until it exits 0.
+whose content clips and exits 1 when any does. It exits 2 while a render is
+still `(pending)`, because nothing measured is not the same as nothing wrong:
+rerun `check` until it exits 0.
+
+When it does clip, `nt-share fix <space>/<hash>` trims those slides and nothing
+else. It re-uploads the artifact whole through a repair prompt allowed to cut
+only the slides `check` named, and prints a new link. A share is immutable, so
+the fix is always a new URL - the old link keeps working until you `rm` it,
+which is what makes this safe to run on a deck already sent. Hand over the new
+link, then `rm` the old artifact. The tier carries over unless `--tier` says
+otherwise.
+
+Edit the source and `put` a fresh deck instead when the slide needs different
+words rather than fewer.

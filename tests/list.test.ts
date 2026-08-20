@@ -18,6 +18,7 @@ interface Row {
   expired: boolean;
   files: number;
   bytes: number;
+  sources: string[];
 }
 
 function metaFor(hash: string, createdAt: number, expiresAt: number | null): string {
@@ -58,6 +59,29 @@ describe('GET /<space>/', () => {
       files: 1,
       bytes: 6,
     });
+  });
+
+  /* The paths that export something, so a caller can name every spelling
+     without a request per artifact. The suffixes stay out of the answer: both
+     ends read them off the export catalog, so listing them here would be a
+     copy that goes stale the first time a format is added. */
+  it('names the renderable sources and leaves the rest out', async () => {
+    const env = testEnv({
+      tokens: JSON.stringify({ tom: await sha256hex('raw-token') }),
+      objects: {
+        [`${SPACE}/${NEW}/meta.json`]: JSON.stringify({
+          space: SPACE, hash: NEW, tier: 'open', uploader: 'tom',
+          createdAt: NOW, expiresAt: null,
+          files: [
+            { path: 'deck.md', size: 6, type: 'text/markdown' },
+            { path: 'chart.png', size: 9, type: 'image/png' },
+          ],
+        }),
+      },
+    });
+    const rows = await (await list(env, 'Bearer raw-token')).json<Row[]>();
+    expect(rows[0].sources).toEqual(['deck.md']);
+    expect(rows[0].files).toBe(2);
   });
 
   /* Anonymous gets the same 404 as a missing page, so a space never confirms
