@@ -8,7 +8,7 @@ import { mintAdminLink } from '../lib/admin';
 import { payloadKey, writeMeta } from '../lib/r2';
 import { jsonResponse, textResponse, wantsJson } from '../lib/http';
 import { now } from '../lib/clock';
-import { MAX_TRANSFORM_BYTES, TRANSFORMS, runTransform, transformable } from '../transforms';
+import { MAX_TRANSFORM_BYTES, REPAIR, TRANSFORMS, runTransform, transformable } from '../transforms';
 
 const MAX_FILES = 200;
 
@@ -46,6 +46,21 @@ export async function upload(
   const ai = env.AI;
   if (transform !== null && !ai) {
     return textResponse('transform unavailable: no AI binding\n', 503);
+  }
+
+  /* `?slides=2,4,5` - the clipped slide numbers a repair may touch. Only the
+     repair prompt reads them, and `nt-share fix` is what fills them in from the
+     check verdict. Parsed here so a junk list is a 400 rather than prose the
+     model has to interpret. */
+  const slidesParam = url.searchParams.get('slides');
+  const slides: number[] = [];
+  if (slidesParam !== null) {
+    if (transform !== REPAIR) return textResponse(`slides= needs transform=${REPAIR}\n`, 400);
+    for (const part of slidesParam.split(',')) {
+      const n = Number(part.trim());
+      if (!Number.isInteger(n) || n < 1) return textResponse('bad slides list\n', 400);
+      slides.push(n);
+    }
   }
 
   let linkExp = 0;
@@ -99,7 +114,7 @@ export async function upload(
       if (e.blob.size > MAX_TRANSFORM_BYTES) {
         return textResponse(`too large to transform: ${e.path}\n`, 413);
       }
-      const out = await runTransform(ai, transform, e.path, await e.blob.text());
+      const out = await runTransform(ai, transform, e.path, await e.blob.text(), slides);
       if (out === null) return textResponse('transform failed; retry without transform=\n', 502);
       // A .txt would serve as text/plain and never render; the output is markdown now.
       const path = e.path.replace(/\.txt$/i, '.md');

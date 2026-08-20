@@ -132,3 +132,61 @@ describe('decodeAiText and cleanOutput', () => {
     expect(cleanOutput('  \n')).toBeNull();
   });
 });
+
+describe('the repair pass', () => {
+  const DECK = '---\nmarp: true\n---\n\n# a deck\n';
+
+  it('names the clipped slides to the model and changes nothing else', async () => {
+    const ai = memoryAi([{ response: DECK }]);
+    await put(await stubEnv(ai), '?transform=fix&slides=3,5', [['deck.md', DECK]]);
+    const [, user] = ai.calls[0].input.messages;
+    expect(user.content).toContain(TRANSFORMS.get('fix'));
+    expect(user.content).toContain('Slides 3, 5 clip the page');
+    expect(user.content).toContain('the only slides you may change');
+  });
+
+  it('says "slide" for one, so the instruction never reads as a plural of one', async () => {
+    const ai = memoryAi([{ response: DECK }]);
+    await put(await stubEnv(ai), '?transform=fix&slides=7', [['deck.md', DECK]]);
+    expect(ai.calls[0].input.messages[1].content).toContain('Slide 7 clips the page');
+  });
+
+  it('carries no slide note when none was named', async () => {
+    const ai = memoryAi([{ response: DECK }]);
+    await put(await stubEnv(ai), '?transform=fix', [['deck.md', DECK]]);
+    expect(ai.calls[0].input.messages[1].content).not.toContain('clip the page');
+  });
+
+  /* The list reaches a prompt, so it is parsed at the edge rather than passed
+     through as prose the model has to interpret. */
+  it('400s a junk slide list, and never calls the model', async () => {
+    const ai = memoryAi([{ response: DECK }]);
+    const res = await put(await stubEnv(ai), '?transform=fix&slides=3,nope', [['deck.md', DECK]]);
+    expect(res.status).toBe(400);
+    expect(ai.calls).toHaveLength(0);
+  });
+
+  it('400s slide 0 and a negative, which no deck has', async () => {
+    for (const bad of ['0', '-2', '1.5']) {
+      const res = await put(await stubEnv(memoryAi([])), `?transform=fix&slides=${bad}`, [['deck.md', DECK]]);
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('400s slides= against a restructure prompt, which would ignore it', async () => {
+    const res = await put(await stubEnv(memoryAi([])), '?transform=deck&slides=3', [['deck.md', DECK]]);
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain('transform=fix');
+  });
+});
+
+describe('the system prompt guards the voice, not just the facts', () => {
+  it('asks for a reformat and for the input sentences to survive', () => {
+    expect(SYSTEM).toContain('reformat');
+    expect(SYSTEM).toContain("Keep the author's wording");
+    /* The old wording asked for a rewrite and guarded only the facts, which is
+       how a fast model at low effort flattened the voice while keeping every
+       number. Pinned so the two words cannot drift back. */
+    expect(SYSTEM).not.toContain('You rewrite');
+  });
+});

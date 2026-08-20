@@ -9,13 +9,13 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
-import { MODEL, runPrompt } from '../../src/transforms/prompt.ts';
+import { MODEL, repairNote, runPrompt } from '../../src/transforms/prompt.ts';
 import { checksFor } from './checks.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROMPTS = join(HERE, '..', '..', 'src', 'transforms');
 const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID;
-const TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+const TOKEN = process.env.CLOUDFLARE_API_TOKEN; // guarddog env-read: the documented Workers AI credential, spent only as the Bearer on api.cloudflare.com below, never printed, and this script never runs in CI.
 if (!ACCOUNT || !TOKEN) {
   console.error('set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN ("Workers AI" token template)');
   process.exit(2);
@@ -51,10 +51,29 @@ for (const f of await readdir(join(HERE, 'fixtures'))) {
 }
 const MUST = JSON.parse(await readFile(join(HERE, 'fixtures', 'must-keep.json'), 'utf8'));
 
+/* `fix` reads a finished deck, not raw notes, so it takes its own fixture rather
+   than the cross-product. Pointing it at meeting notes would grade a repair pass
+   on material it is never handed, and every case would fail for the wrong
+   reason. `slides` is what upload.ts passes it from the check verdict. */
+const REPAIR_CASE = {
+  name: 'fix',
+  file: 'clipping-deck.md',
+  slides: [3],
+};
+
 const filter = process.argv[2] ?? '';
 const cases = [];
 for (const [name, prompt] of prompts) {
+  if (name === REPAIR_CASE.name) {
+    const id = `${name}:${REPAIR_CASE.file}`;
+    const text = fixtures.get(REPAIR_CASE.file);
+    if (text !== undefined && id.includes(filter)) {
+      cases.push({ id, name, prompt, file: REPAIR_CASE.file, text, slides: REPAIR_CASE.slides });
+    }
+    continue;
+  }
   for (const [file, text] of fixtures) {
+    if (file === REPAIR_CASE.file) continue; // a finished deck is not raw material
     const id = `${name}:${file}`;
     if (id.includes(filter)) cases.push({ id, name, prompt, file, text });
   }
@@ -68,7 +87,11 @@ const outDir = join(HERE, 'out');
 await mkdir(outDir, { recursive: true });
 
 async function grade(c) {
-  const output = await runPrompt(ai, c.prompt, c.file, c.text);
+  /* `repairNote` rather than a hand-written string, so the repair case is graded
+     on the exact note the Worker builds from the check verdict. */
+  const output = await runPrompt(
+    ai, c.prompt, c.file, c.text, c.slides ? repairNote(c.slides) : undefined,
+  );
   if (output === null) {
     return { id: c.id, failed: [{ name: 'answered', pass: false, detail: 'runPrompt returned null' }] };
   }

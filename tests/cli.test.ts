@@ -242,7 +242,8 @@ describe('check', () => {
     expect(out).toContain('page.html  (pending)');
     expect(out).toContain('deck.md    slides.html'); // padded to the longest path
     expect(code).toBe(1); // a clipped slide is a failure a loop can branch on
-    expect(out).toContain('rm and put a fresh deck');
+    // The report names the repair verb, so the caller never has to guess it.
+    expect(out).toContain('nt-share fix qa/abc');
   });
 
   it('exits 0 when nothing clips', async () => {
@@ -275,5 +276,228 @@ describe('check', () => {
     const { code, out } = run(['check', 'qa'], { XDG_CACHE_HOME: cacheDir(), PATH: '' });
     expect(code).toBe(1);
     expect(out).toContain('usage: nt-share check <space>/<hash>');
+  });
+});
+
+describe('fix', () => {
+  interface Seen {
+    asked: string[];
+    upload: { query: string; files: string[] } | null;
+  }
+
+  /** The status route's answer for a repair: the tier and the file list the fix
+      rebuilds from, plus the check verdict that names what clips. */
+  interface FixStatus {
+    tier: string;
+    files: string[];
+    sources: {
+      path: string;
+      rendered: string[];
+      check: { slides: number; overflow: number[] } | null;
+    }[];
+  }
+
+  /* One stub for the whole repair round trip: mint the admin credential, read
+     the status, mint a view link, GET each file back, and re-upload. */
+  function stubFix(status: FixStatus) {
+    const seen: Seen = { asked: [], upload: null };
+    const server = createServer((req, res) => {
+      const url = req.url ?? '';
+      seen.asked.push(`${req.method} ${url}`);
+      res.setHeader('content-type', 'application/json');
+      if (url.endsWith('/admin')) {
+        res.end(JSON.stringify({ url: 'https://share.example/qa/abc/?c=minted.1.tok', exp: 0 }));
+        return;
+      }
+      if (url.startsWith('/qa/abc/status')) {
+        res.end(JSON.stringify(status));
+        return;
+      }
+      if (url === '/sign') {
+        /* SAFETY: address() is a string only for a unix socket; the caller
+           listened this server on a TCP port before spawning the CLI. */
+        const port = (server.address() as AddressInfo).port;
+        res.end(JSON.stringify({ url: `http://127.0.0.1:${port}/qa/abc/k/v2.1.tok/`, exp: 0, tier: 'signed' }));
+        return;
+      }
+      if (url.includes('?raw')) {
+        res.setHeader('content-type', 'text/plain');
+        res.end('# a deck that clips\n');
+        return;
+      }
+      if (url.startsWith('/up/qa')) {
+        const chunks: Buffer[] = [];
+        req.on('data', (c: Buffer) => chunks.push(c));
+        req.on('end', () => {
+          const body = Buffer.concat(chunks).toString();
+          seen.upload = {
+            query: url.slice(url.indexOf('?') + 1),
+            files: [...body.matchAll(/filename="([^"]+)"/g)].map((m) => m[1]),
+          };
+          res.end(JSON.stringify({ url: 'https://share.example/qa/new/', hash: 'new', tier: 'signed' }));
+        });
+        return;
+      }
+      res.statusCode = 404;
+      res.end('{}');
+    });
+    return { server, seen };
+  }
+
+  async function fix(status: FixStatus, args: string[] = []) {
+    const { server, seen } = stubFix(status);
+    await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
+    /* SAFETY: address() is a string only for a unix socket; this one listened
+       on a TCP port, and it is listening because the callback above fired. */
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const child = spawn(process.execPath, [BIN, 'fix', 'qa/abc', ...args], {
+        env: {
+          ...process.env,
+          SHARE_URL: `http://127.0.0.1:${port}`,
+          SHARE_TOKEN: 'raw-token',
+          // A live session, because the re-upload runs on one like any put.
+          XDG_CACHE_HOME: cacheDir(live()),
+          PATH: '',
+        },
+      });
+      let out = '';
+      child.stdout.on('data', (c: Buffer) => { out += c.toString(); });
+      child.stderr.on('data', (c: Buffer) => { out += c.toString(); });
+      const code = await new Promise<number | null>((ok) => child.on('close', ok));
+      return { code, out, seen };
+    } finally {
+      server.close();
+    }
+  }
+
+  const clipping = {
+    tier: 'signed',
+    files: ['deck.md', 'chart.png'],
+    sources: [{ path: 'deck.md', rendered: ['slides.pdf'], check: { slides: 8, overflow: [3, 5] } }],
+  };
+
+  it('sends the clipped slide numbers and every file, and lands a new artifact', async () => {
+    const { code, out, seen } = await fix(clipping);
+    expect(code).toBe(0);
+    const query = new URLSearchParams(seen.upload?.query ?? '');
+    expect(query.get('transform')).toBe('fix');
+    expect(query.get('slides')).toBe('3,5');
+    // The source's tier carries over, or a signed deck would be repaired open.
+    expect(query.get('tier')).toBe('signed');
+    /* Every file, not just the deck: this is a fresh upload, so an image left
+       behind here would be an image the repaired deck no longer has. */
+    expect(seen.upload?.files).toEqual(['deck.md', 'chart.png']);
+    expect(out).toContain('https://share.example/qa/new/');
+    expect(out).toContain('trimmed slides 3, 5 of deck.md');
+    // Immutability: the fix never touches the artifact it read.
+    expect(seen.asked.some((a) => a.startsWith('DELETE'))).toBe(false);
+  });
+
+  it('--tier overrides the source tier', async () => {
+    const { seen } = await fix(clipping, ['--tier', 'open']);
+    expect(new URLSearchParams(seen.upload?.query ?? '').get('tier')).toBe('open');
+  });
+
+  it('spends no AI and uploads nothing when nothing clips', async () => {
+    const clean = {
+      tier: 'open',
+      files: ['deck.md'],
+      sources: [{ path: 'deck.md', rendered: ['slides.pdf'], check: { slides: 3, overflow: [] } }],
+    };
+    const { code, out, seen } = await fix(clean);
+    expect(code).toBe(0);
+    expect(out).toContain('nothing clips');
+    expect(seen.upload).toBe(null);
+  });
+
+  it('needs a <space>/<hash>, not a bare space', () => {
+    const { code, out } = run(['fix', 'qa'], { XDG_CACHE_HOME: cacheDir(), PATH: '' });
+    expect(code).toBe(1);
+    expect(out).toContain('usage: nt-share fix <space>/<hash>');
+  });
+});
+
+describe('ls', () => {
+  /** One row of the list route's answer, as the stub hands it back. */
+  interface StubRow {
+    hash: string;
+    url: string;
+    tier: string;
+    files: number;
+    bytes: number;
+    expired: boolean;
+    sources: string[];
+  }
+
+  function stubLs(rows: StubRow[]) {
+    const server = createServer((req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify(rows));
+    });
+    return server;
+  }
+
+  /* spawn, not the spawnSync `run` helper: the stub answers on this process's
+     event loop, and spawnSync blocks it, so a sync child could only ever time
+     out waiting for a reply that cannot be sent. */
+  async function ls(rows: StubRow[], args: string[] = []) {
+    const server = stubLs(rows);
+    await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
+    /* SAFETY: address() is a string only for a unix socket; this one listened
+       on a TCP port, and it is listening because the callback above fired. */
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const child = spawn(process.execPath, [BIN, 'ls', 'qa', ...args], {
+        env: {
+          ...process.env,
+          SHARE_URL: `http://127.0.0.1:${port}`,
+          SHARE_TOKEN: 'raw-token',
+          XDG_CACHE_HOME: cacheDir(),
+          PATH: '',
+        },
+      });
+      let out = '';
+      child.stdout.on('data', (c: Buffer) => { out += c.toString(); });
+      child.stderr.on('data', (c: Buffer) => { out += c.toString(); });
+      const code = await new Promise<number | null>((ok) => child.on('close', ok));
+      return { code, out };
+    } finally {
+      server.close();
+    }
+  }
+
+  const rows = [{
+    hash: 'abc',
+    url: 'https://share.example/qa/abc/',
+    tier: 'open',
+    files: 1,
+    bytes: 2048,
+    expired: false,
+    sources: ['deck.md'],
+  }];
+
+  it('names every spelling a markdown source answers to', async () => {
+    const { code, out } = await ls(rows);
+    expect(code).toBe(0);
+    expect(out).toContain('https://share.example/qa/abc/');
+    expect(out).toContain('1 file, 2.0 KB');
+    /* The four render spellings plus the source, so a recipient can pick a mode
+       rather than guess what a bare `.md` sniffs to. */
+    expect(out).toContain('deck.slides.html');
+    expect(out).toContain('deck.doc.html');
+    expect(out).toContain('deck.slides.pdf');
+    expect(out).toContain('deck.doc.pdf');
+    expect(out).toContain('deck.txt');
+  });
+
+  it('marks an expired artifact', async () => {
+    const { out } = await ls([{ ...rows[0], expired: true }]);
+    expect(out).toContain('EXPIRED');
+  });
+
+  it('--json prints the server body untouched', async () => {
+    const { out } = await ls(rows, ['--json']);
+    expect(JSON.parse(out)).toEqual(rows);
   });
 });

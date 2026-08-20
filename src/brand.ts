@@ -16,6 +16,10 @@
    the parts are joined here and /tokens.css stays one file on the wire. */
 import FONTS from '@notambourine/brand-kit/fonts.css';
 import VARS from '@notambourine/brand-kit/vars.css';
+/* The artwork as data URIs. Load-bearing for the deck theme, which draws the
+   running lockup as a background image because Marpit owns every element inside
+   a slide - drop this and the mark silently stops appearing. */
+import LOGO_VARS from '@notambourine/brand-kit/logo-vars.css';
 import ELEMENTS from '@notambourine/brand-kit/elements.css';
 import DECK from '@notambourine/brand-kit/deck.css';
 /* Inline rather than `<img src="/logo/lockup.svg">`: a PDF header and an
@@ -24,9 +28,10 @@ import DECK from '@notambourine/brand-kit/deck.css';
 import LOCKUP from '@notambourine/brand-kit/logo/lockup.svg';
 import { ROBOTS } from './lib/http';
 
-/** The three parts joined, so /tokens.css is one file on the wire and the PDF
-    export inlines the same string the browser gets. */
-export const TOKENS = [FONTS, VARS, ELEMENTS].join('\n');
+/** The parts joined, so /tokens.css is one file on the wire and the PDF export
+    inlines the same string the browser gets. Same order as the kit's own
+    tokens.css: values before the base layer that reads them. */
+export const TOKENS = [FONTS, VARS, LOGO_VARS, ELEMENTS].join('\n');
 
 /* First declaration wins: the raw palette sits at the top of vars.css and the
    `.theme-light` remaps below it only ever redefine semantic tokens. */

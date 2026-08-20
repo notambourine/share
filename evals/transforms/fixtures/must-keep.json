@@ -10,5 +10,9 @@
   "quarter-recap.md": {
     "keep": ["2.9%", "$8,500", "gift cards", "2026-09-15"],
     "drop": []
+  },
+  "clipping-deck.md": {
+    "keep": ["34 tags", "30 seconds", "18 other US states", "Pandectes", "_class: lead", "marp: true"],
+    "drop": []
   }
 }

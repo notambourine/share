@@ -15,6 +15,8 @@ const NOW = now();
 const EXP = NOW + ADMIN_SECS;
 
 interface StatusBody {
+  tier: string;
+  files: string[];
   sources: { path: string; rendered: string[]; check: { slides: number; overflow: number[] } | null }[];
 }
 
@@ -54,6 +56,18 @@ describe('GET /<space>/<hash>/status', () => {
       { path: 'deck.md', rendered: ['slides.pdf'], check: { slides: 12, overflow: [7] } },
       { path: 'notes.md', rendered: [], check: null },
     ]);
+  });
+
+  /* Every path and the tier, for `nt-share fix`: a repair lands as a new
+     artifact, so a deck's images have to ride along or the fix drops them, and
+     a signed deck repaired open would widen who can read it. Sender-only
+     material, which is why it answers here and not on the public listing. */
+  it('names every file and the tier, so a repair can rebuild the artifact whole', async () => {
+    const env = seededEnv();
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const body = await (await adminStatus(statusReq(token), env, SPACE, HASH)).json<StatusBody>();
+    expect(body.files).toEqual(['deck.md', 'notes.md', 'hero.png']);
+    expect(body.tier).toBe('open');
   });
 
   it('html sources ride along; page renders count, check stays null', async () => {

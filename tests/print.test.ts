@@ -117,9 +117,33 @@ describe('the page carries one script and it removes itself', () => {
 });
 
 describe('the lockup and the attributes', () => {
-  it('inlines the lockup on a document and leaves it off a deck', async () => {
+  /* Two routes to the same mark, because a deck has no element to hang one on:
+     Marpit generates every node inside a slide, so a document gets the lockup as
+     markup in a header and a deck gets it from the theme as a background image.
+     The `print-mark` header would sit outside the slide box on a deck, which is
+     why it stays off. */
+  it('inlines the lockup on a document and leaves the header off a deck', async () => {
     expect(await print('doc')).toContain(LOCKUP);
     expect(await print('slides')).not.toContain('print-mark');
+  });
+
+  /* The regression this whole change exists for: a deck PDF left as an email
+     attachment with nothing on it saying who made it. The mark reaches the page
+     only if logo-vars.css is in the inlined token bundle AND the theme draws it,
+     so assert both halves - either one alone renders a blank corner. */
+  it('carries the running lockup on a deck, as a data URI the paper can print', async () => {
+    const html = await print('slides');
+    expect(html).toContain('--nt-lockup-url');
+    expect(html).toContain('background: var(--nt-lockup-url)');
+    // A data URI, never an origin: printed paper has nothing to fetch from.
+    expect(html).toContain('url("data:image/svg+xml,');
+    expect(html).not.toContain('url("/logo/lockup.svg")');
+  });
+
+  it('gives the cover its own lockup and no page number', async () => {
+    const html = await print('slides');
+    expect(html).toContain('section.lead::before');
+    expect(html).toContain('section.lead::after');
   });
 
   it('carries the root class the paper theme depends on', async () => {

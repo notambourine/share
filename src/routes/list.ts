@@ -5,6 +5,7 @@ import { jsonResponse, htmlResponse } from '../lib/http';
 import { now } from '../lib/clock';
 import { errorShell } from '../render/shell';
 import { publicUrl } from '../lib/link';
+import { formatsFor } from '../lib/exportPath';
 import { isExpired } from '../lib/r2';
 
 /**
@@ -50,5 +51,10 @@ export async function listSpace(request: Request, env: Env, space: string): Prom
     expired: isExpired(m, t),
     files: m.files.length,
     bytes: m.files.reduce((n, f) => n + f.size, 0),
+    /* The paths that export something, so a caller can offer the spellings
+       without a second request per artifact. The suffixes themselves stay out
+       of the answer: they come off the same catalog at either end, so listing
+       them here would be a copy that can go stale. */
+    sources: m.files.filter((f) => formatsFor(f.path).length).map((f) => f.path),
   })));
 }
