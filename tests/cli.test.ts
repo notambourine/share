@@ -254,8 +254,14 @@ describe('check', () => {
     expect(code).toBe(0);
   });
 
-  it('a render still pending is not a failure', async () => {
-    const { code } = await check({ sources: [{ path: 'deck.md', rendered: [], check: null }] });
+  it('exits 2 on a markdown source that has not rendered, so pending never reads as a pass', async () => {
+    const { code, out } = await check({ sources: [{ path: 'deck.md', rendered: [], check: null }] });
+    expect(out).toContain('(pending)');
+    expect(code).toBe(2);
+  });
+
+  it('exits 0 on an html source, which carries no renders by nature', async () => {
+    const { code } = await check({ sources: [{ path: 'page.html', rendered: [], check: null }] });
     expect(code).toBe(0);
   });
 

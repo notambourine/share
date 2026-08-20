@@ -40,6 +40,7 @@ import type { JsonObject } from '../src/lib/json.ts';
 import { isJsonObject, numberAt, numbersAt, parseObject, recordsAt, textAt, textsAt } from '../src/lib/json.ts';
 
 const BASE = (process.env.SHARE_URL ?? 'https://share.notambourine.com').replace(/\/$/, '');
+// guarddog env-read: an op:// locator for the token, never the token itself.
 const REF = process.env.SHARE_TOKEN_REF ?? 'op://Employee/share-token/credential';
 /* ~/.cache on every platform, Windows included: one documented path beats the
    LOCALAPPDATA convention, and NTFS ACLs on the profile dir match 0600-in-home. */
@@ -144,7 +145,7 @@ function isErrno(err: Error): err is ErrnoError {
 /* The one 1Password unlock. Stdout is a pipe, so the secret stays in this
    process and never reaches a terminal, a transcript, or a shell history. */
 function vaultToken(): string {
-  const env = process.env.SHARE_TOKEN;
+  const env = process.env.SHARE_TOKEN; // guarddog env-read: the documented override, read into this process only.
   if (env && !env.startsWith('op://')) return env;
   const ref = env || REF;
   const r = spawnSync('op', ['read', '--no-newline', ref], { encoding: 'utf8' });
@@ -271,6 +272,7 @@ const WIN_CLIP = [
   'if ($null -eq $img) { exit 3 }',
   '$ms = New-Object System.IO.MemoryStream',
   '$img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)',
+  // guarddog keylogging: writes one clipboard image to stdout; captures no input.
   '[Console]::Out.Write([Convert]::ToBase64String($ms.ToArray()))',
 ].join('\n');
 
@@ -459,12 +461,13 @@ switch (cmd) {
     let count = 0;
     // First, so a clipboard holding no image costs no 1Password unlock.
     if (flags.clip) {
+      // guarddog keylogging: FormData.append builds the upload body.
       form.append('f', new Blob([clipboardPng()]), flags.name ?? 'clipboard.png');
       count++;
     }
     for (const p of paths) {
       for (const { abs, rel } of await walk(p)) {
-        form.append('f', new Blob([await readFile(abs)]), rel);
+        form.append('f', new Blob([await readFile(abs)]), rel); // guarddog keylogging: FormData.append, not input capture.
         count++;
         if (!VIDEO_EXT.test(rel)) continue;
         const poster = await posterFrame(abs);
@@ -531,6 +534,15 @@ switch (cmd) {
     if (sources.some((s) => s.overflow && s.overflow.length > 0)) {
       console.error('a slide clips: fix the source, then rm and put a fresh deck - never edit in place');
       process.exit(1);
+    }
+    /* Exit 2, because nothing measured is not the same as nothing wrong: a deck
+       that has not rendered has had no slide checked, and exit 0 there reads as
+       "nothing clips". Only markdown can clip - an html source carries no
+       renders by nature, and gating on it would never let check exit 0. */
+    const unmeasured = sources.filter((s) => s.rendered.length === 0 && s.path.endsWith('.md'));
+    if (unmeasured.length > 0) {
+      console.error(`still rendering, so no slide was measured: ${unmeasured.map((s) => s.path).join(', ')} - rerun check`);
+      process.exit(2);
     }
     break;
   }
