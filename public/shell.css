@@ -183,12 +183,18 @@ body[data-kind="md"] .stage { justify-content: flex-start; }
 /* Marpit sizes each slide from its own viewBox, so the deck only has to cap
    the width and let the aspect ratio do the rest. */
 .deck { width: min(100%, calc((100vh - 140px) * 16 / 9)); margin: 0 auto; }
-.deck svg[data-marpit-svg] { display: none; width: 100%; height: auto;
+/* Visible until the script claims the deck: paging is an enhancement, so a page
+   that never got render.js scrolls the slides instead of showing one blank frame. */
+.deck svg[data-marpit-svg] { width: 100%; height: auto;
   border-radius: var(--r-md); overflow: hidden; }
-.deck svg[data-marpit-svg].current { display: block; }
+.deck svg[data-marpit-svg] + svg[data-marpit-svg] { margin-top: var(--sp-4); }
+.deck.paged svg[data-marpit-svg] { display: none; margin-top: 0; }
+.deck.paged svg[data-marpit-svg].current { display: block; }
 
 .deck-nav { display: flex; align-items: center; justify-content: center;
   gap: var(--sp-4); padding: var(--sp-4) 0; }
+/* Beats the display above, so the buttons stay gone until the script binds them. */
+.deck-nav[hidden] { display: none; }
 .deck-nav button { font-family: var(--font-accent); font-size: var(--fs-caption);
   color: var(--fg3); background: var(--bg-card); border: 1px solid var(--line);
   border-radius: var(--r-pill); padding: var(--sp-2) var(--sp-5); cursor: pointer; }

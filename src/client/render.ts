@@ -20,6 +20,9 @@ if (copy) {
 function deck(host: Element): void {
   const slides = host.querySelectorAll('svg[data-marpit-svg]');
   if (!slides.length) return;
+  /* The stylesheet shows every slide until this class lands, so claiming the host
+     is what turns a scrollable stack into one slide at a time. */
+  host.classList.add('paged');
   const nav = document.querySelector('.deck-nav');
   const count = nav?.querySelector('[data-count]');
   let at = 0;
@@ -58,3 +61,7 @@ function deck(host: Element): void {
    no data attribute to read and nothing to wait for. */
 const host = document.querySelector('.deck');
 if (host) deck(host);
+
+/* Nothing to export, but tests/client/render.test.ts imports this for its side
+   effects and a script with no import or export is not a module. */
+export {};
