@@ -12,8 +12,12 @@ import { now } from '../src/lib/clock';
    PATH='' is how a case proves a code path never shells out to `op`. */
 
 /* Each case spawns a node process, and windows-latest has crossed vitest's 5s
-   default. spawnSync's own 15s timeout below stays the real hang stop. */
-vi.setConfig({ testTimeout: 20_000 });
+   default. spawnSync's own timeout below stays the real hang stop.
+   Windows gets 4x: --clip shells out to powershell, which loads
+   System.Windows.Forms, and a cold runner has spent 15s on that - a kill
+   reports status null, so the budget reads as a wrong exit code. */
+const SPAWN_TIMEOUT = process.platform === 'win32' ? 60_000 : 15_000;
+vi.setConfig({ testTimeout: SPAWN_TIMEOUT + 5_000 });
 
 const BIN = join(process.cwd(), 'bin', 'share.ts');
 const DEAD = 'http://127.0.0.1:9'; // unroutable: reaching a fetch error means the token resolved
@@ -24,7 +28,7 @@ function run(args: string[], env: Record<string, string>) {
   const r = spawnSync(process.execPath, [BIN, ...args], {
     env: clean,
     encoding: 'utf8',
-    timeout: 15000,
+    timeout: SPAWN_TIMEOUT,
   });
   return { code: r.status, out: `${r.stdout}${r.stderr}` };
 }
@@ -145,7 +149,7 @@ describe('install', () => {
         XDG_CACHE_HOME: cacheDir(), SHARE_URL: DEAD, HOME: home, USERPROFILE: home,
       },
       encoding: 'utf8',
-      timeout: 15000,
+      timeout: SPAWN_TIMEOUT,
     });
     return `${r.stdout}${r.stderr}`;
   }
