@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: notambourine/wormhook@dbc81ba898927f163fced0a52dad1f4e036e1815 # v0.29.0
+      - uses: notambourine/wormhook@1270e6a1e7dc2fad0a0abe738a1c56c6e6496cff # v0.31.1
         with:
           # No `npm ci` step above: the Socket app owns the dep tree, so this gate
           # is here for Tier 0+1: lifecycle scripts, loaders, CI-config poisoning.
