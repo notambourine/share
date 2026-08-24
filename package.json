@@ -18,19 +18,19 @@
     "build:client": "npm run vendor && node scripts/client.mjs"
   },
   "devDependencies": {
-    "@cloudflare/puppeteer": "^1.3.0",
-    "@cloudflare/workers-types": "^5.20260819.1",
+    "@cloudflare/puppeteer": "^1.4.0",
+    "@cloudflare/workers-types": "^5.20260822.1",
     "@highlightjs/cdn-assets": "11.12.0",
     "@marp-team/marpit": "^3.2.2",
     "@oxlint/plugins": "^1.79.0",
     "@types/node": "^26.2.0",
     "esbuild": "^0.28.2",
-    "happy-dom": "^20.11.2",
+    "happy-dom": "^20.11.6",
     "marked": "18.0.10",
     "oxlint": "^1.79.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
-    "wrangler": "^4.124.0"
+    "wrangler": "^4.125.0"
   },
   "overrides": {
     "@puppeteer/browsers": "^3.2.0"
