@@ -313,7 +313,7 @@ export function homeShell(): string {
     title: 'NoTambourine',
     body: (
       <div class="card">
-        <p class="eyebrow">boutique skunkworks engineering</p>
+        <p class="eyebrow">boutique AI-enabled engineering</p>
         <h2>Senior engineers. No <em>tambourine</em>.</h2>
         <p>Your growth is capped by the stack, not by the ambition. We embed with your team as a hands-on operating partner and put the work in prod.</p>
         <p>Scope holds, so the estimate is worth something. Tell us what you're building and we'll write back the same day.</p>
