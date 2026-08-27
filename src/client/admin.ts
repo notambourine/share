@@ -150,6 +150,9 @@ if (!c || !actions) {
         link.rel = 'noopener';
         link.textContent = path;
         state?.replaceChildren(document.createTextNode('Ready: '), link);
+      }).catch(() => {
+        // A dropped POST must not leave "Generating" standing forever.
+        say(`The ${name} did not generate. Try again.`);
       });
     });
   }

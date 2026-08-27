@@ -21,6 +21,7 @@ import { fileSuffix } from '../lib/link';
 import { fmtSize } from '../lib/format';
 import { GENERATIONS, transformable } from '../transforms';
 import { LOCKUP } from '../brand';
+import { now } from '../lib/clock';
 
 /* Re-exported because the routes import it from here; it lives in lib/ so the
    CLI can print the same sizes without reaching into the render layer. */
@@ -309,7 +310,7 @@ function verdict(render: IndexRender): Child | null {
  * A generation lists its newest version under the bare name and keeps every
  * older stamp linked, so a link already handed over never stops answering.
  */
-export function indexShell(index: ArtifactIndex, meta: Meta): string {
+export function indexShell(index: ArtifactIndex, meta: Meta, t: number = now()): string {
   const { uploads, generations, renders } = index;
   const bytes = meta.files.reduce((n, f) => n + f.size, 0);
   return layout({
@@ -321,7 +322,7 @@ export function indexShell(index: ArtifactIndex, meta: Meta): string {
           <h1>{index.hash}</h1>
           <span class="path">
             {`${index.space} · ${meta.files.length} ${meta.files.length === 1 ? 'file' : 'files'} · ${
-              fmtSize(bytes)} · ${expiryText(meta, index.createdAt)}`}
+              fmtSize(bytes)} · ${expiryText(meta, t)}`}
           </span>
         </div>
 

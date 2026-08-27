@@ -76,7 +76,11 @@ export async function generate(request: Request, env: Env, space: string, hash: 
   const out = await runTransform(ai, name, texts);
   if (out === null) return jsonResponse({ error: 'the model call failed; try again' }, 502);
 
-  const path = `${name}.${t}.md`;
+  /* Stamps are second-granularity, so two runs of the same generation inside one
+     second would land on the same key; step forward instead of overwriting. */
+  let stamp = t;
+  while (meta.files.some((f) => f.path === `${name}.${stamp}.md`)) stamp += 1;
+  const path = `${name}.${stamp}.md`;
   const blob = `${out}\n`;
   await env.BUCKET.put(payloadKey(space, hash, path), blob, {
     httpMetadata: { contentType: contentTypeFor(path) },

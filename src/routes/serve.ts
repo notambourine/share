@@ -76,7 +76,7 @@ export async function serve(
       const index = await buildIndex(env, meta);
       return wantsJson(request)
         ? jsonResponse({ ...index })
-        : htmlResponse(indexShell(index, meta));
+        : htmlResponse(indexShell(index, meta, t));
     }
   }
 
