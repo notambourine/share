@@ -97,7 +97,7 @@
   to follow. One run takes an ordered list of ticked sources and answers one
   document, and `MAX_TRANSFORM_BYTES` is a per-run budget that refuses rather
   than truncates - a quiet truncation produces a confidently wrong deck. A
-  prompt or model edit runs `npm run eval:transforms` (live model, by hand,
+  prompt or model edit runs `npm run evals` (live model, by hand,
   needs a Workers AI token) before it ships; CI never runs it.
 - `skills/share/SKILL.md` is the only copy of the skill. `src/skill.ts` imports
   it to serve `/SKILL.md`; never add a copy under `public/`.

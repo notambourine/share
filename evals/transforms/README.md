@@ -14,12 +14,14 @@ ships. `checks.mjs` grades deterministically:
 
 Run it by hand:
 
-    CLOUDFLARE_ACCOUNT_ID=<id> CLOUDFLARE_API_TOKEN=<token> npm run eval:transforms
-    npm run eval:transforms -- deck:            # filter, substring of <transform>:<fixture>
+    npm run evals
+    npm run evals -- deck:            # filter, substring of <transform>:<fixture>
 
-The token wants the dashboard's "Workers AI" template; the account id sits on
-the dashboard's Workers overview. Pass both per run (or via `op run`) - never
-into a file. The full matrix is 12 calls, well under a cent.
+The `evals` script wraps `op run` around the account id and a
+`op://Employee/TOM_NTB_WORKERS_API_TOKEN/credential` reference, so it resolves
+from 1Password at run time - the token never lands in a file. A "Workers AI"
+template token minted for someone else's account needs their own account id
+and vault path substituted. The full matrix is 12 calls, well under a cent.
 
 Outputs land in `out/` (gitignored). Read them after any prompt edit: the
 checks gate structure and fidelity, not tone. This never joins CI - it spends

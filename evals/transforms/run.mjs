@@ -71,14 +71,20 @@ if (cases.length === 0) {
 const outDir = join(HERE, 'out');
 await mkdir(outDir, { recursive: true });
 
+let done = 0;
 async function grade(c) {
+  console.error(`  -> ${c.id}`);
   const output = await runPrompt(ai, c.prompt, [{ path: c.file, text: c.text }]);
+  done++;
   if (output === null) {
+    console.error(`  <- ${c.id} FAIL (null) [${done}/${cases.length}]`);
     return { id: c.id, failed: [{ name: 'answered', pass: false, detail: 'runPrompt returned null' }] };
   }
   await writeFile(join(outDir, `${c.name}--${c.file}.md`), `${output}\n`);
   const facts = MUST[c.file] ?? { keep: [], drop: [] };
-  return { id: c.id, failed: checksFor(c.name, output, c.text, facts).filter((k) => !k.pass) };
+  const failed = checksFor(c.name, output, c.text, facts).filter((k) => !k.pass);
+  console.error(`  <- ${c.id} ${failed.length === 0 ? 'PASS' : 'FAIL'} [${done}/${cases.length}]`);
+  return { id: c.id, failed };
 }
 
 console.error(`${cases.length} cases against ${MODEL}`);

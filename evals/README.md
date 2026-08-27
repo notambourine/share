@@ -8,4 +8,4 @@ path. `allowed_tools: []` on every case, so an eval agent can never upload or
 raise a 1Password prompt; the invoke-or-not decision it grades happens first.
 
 `transforms/` is a different suite: live-model evals for `src/transforms/`,
-run by hand with `npm run eval:transforms` - its README has the how.
+run by hand with `npm run evals` - its README has the how.
