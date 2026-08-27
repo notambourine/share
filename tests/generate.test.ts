@@ -7,6 +7,7 @@ import { GENERATIONS, MAX_TRANSFORM_BYTES, promptFor } from '../src/transforms';
 import { MODEL, SYSTEM, buildInput, cleanOutput, decodeAiText } from '../src/transforms/prompt';
 import type { TestEnv } from './bindings';
 import { fetchWorker, memoryAi, testEnv } from './bindings';
+import { MAX_VERSIONS } from '../src/routes/generate';
 
 const KEYS = { v1: 'unit-test-signing-secret' };
 const SPACE = 'acme';
@@ -194,6 +195,23 @@ describe('POST /<space>/<hash>/generate', () => {
     expect(body.error).toContain(String(half * 2));
     expect(body.files).toEqual(['a.md', 'b.md']);
     expect(ai.calls).toHaveLength(0);
+  });
+
+  /* The bound on what a leaked working link can spend at the model. Counted by
+     listing, before the call, so the refused run costs nothing. */
+  it('refuses the run past MAX_VERSIONS of one name without calling the model', async () => {
+    const ai = memoryAi([{ response: FORMATTED }]);
+    const env = seededEnv(ai);
+    for (let i = 0; i < MAX_VERSIONS; i++) {
+      env.BUCKET.objects.set(`${SPACE}/${HASH}/f/deck.${1000 + i}.md`, FORMATTED);
+    }
+    // Another name's versions, and a look-alike upload, do not count against deck.
+    env.BUCKET.objects.set(`${SPACE}/${HASH}/f/agenda.1000.md`, FORMATTED);
+    env.BUCKET.objects.set(`${SPACE}/${HASH}/f/deck.notes.md`, FORMATTED);
+    const res = await gen(env, { name: 'deck', sources: ['log.md'] });
+    expect(res.status).toBe(429);
+    expect(ai.calls).toHaveLength(0);
+    expect((await gen(env, { name: 'agenda', sources: ['log.md'] })).status).toBe(201);
   });
 
   it('503s without the AI binding, and 502s a failed call, storing nothing', async () => {

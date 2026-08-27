@@ -57,6 +57,14 @@
   generates - a scanner prefetches a link and would spend a model call. The
   working page is therefore the one shell served with `form-action 'self'`
   (`ADMIN_CSP`); every other shell can host uploaded HTML and keeps `'none'`.
+- The paid bindings are bounded by count, never by trust in the caller. A `?c=`
+  refresh is signed over its session's first mint and is cut at
+  `ADMIN_SESSION_SECS`, so a leaked link cannot renew itself forever; one
+  generation name holds `MAX_VERSIONS` under a hash, counted by listing before
+  the model call; and a source renders once per `ATTEMPT_SECS`, claimed by a
+  marker under `d/v<N>/` written before the browser opens. Keep every bound a
+  listing or an object the delete and sweep prefixes already cover; never a
+  counter in `meta.json`.
 - One-time dashboard setup: README.md "Setup from zero". Token add, rotate,
   offboard, and delivery: `scripts/add-employee.sh` (its header is the runbook).
 - This repo is public. Client names never enter it; committed examples use

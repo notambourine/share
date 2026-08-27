@@ -256,6 +256,12 @@ export function checkKey(space: string, hash: string, source: string): string {
   return `${derivedPrefix(space, hash)}${source}.${CHECK_TAIL}`;
 }
 
+/** The render window's stamp, beside the artifact it guards. Neither a rendered
+    tail nor the check tail, so the index listing skips it. */
+export function attemptKey(space: string, hash: string, source: string, mode: RenderMode): string {
+  return `${derivedPrefix(space, hash)}${source}.${mode}.attempt`;
+}
+
 interface DerivedParts {
   source: string;
   mode: RenderMode;

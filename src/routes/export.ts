@@ -18,8 +18,9 @@
 import type { Env } from '../lib/types';
 import {
   type ExportFormat, type RenderMode,
-  derivedKey, checkKey, sniffDeck, isPageSource,
+  derivedKey, checkKey, attemptKey, sniffDeck, isPageSource,
 } from '../lib/exportPath';
+import { now } from '../lib/clock';
 import { render, renderPage, type Artifacts, type PageArtifacts } from '../lib/pdf';
 import { printHtml, pdfOptionsFor } from '../render/export';
 import { rawBytes } from '../lib/bytes';
@@ -62,12 +63,8 @@ async function store(
 
 /** Null means the browser was unreachable and the caller answers a 202. */
 async function produce(
-  env: Env, space: string, hash: string, source: string, mode: RenderMode, markdown: string, url: URL,
+  env: Env, browser: Fetcher, space: string, hash: string, source: string, mode: RenderMode, markdown: string, url: URL,
 ): Promise<Artifacts | null> {
-  if (!env.BROWSER) {
-    console.log('export: no BROWSER binding');
-    return null;
-  }
   const title = baseName(source);
   const dir = url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1);
   let html: string;
@@ -83,9 +80,26 @@ async function produce(
     console.log(`export: print HTML failed: ${err}`);
     return null;
   }
-  const out = await render(env.BROWSER, html, pdfOptionsFor(mode, title), mode === 'slides');
+  const out = await render(browser, html, pdfOptionsFor(mode, title), mode === 'slides');
   if (out) await store(env, space, hash, source, mode, out);
   return out;
+}
+
+/** One browser per source per minute. The hash is the only credential a reader
+    holds, so this is what bounds the BROWSER bill on a link that got around: a
+    burst of first GETs, or a page that never goes idle, spends one render per
+    window instead of one per request. Written before the render, so the window
+    opens whether or not the render lands. */
+export const ATTEMPT_SECS = 60;
+
+/** True when this request may spend the browser; false inside another's window. */
+async function claimRender(env: Env, space: string, hash: string, source: string, mode: RenderMode): Promise<boolean> {
+  const key = attemptKey(space, hash, source, mode);
+  const t = now();
+  const last = Number(await (await env.BUCKET.get(key))?.text());
+  if (Number.isFinite(last) && t - last < ATTEMPT_SECS) return false;
+  await env.BUCKET.put(key, String(t), { httpMetadata: { contentType: 'text/plain' } });
+  return true;
 }
 
 /** A `.pdf` or `.png` URL must never answer HTML at 200 - a curl -o would
@@ -114,6 +128,7 @@ async function exportPage(request: Request, env: Env, target: ExportTarget): Pro
     console.log('export: no BROWSER binding');
     return rendering202();
   }
+  if (!await claimRender(env, space, hash, source, 'page')) return rendering202();
   const dir = url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1);
   const out = await renderPage(env.BROWSER, `${url.origin}${dir}${encodeURI(source)}`, pdfOptionsFor('page', baseName(source)));
   if (!out) {
@@ -153,7 +168,12 @@ export async function exportArtifact(
   const name = downloadName(source, 'pdf');
   if (await env.BUCKET.head(key)) return rawBytes(request, env, key, name, false);
 
-  const out = await produce(env, space, hash, source, mode, markdown, url);
+  if (!env.BROWSER) {
+    console.log('export: no BROWSER binding');
+    return rendering202();
+  }
+  if (!await claimRender(env, space, hash, source, mode)) return rendering202();
+  const out = await produce(env, env.BROWSER, space, hash, source, mode, markdown, url);
   if (!out) return rendering202();
 
   return rawBytes(request, env, key, name, false);

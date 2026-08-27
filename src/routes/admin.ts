@@ -1,5 +1,5 @@
 import type { Env, Meta } from '../lib/types';
-import { ADMIN_SECS, mintAdminLink, mintAdminToken, verifyAdminToken } from '../lib/admin';
+import { mintAdminLink, mintAdminToken, refreshExp, verifyAdminToken } from '../lib/admin';
 import { authorize, requireKeys } from '../lib/auth';
 import type { SigningKeys } from '../lib/sign';
 import { readMeta, writeMeta, isExpired } from '../lib/r2';
@@ -13,27 +13,28 @@ import { now } from '../lib/clock';
     handlers then read. No Bearer, so it never touches the vault map. */
 export async function adminToken(
   request: Request, env: Env, space: string, hash: string,
-): Promise<{ keys: SigningKeys; t: number } | Response> {
+): Promise<{ keys: SigningKeys; t: number; origin: number } | Response> {
   const keys = requireKeys(env, 'json');
   if (keys instanceof Response) return keys;
   const t = now();
   const c = new URL(request.url).searchParams.get('c');
-  if (!c || !(await verifyAdminToken(keys, space, hash, c, t)).ok) {
+  const v = c ? await verifyAdminToken(keys, space, hash, c, t) : null;
+  if (!v?.ok) {
     return jsonResponse({ error: `admin link missing or expired; re-open: nt-share admin ${space}/${hash}` }, 401);
   }
-  return { keys, t };
+  return { keys, t, origin: v.origin };
 }
 
 /**
  * POST /<space>/<hash>/config?c=<token>: the working page's expiry write,
  * `{ttl}`. Answers a fresh 5-minute token - the sliding window is a new
- * credential per edit, never a longer exp on the old one - plus the expiry it
- * committed.
+ * credential per edit, never a longer exp on the old one, and never past the
+ * session's hour - plus the expiry it committed.
  */
 export async function adminConfig(request: Request, env: Env, space: string, hash: string): Promise<Response> {
   const admin = await adminToken(request, env, space, hash);
   if (admin instanceof Response) return admin;
-  const { keys, t } = admin;
+  const { keys, t, origin } = admin;
 
   const ttl = textAt(parseObject(await request.text()) ?? {}, 'ttl');
   if (!ttl) return jsonResponse({ error: 'expected JSON body {ttl}' }, 400);
@@ -49,9 +50,9 @@ export async function adminConfig(request: Request, env: Env, space: string, has
   const updated: Meta = { ...meta, expiresAt };
   await writeMeta(env, updated);
 
-  const exp = t + ADMIN_SECS;
+  const exp = refreshExp(t, origin);
   return jsonResponse({
-    c: await mintAdminToken(keys, space, hash, exp),
+    c: await mintAdminToken(keys, space, hash, exp, origin),
     exp,
     expiresAt,
     // Rendered here, so the page never restates the countdown grammar.

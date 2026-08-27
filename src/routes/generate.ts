@@ -1,6 +1,6 @@
 import type { Env, MetaFile } from '../lib/types';
 import { adminToken } from './admin';
-import { readMeta, readPayload, isExpired, payloadKey } from '../lib/r2';
+import { readMeta, readPayload, isExpired, listAll, payloadKey } from '../lib/r2';
 import { contentTypeFor } from '../lib/keys';
 import { parseObject, textAt, textsAt } from '../lib/json';
 import { htmlResponse, jsonResponse, seeOther, wantsJson } from '../lib/http';
@@ -63,6 +63,18 @@ async function freeStamp(
   return `${name}.${stamp}.md`;
 }
 
+/** Versions one generation name may hold under one hash. The bound on what a
+    leaked working link can spend at the model: counted by listing, so a run
+    that is refused spends nothing, and a concurrent pair overshoots by one. */
+export const MAX_VERSIONS = 20;
+
+async function countVersions(env: Env, space: string, hash: string, name: string): Promise<number> {
+  const dir = payloadKey(space, hash, '');
+  const stamped = new RegExp(`^${name}\\.\\d+\\.md$`);
+  const found = await listAll(env, `${dir}${name}.`);
+  return found.filter(({ key }) => stamped.test(key.slice(dir.length))).length;
+}
+
 /**
  * POST /<space>/<hash>/generate?c=<token>: many sources in, one document out.
  *
@@ -118,6 +130,10 @@ export async function generate(request: Request, env: Env, space: string, hash: 
       `too much text to generate from: ${bytes} bytes over ${MAX_TRANSFORM_BYTES}`,
       picked.map((f) => f.path),
     );
+  }
+
+  if (await countVersions(env, space, hash, name) >= MAX_VERSIONS) {
+    return refuse(request, 429, `${name} already has ${MAX_VERSIONS} versions here; upload again to keep going`);
   }
 
   const texts: TransformSource[] = [];

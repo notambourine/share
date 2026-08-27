@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ADMIN_SECS, mintAdminToken, verifyAdminToken } from '../src/lib/admin';
+import { ADMIN_SECS, ADMIN_SESSION_SECS, mintAdminToken, verifyAdminToken } from '../src/lib/admin';
 import { mintToken, verifyToken } from '../src/lib/sign';
 import { sha256hex } from '../src/lib/auth';
 import { now } from '../src/lib/clock';
@@ -63,12 +63,12 @@ describe('admin token scope', () => {
      same key could ever sign: a token over the bare artifact prefix fails here
      on the signature rather than on a check someone has to remember to write. */
   it('a token over another scope fails, in both directions', async () => {
-    const other = await mintToken(KEYS, PREFIX, EXP);
+    const other = `${await mintToken(KEYS, `${PREFIX}@${NOW}`, EXP)}.${NOW}`;
     expect(await verifyAdminToken(KEYS, SPACE, HASH, other, NOW)).toMatchObject({
       ok: false, reason: 'bad-signature',
     });
     const admin = await mintAdminToken(KEYS, SPACE, HASH, EXP);
-    expect(await verifyToken(KEYS, PREFIX, admin, NOW)).toMatchObject({
+    expect(await verifyToken(KEYS, PREFIX, admin.replace(/\.\d+$/, ''), NOW)).toMatchObject({
       ok: false, reason: 'bad-signature',
     });
   });
@@ -88,6 +88,19 @@ describe('admin token scope', () => {
     expect(await verifyAdminToken(KEYS, SPACE, HASH, forever, NOW)).toMatchObject({
       ok: false, reason: 'expired',
     });
+  });
+
+  /* The origin rides in the clear but under the signature, so moving it to buy
+     a longer session fails on the signature, and an exp past the session fails
+     even when correctly signed. */
+  it('never outlives the session it was first minted in', async () => {
+    const origin = NOW - ADMIN_SESSION_SECS;
+    const past = await mintAdminToken(KEYS, SPACE, HASH, NOW + 60, origin);
+    expect(await verifyAdminToken(KEYS, SPACE, HASH, past, NOW)).toMatchObject({ ok: false, reason: 'expired' });
+    const live = await mintAdminToken(KEYS, SPACE, HASH, EXP, NOW - 60);
+    const moved = live.replace(/\.\d+$/, `.${NOW}`);
+    expect(await verifyAdminToken(KEYS, SPACE, HASH, moved, NOW)).toMatchObject({ ok: false, reason: 'bad-signature' });
+    expect(await verifyAdminToken(KEYS, SPACE, HASH, live.replace(/\.\d+$/, ''), NOW)).toMatchObject({ reason: 'malformed' });
   });
 });
 
@@ -146,6 +159,20 @@ describe('POST /<space>/<hash>/config', () => {
     expect(Number(body.c.split('.')[1])).toBeGreaterThan(Number(sent.split('.')[1]));
     expect((await verifyAdminToken(KEYS, SPACE, HASH, body.c, NOW)).ok).toBe(true);
     expect(storedMeta(env).expiresAt).toBe(NOW + 30 * DAY);
+  });
+
+  /* A leaked link could otherwise renew itself every five minutes forever. */
+  it('a refresh is cut at the session hour, and the last one stops renewing', async () => {
+    const env = seededEnv();
+    const origin = NOW - ADMIN_SESSION_SECS + 90;
+    const sent = await mintAdminToken(KEYS, SPACE, HASH, NOW + 60, origin);
+    const res = await adminConfig(configReq(sent, '{"ttl":"30d"}'), env, SPACE, HASH);
+    expect(res.status).toBe(200);
+    const body = await res.json<{ c: string; exp: number }>();
+    expect(body.exp).toBe(origin + ADMIN_SESSION_SECS);
+    expect((await verifyAdminToken(KEYS, SPACE, HASH, body.c, NOW)).ok).toBe(true);
+    // Its own exp is the end of the session, so a later refresh has no room left.
+    expect((await verifyAdminToken(KEYS, SPACE, HASH, body.c, body.exp + 1)).ok).toBe(false);
   });
 
   it('forever clears the expiry', async () => {
