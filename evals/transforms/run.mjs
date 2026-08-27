@@ -5,11 +5,11 @@
    are the exact code path the Worker runs. Never in CI: it spends inference
    and carries an API token. See README.md here. */
 
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
-import { MODEL, runPrompt } from '../../src/transforms/prompt.ts';
+import { MODEL, decodeAiText, runPrompt } from '../../src/transforms/prompt.ts';
 import { checksFor } from './checks.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -21,25 +21,48 @@ if (!ACCOUNT || !TOKEN) {
   process.exit(2);
 }
 
+const LOG = join(HERE, 'out', 'calls.jsonl');
+
 /* The binding's shape over the REST endpoint, so runPrompt cannot tell the
-   difference between this and env.AI. */
-const ai = {
-  async run(model, input) {
-    const res = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/${model}`,
-      {
-        method: 'POST',
-        headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
-        body: JSON.stringify(input),
-      },
-    );
-    const body = await res.json();
-    if (!res.ok || body.success === false) {
-      throw new Error(`ai/run ${res.status}: ${JSON.stringify(body.errors ?? body).slice(0, 300)}`);
-    }
-    return body.result ?? body;
-  },
-};
+   difference between this and env.AI. One shim per case (via caseId) so
+   concurrent calls in a batch log against the right id. */
+function makeAi(caseId) {
+  return {
+    async run(model, input) {
+      const startedAt = Date.now();
+      let res;
+      let body;
+      let error = null;
+      try {
+        res = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/${model}`,
+          {
+            method: 'POST',
+            headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+            body: JSON.stringify(input),
+          },
+        );
+        body = await res.json();
+        if (!res.ok || body.success === false) {
+          error = `ai/run ${res.status}: ${JSON.stringify(body.errors ?? body).slice(0, 300)}`;
+        }
+      } catch (e) {
+        error = e instanceof Error ? e.message : String(e);
+      }
+      await appendFile(LOG, `${JSON.stringify({
+        id: caseId, model, ms: Date.now() - startedAt,
+        status: res?.status ?? null, request: input, response: body ?? null, error,
+      })}\n`);
+      const preview = error
+        ? `ERROR ${error}`
+        : (decodeAiText(body?.result ?? body) ?? JSON.stringify(body)).slice(0, 600);
+      const indented = preview.split('\n').map((line) => `    ${line}`).join('\n');
+      console.error(`\n  --- [${res?.status ?? 'ERR'} ${Date.now() - startedAt}ms] ${caseId} ---\n${indented}\n`);
+      if (error) throw new Error(error);
+      return body.result ?? body;
+    },
+  };
+}
 
 const prompts = new Map();
 for (const f of await readdir(PROMPTS)) {
@@ -70,11 +93,16 @@ if (cases.length === 0) {
 
 const outDir = join(HERE, 'out');
 await mkdir(outDir, { recursive: true });
+await writeFile(LOG, '');
+
+function why(failed) {
+  return failed.map((f) => (f.detail ? `${f.name} (${f.detail})` : f.name)).join('; ');
+}
 
 let done = 0;
 async function grade(c) {
   console.error(`  -> ${c.id}`);
-  const output = await runPrompt(ai, c.prompt, [{ path: c.file, text: c.text }]);
+  const output = await runPrompt(makeAi(c.id), c.prompt, [{ path: c.file, text: c.text }]);
   done++;
   if (output === null) {
     console.error(`  <- ${c.id} FAIL (null) [${done}/${cases.length}]`);
@@ -83,7 +111,8 @@ async function grade(c) {
   await writeFile(join(outDir, `${c.name}--${c.file}.md`), `${output}\n`);
   const facts = MUST[c.file] ?? { keep: [], drop: [] };
   const failed = checksFor(c.name, output, c.text, facts).filter((k) => !k.pass);
-  console.error(`  <- ${c.id} ${failed.length === 0 ? 'PASS' : 'FAIL'} [${done}/${cases.length}]`);
+  const status = failed.length === 0 ? 'PASS' : `FAIL - ${why(failed)}`;
+  console.error(`  <- ${c.id} ${status} [${done}/${cases.length}]`);
   return { id: c.id, failed };
 }
 
@@ -101,8 +130,7 @@ for (const r of results) {
     continue;
   }
   bad++;
-  const why = r.failed.map((f) => (f.detail ? `${f.name} (${f.detail})` : f.name)).join('; ');
-  console.log(`FAIL ${r.id} - ${why}`);
+  console.log(`FAIL ${r.id} - ${why(r.failed)}`);
 }
-console.log(`\n${results.length - bad}/${results.length} pass; outputs in evals/transforms/out/`);
+console.log(`\n${results.length - bad}/${results.length} pass; outputs in evals/transforms/out/, raw calls in evals/transforms/out/calls.jsonl`);
 process.exit(bad === 0 ? 0 : 1);

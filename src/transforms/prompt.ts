@@ -11,10 +11,10 @@ import type { JsonValue } from '../lib/json.ts';
 import { isJsonObject, recordsAt, textAt } from '../lib/json.ts';
 import type { AiChatInput, AiRunner } from '../lib/types.ts';
 
-/* DeepSeek V4 Flash: the fast tier with a 1M context, so a notes file never
+/* GLM 5.3 Flash: the fast tier with a 1M context, so a notes file never
    nears the window and the cost stays cents per thousand uploads. Needs the
    account on paid Workers billing. */
-export const MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
+export const MODEL = '@cf/zai-org/glm-5.3-flash';
 
 /* "Reformat", not "rewrite", and the sentence rule below it. The old wording
    asked for a rewrite and guarded only the facts, so a fast model at low effort
