@@ -76,8 +76,9 @@ export interface AiRunner {
 export interface Env {
   BUCKET: Store;
   ASSETS: AssetServer;
-  /** Workers AI, for `?transform=` on upload (src/transforms/). Optional: a
-      deploy that predates the binding still uploads; only transforms 503. */
+  /** Workers AI, for the working page's generate route (src/transforms/).
+      Optional: a deploy that predates the binding still uploads and serves;
+      only a generation 503s. */
   AI?: AiRunner;
   /** Browser Rendering, driven by @cloudflare/puppeteer, so this one stays the
       whole binding. Optional: a deploy that predates it, or an account past its
@@ -98,8 +99,6 @@ export type BindingsFit = [
   Fits<Fetcher, AssetServer>,
 ];
 
-export type Tier = 'open' | 'signed';
-
 export interface MetaFile {
   path: string;
   size: number;
@@ -112,17 +111,15 @@ export interface MetaFile {
 export interface Meta {
   space: string;
   hash: string;
-  tier: Tier;
   uploader: string;
   /** Epoch seconds. */
   createdAt: number;
   /** Epoch seconds, null = never expires. */
   expiresAt: number | null;
-  /** The `?transform=` name the upload's text files went through, when one did. */
-  transform?: string;
+  /** Uploads and generations alike; a generation carries an epoch stamp in its
+      name (`deck.<epoch>.md`), which is what a bare name resolves through. */
   files: MetaFile[];
 }
 
 export const DEFAULT_ARTIFACT_DAYS = 90;
-export const DEFAULT_LINK_DAYS = 30;
 export const TRASH_PREFIX = '_trash/';

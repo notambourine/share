@@ -1,14 +1,13 @@
-import type { Env, Meta, MetaFile, Tier } from '../lib/types';
-import { DEFAULT_ARTIFACT_DAYS, DEFAULT_LINK_DAYS } from '../lib/types';
+import type { Env, Meta, MetaFile } from '../lib/types';
+import { DEFAULT_ARTIFACT_DAYS } from '../lib/types';
 import { genSlug, normalizeUploadPath, contentTypeFor, isValidSpace, parseDuration } from '../lib/keys';
 import { posterParent } from '../lib/poster';
 import { authorize } from '../lib/auth';
-import { mintArtifactLink, publicUrl } from '../lib/link';
+import { publicUrl } from '../lib/link';
 import { mintAdminLink } from '../lib/admin';
 import { payloadKey, writeMeta } from '../lib/r2';
 import { jsonResponse, textResponse, wantsJson } from '../lib/http';
 import { now } from '../lib/clock';
-import { MAX_TRANSFORM_BYTES, REPAIR, TRANSFORMS, runTransform, transformable } from '../transforms';
 
 const MAX_FILES = 200;
 
@@ -17,61 +16,25 @@ interface UploadEntry {
   blob: File;
 }
 
+/**
+ * POST /up/<space>: one request, one artifact. Nothing renders and nothing
+ * generates here - a page is rendered by the request that asks for it, and a
+ * document is generated from the working page this answers with - so an upload
+ * nobody opens spends no browser and no inference budget.
+ *
+ * Keys ride along but are not required: missing keys only cost the working-page
+ * link, and the upload still lands and still serves.
+ */
 export async function upload(
   request: Request, env: Env, space: string,
 ): Promise<Response> {
-  /* Signing your own fresh upload spends no authority the upload did not, so a
-     session token covers both and the signed tier costs one 1Password unlock.
-     Keys ride along for every tier: the admin link mints from the same set, and
-     missing keys only block the signed tier below - an open upload still lands,
-     just without its admin link. */
-  const gate = await authorize(request, env, { need: 'upload', flavor: 'text' });
+  const gate = await authorize(request, env, { flavor: 'text' });
   if (gate instanceof Response) return gate;
   const { name: uploader, keys } = gate;
   if (!isValidSpace(space)) return textResponse('invalid space name\n', 400);
 
   const url = new URL(request.url);
   const t = now();
-
-  const tierParam = url.searchParams.get('tier') ?? 'open';
-  if (tierParam !== 'open' && tierParam !== 'signed') {
-    return textResponse('tier must be open or signed\n', 400);
-  }
-  const tier: Tier = tierParam;
-
-  const transform = url.searchParams.get('transform');
-  if (transform !== null && !TRANSFORMS.has(transform)) {
-    return textResponse(`unknown transform (${[...TRANSFORMS.keys()].join(', ')})\n`, 400);
-  }
-  const ai = env.AI;
-  if (transform !== null && !ai) {
-    return textResponse('transform unavailable: no AI binding\n', 503);
-  }
-
-  /* `?slides=2,4,5` - the clipped slide numbers a repair may touch. Only the
-     repair prompt reads them, and `nt-share fix` is what fills them in from the
-     check verdict. Parsed here so a junk list is a 400 rather than prose the
-     model has to interpret. */
-  const slidesParam = url.searchParams.get('slides');
-  const slides: number[] = [];
-  if (slidesParam !== null) {
-    if (transform !== REPAIR) return textResponse(`slides= needs transform=${REPAIR}\n`, 400);
-    for (const part of slidesParam.split(',')) {
-      const n = Number(part.trim());
-      if (!Number.isInteger(n) || n < 1) return textResponse('bad slides list\n', 400);
-      slides.push(n);
-    }
-  }
-
-  let linkExp = 0;
-  if (tier === 'signed') {
-    const signParam = url.searchParams.get('sign');
-    const secs = signParam ? parseDuration(signParam) : DEFAULT_LINK_DAYS * 86400;
-    if (secs === null) return textResponse('bad sign duration\n', 400);
-    linkExp = secs === 0 ? 0 : t + secs;
-    // Before a byte lands: a stored artifact with no link is a dead end.
-    if (!keys) return textResponse('signing keys misconfigured\n', 500);
-  }
 
   let expiresAt: number | null;
   const ttlParam = url.searchParams.get('ttl');
@@ -104,30 +67,6 @@ export async function upload(
   if (entries.length === 0) return textResponse('no files (use -F f=@file)\n', 400);
   if (entries.length > MAX_FILES) return textResponse(`too many files (max ${MAX_FILES})\n`, 400);
 
-  /* Before any byte lands, so a failed transform stores nothing, and before
-     the poster grouping, so `seen` still matches the paths. Only the text
-     files rewrite; a deck's images ride along untouched. */
-  if (transform !== null && ai) {
-    const sources = entries.filter((e) => transformable(e.path));
-    if (sources.length === 0) return textResponse('transform needs a .md or .txt file\n', 400);
-    for (const e of sources) {
-      if (e.blob.size > MAX_TRANSFORM_BYTES) {
-        return textResponse(`too large to transform: ${e.path}\n`, 413);
-      }
-      const out = await runTransform(ai, transform, e.path, await e.blob.text(), slides);
-      if (out === null) return textResponse('transform failed; retry without transform=\n', 502);
-      // A .txt would serve as text/plain and never render; the output is markdown now.
-      const path = e.path.replace(/\.txt$/i, '.md');
-      if (path !== e.path) {
-        if (seen.has(path)) return textResponse(`duplicate path: ${path}\n`, 400);
-        seen.delete(e.path);
-        seen.add(path);
-        e.path = path;
-      }
-      e.blob = new File([`${out}\n`], path.slice(path.lastIndexOf('/') + 1));
-    }
-  }
-
   const hash = genSlug(12);
   /* A poster only counts as one when the file it names rode along; otherwise
      someone uploaded a picture that happens to be called that, and it keeps its
@@ -153,31 +92,18 @@ export async function upload(
     };
   });
 
-  const meta: Meta = {
-    space, hash, tier, uploader,
-    createdAt: t, expiresAt,
-    ...(transform !== null && { transform }),
-    files,
-  };
+  const meta: Meta = { space, hash, uploader, createdAt: t, expiresAt, files };
   await writeMeta(env, meta);
 
-  /* No render at upload. A page is rendered by the request that asks for it and
-     a PDF by the tile that is clicked, so an upload nobody opens spends none of
-     the browser budget and a brand edit needs no backfill. */
   const link = publicUrl(url.origin, meta);
-  const signed = tier === 'signed' && keys
-    ? await mintArtifactLink(keys, url.origin, meta, linkExp) : null;
-  // The sender's second link: TTL chips and delete, live 5 minutes from now.
+  // The sender's second link: generation, TTL chips, delete. Live 5 minutes.
   const admin = keys && await mintAdminLink(keys, url.origin, space, hash, t);
 
   if (wantsJson(request)) {
     return jsonResponse({
-      url: link, hash, tier, expiresAt, files: files.map((f) => f.path),
-      ...(transform !== null && { transform }),
-      ...(signed && { signedUrl: signed.url, signedExp: signed.exp }),
+      url: link, hash, expiresAt, files: files.map((f) => f.path),
       ...(admin && { adminUrl: admin.url, adminExp: admin.exp }),
     }, 201);
   }
-  // The bare URL 401s on a signed artifact, so the signed one is the answer.
-  return textResponse(`${signed ? signed.url : link}\n`, 201);
+  return textResponse(`${link}\n`, 201);
 }

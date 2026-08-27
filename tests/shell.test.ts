@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { fileShell, dirShell, adminShell, errorShell, homeShell, type ShellView } from '../src/render/shell';
+import { fileShell, indexShell, adminShell, errorShell, homeShell, type ShellView } from '../src/render/shell';
+import type { ArtifactIndex } from '../src/lib/artifact';
 import type { Meta } from '../src/lib/types';
 
 const DECK: ShellView = { kind: 'slides', html: '<div></div>', css: '' };
@@ -19,11 +20,33 @@ function meta(paths: string[]): Meta {
   return {
     space: 'acme',
     hash: 'LCLC7zhWhmP4',
-    tier: 'open',
     uploader: 'test',
     createdAt: 1_700_000_000,
     expiresAt: null,
     files: paths.map((path) => ({ path, size: 17, type: 'text/plain; charset=utf-8' })),
+  };
+}
+
+/** The index model a route would have gathered, built here so the shell tests
+    never reach for a bucket. */
+function index(paths: string[], stamped: string[] = []): ArtifactIndex {
+  const file = (path: string) => ({
+    path,
+    size: 17,
+    stamp: null,
+    exports: path.endsWith('.md') ? [`${path.replace(/\.md$/, '')}.pdf`] : [],
+  });
+  return {
+    space: 'acme',
+    hash: 'LCLC7zhWhmP4',
+    createdAt: 1_700_000_000,
+    expiresAt: null,
+    uploads: paths.map(file),
+    generations: stamped.length === 0 ? [] : [{
+      name: 'deck',
+      versions: stamped.map((path) => ({ ...file(path), stamp: 1712 })),
+    }],
+    renders: [],
   };
 }
 
@@ -43,8 +66,8 @@ describe('every shell escapes a hostile filename', () => {
     expect(out).not.toContain('onload="alert(1)"');
   });
 
-  it('escapes it in the directory listing', () => {
-    const out = dirShell('LCLC7zhWhmP4', [{ path: HOSTILE_PATH, size: 17, type: 'text/plain; charset=utf-8' }]);
+  it('escapes it in the index listing', () => {
+    const out = indexShell(index([HOSTILE_PATH]), meta([HOSTILE_PATH]));
     expect(out).not.toContain('<script>alert(1)</script>');
     expect(out).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
   });
@@ -53,7 +76,6 @@ describe('every shell escapes a hostile filename', () => {
     const out = adminShell({
       meta: meta([HOSTILE_PATH, 'deck.md']),
       origin: 'https://share.test',
-      kSeg: '',
       now: 1_700_000_000,
       adminExp: 1_700_000_300,
     });
@@ -67,15 +89,15 @@ describe('the shells still render what the client scripts select on', () => {
     const admin = adminShell({
       meta: meta(['deck.md']),
       origin: 'https://share.test',
-      kSeg: '',
       now: 1_700_000_000,
       adminExp: 1_700_000_300,
     });
-    for (const attr of ['data-copylink', 'data-arm', 'data-fire', 'data-disarm', 'data-countdown', 'data-exp', 'data-ttl', 'data-copy-href']) {
+    for (const attr of [
+      'data-copylink', 'data-arm', 'data-fire', 'data-disarm', 'data-countdown',
+      'data-exp', 'data-ttl', 'data-copy-href', 'data-source', 'data-generate', 'data-genstate',
+    ]) {
       expect(admin).toContain(attr);
     }
-    // The poll needs both halves on the same tile, and the value, not just the key.
-    expect(admin).toContain('data-src="deck.md" data-await="slides.pdf"');
   });
 
   it('keeps data-kind on the body, and no data-raw, because nothing fetches', () => {
@@ -113,7 +135,6 @@ describe('the shells keep their doctype and their chrome', () => {
     const forever = adminShell({
       meta: meta(['a.txt']),
       origin: 'https://share.test',
-      kSeg: '',
       now: 1_700_000_000,
       adminExp: 1_700_000_300,
     });
@@ -122,26 +143,29 @@ describe('the shells keep their doctype and their chrome', () => {
   });
 });
 
-/* The artifact root is what a recipient lands on, and a bare `.md` sniffs
-   deck-or-document from its own content - which they cannot guess. Naming every
-   spelling beside the file is what lets them pick. */
-describe('the directory listing offers each source its spellings', () => {
-  it('lists every tiled format for a markdown file, relative so a /k/ segment rides along', () => {
-    const out = dirShell('LCLC7zhWhmP4', [
-      { path: 'deck.md', size: 20, type: 'text/markdown' },
-      { path: 'chart.png', size: 9, type: 'image/png' },
-    ]);
-    for (const href of ['deck.slides.html', 'deck.doc.html', 'deck.slides.pdf', 'deck.doc.pdf', 'deck.txt']) {
-      expect(out).toContain(`href="${href}"`);
-    }
-    // Relative, never absolute: an absolute href would drop a signed segment.
-    expect(out).not.toContain('href="/deck.slides.html"');
+/* The index page is what a recipient lands on, and it has to name the export
+   beside the file: a bare `.md` sniffs deck-or-document from its own content,
+   which they cannot guess, and the `.pdf` is the thing they attach. */
+describe('the index listing offers each source its spellings', () => {
+  it('names the pdf beside a markdown file, relative so nothing hardcodes an origin', () => {
+    const paths = ['deck.md', 'chart.png'];
+    const out = indexShell(index(paths), meta(paths));
+    expect(out).toContain('href="deck.pdf"');
+    expect(out).not.toContain('href="/deck.pdf"');
     // A png exports nothing, so it gets its name and no spellings.
     expect(out).toContain('href="chart.png"');
+    expect(out).not.toContain('href="chart.pdf"');
   });
 
   it('gives a file that exports nothing no spelling row at all', () => {
-    const out = dirShell('LCLC7zhWhmP4', [{ path: 'notes.zip', size: 4, type: 'application/zip' }]);
+    const out = indexShell(index(['notes.zip']), meta(['notes.zip']));
     expect(out).not.toContain('spellings');
+  });
+
+  it('leads a generation with its bare name and keeps the stamp linked', () => {
+    const out = indexShell(index([], ['deck.1712.md']), meta(['deck.1712.md']));
+    expect(out).toContain('deck.md (newest)');
+    expect(out).toContain('href="deck.1712.md"');
+    expect(out).toContain('href="deck.1712.pdf"');
   });
 });

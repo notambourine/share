@@ -11,12 +11,10 @@
 export interface ParsedRoute {
   space: string;
   hash: string;
-  /** The `/k/<token>/` view token; null on an open link. */
-  token: string | null;
   /** Path under the artifact root; `''` is the root itself. */
   rest: string;
   origin: string;
-  /** Artifact root, token segment included, with a trailing slash. */
+  /** Artifact root, with a trailing slash. */
   root: string;
   /** The directory `rest` sits in, with a trailing slash. */
   dir: string;
@@ -39,19 +37,16 @@ export function pathSegments(path: string): string[] | null {
  */
 export function parseRoute(url: URL, segs: string[]): ParsedRoute {
   const [space, hash] = segs;
-  const signed = segs[2] === 'k' && segs.length >= 4;
-  const token = signed ? segs[3] : null;
   const { origin, pathname } = url;
   return {
     space,
     hash,
-    token,
-    rest: segs.slice(signed ? 4 : 2).join('/'),
+    rest: segs.slice(2).join('/'),
     origin,
     /* Built from the segments rather than sliced off the pathname: the poster is
        a sibling of the file, not of the URL, and a request under a subdirectory
        would otherwise hang it off the wrong base. */
-    root: `${origin}/${space}/${hash}/${token ? `k/${token}/` : ''}`,
+    root: `${origin}/${space}/${hash}/`,
     dir: `${origin}${pathname.slice(0, pathname.lastIndexOf('/') + 1)}`,
     page: `${origin}${pathname}`,
   };

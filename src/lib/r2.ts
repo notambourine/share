@@ -17,7 +17,7 @@ function decodeFile(record: JsonObject): MetaFile | null {
 /**
  * meta.json is this Worker's own record, and it still gets decoded: a partial
  * write or an older field set would otherwise reach the router as a `Meta` that
- * lies, and the router is what decides whether a link needs a signature.
+ * lies about which files a share holds.
  */
 export function decodeMeta(text: string): Meta | null {
   const record = parseObject(text);
@@ -25,11 +25,10 @@ export function decodeMeta(text: string): Meta | null {
 
   const space = textAt(record, 'space');
   const hash = textAt(record, 'hash');
-  const tier = textAt(record, 'tier');
   const uploader = textAt(record, 'uploader');
   const createdAt = numberAt(record, 'createdAt');
   const files = recordsAt(record, 'files');
-  if (space === null || hash === null || uploader === null || tier === null) return null;
+  if (space === null || hash === null || uploader === null) return null;
   if (createdAt === null || files === null) return null;
 
   const decoded: MetaFile[] = [];
@@ -39,18 +38,12 @@ export function decodeMeta(text: string): Meta | null {
     decoded.push(one);
   }
 
-  // Absent on every upload that predates transforms and on every plain one.
-  const transform = textAt(record, 'transform');
-
   return {
     space,
     hash,
-    // Anything but the literal `open` demands a token: fail toward the lock.
-    tier: tier === 'open' ? 'open' : 'signed',
     uploader,
     createdAt,
     expiresAt: numberAt(record, 'expiresAt'),
-    ...(transform !== null && { transform }),
     files: decoded,
   };
 }

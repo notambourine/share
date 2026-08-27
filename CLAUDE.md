@@ -22,22 +22,32 @@
 - Markdown, decks, highlighting, and mermaid render in the Worker, in
   `src/render/markdown.ts`, which the live shells and the print page both call.
   Never add a parser under `public/` or a second render path: a page arrives as
-  markup, and `src/client/` holds interaction only - the deck nav and the copy
-  button. Never reintroduce a `?raw` fetch to fill a shell.
+  markup, and `src/client/` holds interaction only - the deck nav, the copy
+  button, and the working page's writes. Never reintroduce a `?raw` fetch to
+  fill a shell, and never a poll: a format tile is a real anchor and the render
+  happens on the GET, so the tab holds instead of a spinner lying.
 - Mermaid is `src/render/mermaid.ts`, over `beautiful-mermaid`, which lays a
   diagram out from metric tables and needs no DOM. Never reach for upstream
   mermaid: it measures through `getBBox()`, so it could only run in the viewer.
   The SVG's colors are `var()`s off the golden set, which is what lets one
   render serve the dark shell and the light PDF; none may name the token it
   sets, because a custom property that reads itself is a cycle.
-- Nothing renders at upload. An html view is rendered by the request that asks
-  for it and stores nothing, so a brand edit reaches every link ever made with
-  nothing to invalidate. Only `.pdf` and `.png` reach the `BROWSER` binding, and
-  only they cache under `d/v<N>/` behind a hand-bumped `CACHE_VERSION`.
+- Nothing renders and nothing generates at upload. An html view is rendered by
+  the request that asks for it and stores nothing, so a brand edit reaches every
+  link ever made with nothing to invalidate. Only `.pdf` and `.png` reach the
+  `BROWSER` binding, and only they cache under `d/v<N>/` behind a hand-bumped
+  `CACHE_VERSION`.
+- A generation writes `<name>.<epoch>.md` into `f/` and appends it to
+  `meta.files`; a bare `<name>.md` or `<name>.pdf` resolves to the highest epoch
+  by listing, never through a stored pointer. Never overwrite a version and
+  never add a pointer object: an older stamp keeps its own URL, which is the
+  whole reason re-generating is safe on a link already sent. A derived key hangs
+  off the source's full stamped name, so each version's render stays immutable
+  while the bare alias is mutable by design.
 - One-time dashboard setup: README.md "Setup from zero". Token add, rotate,
   offboard, and delivery: `scripts/add-employee.sh` (its header is the runbook).
 - This repo is public. Client names never enter it; committed examples use
-  `acme`. Retention is per artifact - `?ttl=` at upload, the admin page's
+  `acme`. Retention is per artifact - `?ttl=` at upload, the working page's
   chips after - so no config file or secret holds a space name.
 - Cloudflare secrets are write-only. The 1Password vault is the source of truth
   for bearer tokens; the `TOKENS` secret is derived from it, never hand-edited.
@@ -63,31 +73,40 @@
   that are already markup: the lockup, the inlined stylesheet, the rendered
   document or deck. Never reach for it to silence a `&amp;` that looks wrong.
 - The Worker keeps its own router. Precedence in `src/worker.ts` is the security
-  model - an uploaded file named `config`, `admin`, or `status` keeps its GET -
+  model - an uploaded file named `config`, `admin`, or `generate` keeps its GET -
   so never move that dispatch into a route matcher. Responses keep coming from
   `htmlResponse()` in `src/lib/http.ts`, which owns the CSP and `Vary`.
 - Every color in this repo must be one the golden set defines, including inside
   a `var()` fallback, and every `var(--x)` must read a token it still declares.
   `npm run brand` is the gate and CI runs it.
-- `src/transforms/` is the `?transform=` upload feature: the format lives in
+- `src/transforms/` backs the working page's generate route: the format lives in
   those prompts, server-side, so never publish a formatting skill for uploaders
-  to follow. A prompt or model edit runs `npm run eval:transforms` (live model,
-  by hand, needs a Workers AI token) before it ships; CI never runs it.
+  to follow. One run takes an ordered list of ticked sources and answers one
+  document, and `MAX_TRANSFORM_BYTES` is a per-run budget that refuses rather
+  than truncates - a quiet truncation produces a confidently wrong deck. A
+  prompt or model edit runs `npm run eval:transforms` (live model, by hand,
+  needs a Workers AI token) before it ships; CI never runs it.
 - `skills/share/SKILL.md` is the only copy of the skill. `src/skill.ts` imports
   it to serve `/SKILL.md`; never add a copy under `public/`.
 - `skills/` is the published plugin surface, and this repo holds no other
   skills. Never vendor a third-party skill tree here; that machinery lives in
   its own repo.
-- `authorize()` in `src/lib/auth.ts` is the one Bearer gate: it owns which
-  credential a verb takes (a session token only uploads), the `SIGNING_KEYS`
-  500, and whether a refusal speaks JSON or text. A route calls it and returns
-  the `Response` it may hand back; never re-derive that policy from
-  `authenticate()`'s tri-state at a call site.
+- `authorize()` in `src/lib/auth.ts` is the one Bearer gate: one credential
+  reaches it - the vault token, which only ever mints - so what it owns is the
+  `SIGNING_KEYS` 500 and whether a refusal speaks JSON or text. A route calls it
+  and returns the `Response` it may hand back. Two credentials exist in total,
+  and the other never appears in a Bearer header: the 5-minute artifact-scoped
+  `?c=` the working page carries.
 - Never generate or echo a raw bearer token in a session; that is terminal-only
   work via `scripts/add-employee.sh`.
-- Never put Cloudflare Access on this hostname. Uploaded JS runs here, and an
+- The unguessable hash is the only credential a reader needs, so the standing
+  prohibitions below are the entire protection story - more load-bearing now,
+  not less, because no second tier stands behind them.
+- Never put Cloudflare Access on this hostname. Uploaded JS runs here, and a
   `CF_Authorization` cookie is an ambient credential a hosted script can replay.
-  A signature in a URL is not ambient, which is why the signed tier is the lock.
+  Never reintroduce a view token or a locked tier either: the write credential
+  is scoped to one hash for five minutes, and a long-lived read token in a URL
+  is a second thing to revoke that buys nothing the hash does not.
 - Never set a cookie on `notambourine.com` or any subdomain. `share` is
   same-site with the marketing site, so a `Domain=notambourine.com` cookie set
   here reaches it. That the site sets none is what makes the shared apex safe.

@@ -5,38 +5,16 @@ URL, hand it to one person. This file is the whole API.
 
 ## Auth
 
-Writes need `Authorization: Bearer <token>`: either your raw vault token or a
-short-lived session token (see Session). Load the raw token from 1Password by
-reference; never paste it into a transcript or a shell history. Convention:
-it lives in your Employee vault as item `share-token`, field `credential`.
-Run a raw-token command under this prefix (op run resolves the reference from
-the environment; single-quote the inner command so your shell does not expand
-$SHARE_TOKEN early):
+Writes need `Authorization: Bearer <token>`: your raw vault token. Load it from
+1Password by reference; never paste it into a transcript or a shell history.
+Convention: it lives in your Employee vault as item `share-token`, field
+`credential`. Run a command under this prefix (op run resolves the reference
+from the environment; single-quote the inner command so your shell does not
+expand $SHARE_TOKEN early):
 
     SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c '<command>'
 
 Reads need nothing: the unguessable hash in the URL is the credential.
-Signed-tier artifacts additionally need a `/k/<token>/` path segment.
-
-## Session
-
-Trade the vault token for a session token once, then run every upload with
-the session token and no 1Password unlock:
-
-    curl -sS -X POST -H "Authorization: Bearer $SHARE_TOKEN" \
-      https://share.notambourine.com/session
-
-Returns 201 {token, name, expiresAt}. ttl defaults to 5m (?ttl=, cap 1h).
-Convention: write the response to ~/.cache/notambourine-share/session.json
-(mode 0600) and read the token from there per upload, AWS-STS-cache style,
-so the token never enters a transcript or shell history.
-The session token authorizes /up only: list, delete, and signing an older
-artifact still need the vault token, and a session cannot mint another
-session, so an exfiltrated session token caps at a few minutes of uploads.
-A signed-tier upload returns its own link (see Upload), because signing what
-you just created spends no authority beyond the upload itself. A 401 here
-means the server rejects your vault token itself. An expired session 401s
-with "session expired" on upload; mint a new one and retry.
 
 ## Upload
 
@@ -48,63 +26,63 @@ Multiple `-F f=@...` fields keep their relative paths, so a folder with an
 `index.html` serves as a real page with its own CSS, JS, and images.
 
 Query parameters:
-  tier=open|signed   default open; signed requires a minted /k/ token to view
   ttl=<dur>|forever  fixed artifact expiry, default 90d (e.g. 7d, 12h, 4w)
-  sign=<dur>|forever signed tier only: link life, default 30d
-  transform=<name>   reformat each .md/.txt through Workers AI before storing:
-                     agenda, renewal, performance, presentation, or deck. The
-                     server owns the format, so send raw notes, never a
-                     pre-formatted file. presentation and deck come out as
-                     Marp decks; a .txt is stored as .md. A 502 means the
-                     model call failed and nothing stored: retry without it.
 
-A signed-tier upload returns the signed link, not the bare one, because the
-bare one 401s. With `Accept: application/json` it comes back as signedUrl and
-signedExp, alongside url and hash. The JSON answer also carries
-adminUrl and adminExp: the artifact's admin link (see Admin link), live for
+Nothing renders and nothing generates at upload. With
+`Accept: application/json` the answer carries url, hash, expiresAt, files, and
+adminUrl plus adminExp: the working-page link (see Working page), live for
 5 minutes, for the uploader only - never a link to hand over. The plain-text
 answer stays the one hand-over URL.
 
-## Re-sign an older artifact
-
-    curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d '{"path":"<space>/<hash>","ttl":"30d"}' \
-      https://share.notambourine.com/sign
-
-Returns {url, exp}. ttl defaults to 30d; "forever" never expires.
-
-## Admin link
+## Working page
 
     curl -sS -X POST -H "Authorization: Bearer $SHARE_TOKEN" \
       https://share.notambourine.com/<space>/<hash>/admin
 
-Returns {url, exp}: the artifact's admin link, live for 5 minutes. Upload
+Returns {url, exp}: the artifact's working page, live for 5 minutes. Upload
 mints one too (adminUrl in its JSON answer); this route re-opens it. The url
-carries ?c=<token>, a credential scoped to exactly this artifact's config and
-delete routes - it is not a view token and never belongs in a link you hand
-over. It authorizes two writes:
+carries ?c=<token>, a credential scoped to exactly this artifact's write routes
+- it is not a view credential and never belongs in a link you hand over. It
+authorizes three writes:
 
+    POST /<space>/<hash>/generate?c=<token>  {"name":"deck","sources":["notes.md"]}
     POST /<space>/<hash>/config?c=<token>    {"ttl":"30d"} or {"ttl":"forever"}
     DELETE /<space>/<hash>/?c=<token>        same soft delete as Revoke below
+
+The generate write composes the named sources, in the order given, into one
+document through a server-side prompt. `name` is one of deck, agenda, renewal,
+ship-summary; `sources` are paths this share holds, each a .md, .markdown, or
+.txt. Answers 201 {path, size, bare}: the version that landed
+(`deck.<epoch>.md`) and the bare name it now answers to (`deck.md`). 400 names
+a bad file or name, 413 refuses a run over 200,000 bytes of text with the count
+and the files, 502 means the model call failed and nothing stored, 503 means the
+AI binding is absent.
 
 The config write answers {c, exp, expiresAt, expiry}: a fresh 5-minute token
 with the epoch it dies (each edit restarts the clock; adopt the new c) plus the
 expiry it committed, rendered. The ttl counts from upload; a ttl the artifact
 has already outlived counts from the write instead.
 
-Opened in a browser, the url serves an admin page: format links to hand over
-(they carry no c=), the expiry chips, and delete. An invalid or expired c=
-serves the plain view, never a 401.
+Opened in a browser, the url serves the working page: the source checkboxes and
+generation buttons, format links to hand over (they carry no c=), the expiry
+chips, and delete. An invalid or expired c= serves the public index, never a 401.
 
-## List a space
+## Index page
 
-    curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
-      https://share.notambourine.com/<space>/
+    curl -sS -H "Accept: application/json" \
+      https://share.notambourine.com/<space>/<hash>/
 
-JSON array, newest first: hash, url, tier, uploader, createdAt, expiresAt,
-expired, files (count), bytes. Times are epoch seconds; expiresAt null means
-never expires. Without the Bearer header this path returns 404.
+The share's own root, with no credential. JSON: space, hash, createdAt,
+expiresAt, uploads (path, size, stamp, exports), generations (name, versions
+newest first), and renders (source, path, key, check). `stamp` is the epoch a
+generated version landed under and null on an upload; `key` is which mode
+rendered - slides.pdf, doc.pdf, page.pdf, page.png; `check` carries
+{slides, overflow} for a deck render that was measured, where overflow lists the
+1-indexed slides whose content clips the page.
+
+In a browser the same URL is a page listing the same thing. A share whose upload
+carries an `index.html` serves that page here instead: the folder is the
+artifact.
 
 ## Revoke
 
@@ -132,37 +110,28 @@ them. Arrow keys move between slides and the #n fragment links to one.
 
 ## Formats
 
-Swap a markdown share URL's extension for a branded export: uploaded
-`deck.md`, ask for `deck.pdf`. A suffix decides the output on its own, so
-Accept gets no vote, and a file uploaded under the suffixed name always wins
-over the export.
+Swap a share URL's extension for a branded export: uploaded `deck.md`, ask for
+`deck.pdf`. A suffix decides the output on its own, so Accept gets no vote, and
+a file uploaded under the suffixed name always wins over the export.
 
     deck.md              branded page, deck or document decided from the content
-    deck.txt             the source, text/plain, always
-    deck.slides.html     branded page, always a deck
-    deck.doc.html        branded page, always a document
     deck.pdf             PDF, deck or document decided from the content
-    deck.slides.pdf      PDF, always a deck
-    deck.doc.pdf         PDF, always a document
 
-Bare .md and .pdf read the content to choose: `marp: true` front matter
-or `---` slide separators mean deck, anything else means document. Name
-.slides.* or .doc.* when you want to decide instead of guessing. When one
-upload holds both deck.md and deck.markdown, the .md spelling wins the base
-name.
-
-The .html spellings are pages, not downloads: the Worker renders them on the
-request that asks, so they answer immediately and pick up a brand change with no
-re-render. Only the PDFs are stored artifacts.
+Both read the content to choose: `marp: true` front matter or `---` slide
+separators mean deck, anything else means document. When one upload holds both
+deck.md and deck.markdown, the .md spelling wins the base name.
 
 An uploaded HTML page exports too: uploaded `page.html`, ask for
 
     page.pdf             PDF of the page, plain A4
     page.png             screenshot, the whole page at 1280 wide
-    page.full.png        the same object, spelled out
 
 PNG is HTML-only; markdown keeps its own family above. When one upload holds
 both deck.md and deck.html, markdown wins the base and deck.png is a 404.
+
+A generated document lands stamped (`deck.<epoch>.md`) and the bare name follows
+the newest stamp, so `deck.md` and `deck.pdf` serve the latest version while
+every older stamp keeps its own URL. The index page lists all of them.
 
 Nothing renders at upload. A .pdf or .png is rendered by the first request that
 asks for it and then cached, so that request can take a few seconds; one that is
@@ -172,4 +141,4 @@ a .pdf.
 
 ## Skill
 
-GET /SKILL.md is a drop-in Claude skill covering all five verbs.
+GET /SKILL.md is a drop-in Claude skill covering both verbs.

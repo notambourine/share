@@ -137,8 +137,8 @@ const asCtx = (deferrals: Pick<ExecutionContext, 'waitUntil'>): ExecutionContext
 
 /**
  * Through the front door: the dispatch order in src/worker.ts is the security
- * model - an uploaded file named `config`, `admin`, or `status` keeps its GET -
- * and only a test that crosses this seam can hold it.
+ * model - an uploaded file named `config`, `admin`, or `generate` keeps its GET
+ * - and only a test that crosses this seam can hold it.
  */
 export function fetchWorker(env: Env, request: Request): Promise<Response> {
   return worker.fetch(request, env);

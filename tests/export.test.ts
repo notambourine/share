@@ -9,7 +9,7 @@ const DECK = '# One\n\ntext\n\n---\n\n# Two\n';
 
 function metaFor(files: MetaFile[]): string {
   const meta: Meta = {
-    space: SPACE, hash: HASH, tier: 'open', uploader: 'test',
+    space: SPACE, hash: HASH, uploader: 'test',
     createdAt: 0, expiresAt: null, files,
   };
   return JSON.stringify(meta);
@@ -51,14 +51,18 @@ describe('page exports (uploaded HTML)', () => {
     }
   });
 
-  it('serves a cached shot; bare .png and .full.png share the object', async () => {
-    const env = pageWorld({ [derivedKey(SPACE, HASH, 'page.html', 'page', 'full.png')]: 'PNGBYTES' });
-    for (const path of ['page.png', 'page.full.png']) {
-      const res = await ask(env, path);
-      expect(res.status).toBe(200);
-      expect(res.headers.get('content-type')).toBe('image/png');
-      expect(await res.text()).toBe('PNGBYTES');
-    }
+  it('serves a cached shot', async () => {
+    const env = pageWorld({ [derivedKey(SPACE, HASH, 'page.html', 'page', 'png')]: 'PNGBYTES' });
+    const res = await ask(env, 'page.png');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+    expect(await res.text()).toBe('PNGBYTES');
+  });
+
+  /* The spelled-out alias is gone with the rest of the grammar: one name per
+     artifact, and the page generates the link. */
+  it('404s the old .full.png spelling', async () => {
+    expect((await ask(pageWorld(), 'page.full.png')).status).toBe(404);
   });
 
   it('a real uploaded page.pdf wins its own name', async () => {
@@ -112,7 +116,7 @@ describe('the live markdown view', () => {
   });
 });
 
-describe('format suffixes', () => {
+describe('the .pdf suffix', () => {
   it('serves a cached PDF, and the suffix outranks Accept', async () => {
     const key = derivedKey(SPACE, HASH, 'deck.md', 'slides', 'pdf');
     const env = world({ [key]: 'PDFBYTES' });
@@ -122,47 +126,21 @@ describe('format suffixes', () => {
     expect(await res.text()).toBe('PDFBYTES');
   });
 
-  it('sniffs deck content to the slides mode on a bare .pdf', async () => {
+  /* Deck-or-document is the content's call, every time: the cache key follows
+     the sniff, so a doc render is not what a deck URL hands back. */
+  it('sniffs deck content to the slides key', async () => {
     const env = world({ [derivedKey(SPACE, HASH, 'deck.md', 'doc', 'pdf')]: 'DOC' });
-    // Only the doc object exists, and the sniff wants the slides one.
     const res = await ask(env, 'deck.pdf');
     expect(res.headers.get('content-type')).not.toBe('application/pdf');
   });
 
-  it('an explicit spelling beats the sniff', async () => {
-    const env = world({ [derivedKey(SPACE, HASH, 'deck.md', 'doc', 'pdf')]: 'DOC' });
-    const res = await ask(env, 'deck.doc.pdf');
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe('DOC');
-  });
-
-  /* The `.html` spellings are mode overrides, not artifacts: they render on the
-     request that asks and store nothing, so there is no browser budget to spend
-     and no stored copy to go stale when the brand moves. */
-  it('.slides.html renders live, with no stored object and no browser', async () => {
-    const env = world();
-    const res = await ask(env, 'deck.slides.html');
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toContain('text/html');
-    const html = await res.text();
-    expect(html).toContain('data-marpit-svg');
-    // Rendered here, so the page ships no parser and asks for no second round trip.
-    expect(html).not.toContain('marpit.js');
-    expect(html).not.toContain('?raw');
-  });
-
-  it('.doc.html pins the document mode over content that sniffs as a deck', async () => {
-    const html = await (await ask(world(), 'deck.doc.html')).text();
-    expect(html).toContain('data-kind="md"');
-    expect(html).not.toContain('data-marpit-svg');
-  });
-
-  it('.txt is the source bytes as text/plain, always', async () => {
-    const env = world();
-    const res = await ask(env, 'deck.txt');
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toContain('text/plain');
-    expect(await res.text()).toBe(DECK);
+  it('sniffs prose to the doc key', async () => {
+    const prose = '# Notes\n\nJust prose.\n';
+    const env = world({
+      [`${SPACE}/${HASH}/f/notes.md`]: prose,
+      [derivedKey(SPACE, HASH, 'notes.md', 'doc', 'pdf')]: 'DOC',
+    }, [{ path: 'notes.md', size: prose.length, type: 'text/markdown; charset=utf-8' }]);
+    expect(await (await ask(env, 'notes.pdf', '*/*')).text()).toBe('DOC');
   });
 
   /* A .pdf URL never answers HTML at 200: `curl -o deck.pdf` would write HTML
@@ -175,20 +153,6 @@ describe('format suffixes', () => {
     expect(res.headers.get('content-type')).not.toContain('text/html');
   });
 
-  /* An `.html` spelling is a live render, so it is a page a person can read
-     however cold the PDF cache is. */
-  it('a cold .slides.html still serves the live shell', async () => {
-    const env = world();
-    const res = await ask(env, 'deck.slides.html');
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
-    expect(await res.text()).toContain('data-kind="slides"');
-  });
-
-  it('the bare .html alias is gone: .md is the one unpinned spelling', async () => {
-    expect((await ask(world(), 'deck.html')).status).toBe(404);
-  });
-
   it('a real uploaded file wins its own name', async () => {
     const files = [MD_FILE, { path: 'deck.pdf', size: 6, type: 'application/pdf' }];
     const env = world({ [`${SPACE}/${HASH}/f/deck.pdf`]: 'REAL' }, files);
@@ -196,10 +160,10 @@ describe('format suffixes', () => {
     expect(await res.text()).toBe('REAL');
   });
 
-  it('404s a suffix whose source was never uploaded, the legacy spelling included', async () => {
+  it('404s a suffix whose source was never uploaded, the retired spellings included', async () => {
     const env = world();
-    expect((await ask(env, 'missing.pdf')).status).toBe(404);
-    expect((await ask(env, 'deck.docx')).status).toBe(404);
-    expect((await ask(env, 'deck.md.pdf')).status).toBe(404);
+    for (const path of ['missing.pdf', 'deck.docx', 'deck.md.pdf', 'deck.txt', 'deck.slides.pdf', 'deck.html']) {
+      expect([path, (await ask(env, path)).status]).toEqual([path, 404]);
+    }
   });
 });

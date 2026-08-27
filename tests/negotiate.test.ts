@@ -35,7 +35,7 @@ describe('viewModeFor', () => {
     expect(viewModeFor('main.ts', CURL, q())).toBe('raw');
   });
 
-  it('markdown renders the document; the deck is the .slides.html file', () => {
+  it('markdown renders in the shell whatever the query says; the content picks the mode', () => {
     expect(viewModeFor('deck.md', BROWSER, q())).toBe('shell-md');
     expect(viewModeFor('deck.md', BROWSER, q('slides'))).toBe('shell-md');
     expect(viewModeFor('deck.md', CURL, q())).toBe('raw');

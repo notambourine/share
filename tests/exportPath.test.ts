@@ -1,30 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  CACHE_VERSION, parseExportPath, resolveExport, explicitMode,
-  isLiveHtml, pageExt, derivedKey, checkKey, sniffDeck,
-  formatsFor, stemOf, isRenderedKey,
+  CACHE_VERSION, parseExportPath, resolveExport, derivedKey, checkKey, sniffDeck,
+  formatsFor, stemOf,
   derivedPrefix, parseDerivedKey, parseCheckKey,
 } from '../src/lib/exportPath';
 
 describe('parseExportPath', () => {
-  it('reads every suffix in the grammar', () => {
-    expect(parseExportPath('deck.slides.html')).toEqual({ base: 'deck', format: 'slides-html' });
-    expect(parseExportPath('deck.doc.html')).toEqual({ base: 'deck', format: 'doc-html' });
+  it('reads the two spellings and nothing else', () => {
     expect(parseExportPath('deck.pdf')).toEqual({ base: 'deck', format: 'pdf' });
-    expect(parseExportPath('deck.slides.pdf')).toEqual({ base: 'deck', format: 'slides-pdf' });
-    expect(parseExportPath('deck.doc.pdf')).toEqual({ base: 'deck', format: 'doc-pdf' });
-    expect(parseExportPath('deck.txt')).toEqual({ base: 'deck', format: 'txt' });
     expect(parseExportPath('page.png')).toEqual({ base: 'page', format: 'png' });
-    expect(parseExportPath('page.full.png')).toEqual({ base: 'page', format: 'full-png' });
-  });
-
-  it('takes the longest suffix, so .slides.pdf never reads as .pdf', () => {
-    expect(parseExportPath('a.slides.html')?.format).toBe('slides-html');
-    expect(parseExportPath('a.slides.pdf')?.format).toBe('slides-pdf');
-    expect(parseExportPath('a.doc.html')?.format).toBe('doc-html');
-    expect(parseExportPath('a.doc.pdf')?.format).toBe('doc-pdf');
-    expect(parseExportPath('a.full.png')?.format).toBe('full-png');
+    expect(parseExportPath('deck.slides.pdf')).toEqual({ base: 'deck.slides', format: 'pdf' });
   });
 
   it('keeps nested paths intact', () => {
@@ -40,22 +26,20 @@ describe('parseExportPath', () => {
 describe('resolveExport', () => {
   const files = ['deck.md', 'notes.markdown', 'report.pdf', 'shot.png'];
 
-  it('resolves a suffix onto the uploaded markdown source', () => {
+  it('resolves a suffix onto the markdown source', () => {
     expect(resolveExport(files, 'deck.pdf')).toEqual({ source: 'deck.md', format: 'pdf' });
-    expect(resolveExport(files, 'deck.txt')).toEqual({ source: 'deck.md', format: 'txt' });
-    expect(resolveExport(files, 'notes.doc.pdf')?.source).toBe('notes.markdown');
+    expect(resolveExport(files, 'notes.pdf')?.source).toBe('notes.markdown');
   });
 
-  it('the old deck.md.pdf spelling is gone, no shim', () => {
+  /* The suffix grammar is gone: deck-vs-document comes from the content, so a
+     spelling that used to pin the mode is now just a base that was never
+     uploaded. */
+  it('the mode-pinning spellings are gone, no shim', () => {
+    expect(resolveExport(files, 'deck.slides.pdf')).toBeNull();
+    expect(resolveExport(files, 'deck.doc.pdf')).toBeNull();
+    expect(resolveExport(files, 'deck.slides.html')).toBeNull();
+    expect(resolveExport(files, 'deck.txt')).toBeNull();
     expect(resolveExport(files, 'deck.md.pdf')).toBeNull();
-  });
-
-  /* The pinned spellings say which mode; a bare `.html` said nothing the
-     source itself did not, and served the same bytes as `.md`. */
-  it('the bare .html alias is gone, so only the pinned spellings resolve', () => {
-    expect(resolveExport(files, 'deck.html')).toBeNull();
-    expect(resolveExport(files, 'deck.slides.html')).toEqual({ source: 'deck.md', format: 'slides-html' });
-    expect(resolveExport(files, 'deck.doc.html')).toEqual({ source: 'deck.md', format: 'doc-html' });
   });
 
   /* R12 says fail loudly rather than mangle; silently re-rendering over a real
@@ -72,21 +56,15 @@ describe('resolveExport', () => {
 
   it('refuses a base that was never uploaded as a source', () => {
     expect(resolveExport(files, 'shot.pdf')).toBeNull();
-    expect(resolveExport(files, 'shot.png.pdf')).toBeNull();
     expect(resolveExport(files, 'missing.pdf')).toBeNull();
     // shot.png is a real upload, never an export of itself.
     expect(resolveExport(files, 'shot.png')).toBeNull();
   });
 
-  it('falls back to an .html source, which takes .pdf and the shot only', () => {
+  it('falls back to an .html source, which takes both spellings', () => {
     const page = ['page.html', 'shot.png'];
     expect(resolveExport(page, 'page.pdf')).toEqual({ source: 'page.html', format: 'pdf' });
     expect(resolveExport(page, 'page.png')).toEqual({ source: 'page.html', format: 'png' });
-    expect(resolveExport(page, 'page.full.png')).toEqual({ source: 'page.html', format: 'full-png' });
-    // Markdown's family stays markdown-only.
-    expect(resolveExport(page, 'page.txt')).toBeNull();
-    expect(resolveExport(page, 'page.slides.pdf')).toBeNull();
-    expect(resolveExport(page, 'page.doc.html')).toBeNull();
     // `.html` beats `.htm` when one upload holds both spellings.
     expect(resolveExport(['a.htm', 'a.html'], 'a.pdf')?.source).toBe('a.html');
     expect(resolveExport(['a.htm'], 'a.pdf')?.source).toBe('a.htm');
@@ -99,54 +77,28 @@ describe('resolveExport', () => {
   });
 });
 
-describe('mode and extension', () => {
-  it('only the explicit spellings carry a mode', () => {
-    expect(explicitMode('slides-pdf')).toBe('slides');
-    expect(explicitMode('slides-html')).toBe('slides');
-    expect(explicitMode('doc-pdf')).toBe('doc');
-    expect(explicitMode('doc-html')).toBe('doc');
-    expect(explicitMode('pdf')).toBeNull();
-  });
-
-  /* The split that decides whether a request reaches a browser at all: an
-     `.html` spelling renders in the Worker, a `.pdf` needs a print engine. */
-  it('sorts the html spellings away from the ones that store an artifact', () => {
-    for (const f of ['slides-html', 'doc-html'] as const) {
-      expect(isLiveHtml('deck.md', f)).toBe(true);
-    }
-    for (const f of ['pdf', 'slides-pdf', 'doc-pdf', 'txt'] as const) {
-      expect(isLiveHtml('deck.md', f)).toBe(false);
-    }
-  });
-
-  it('an uploaded HTML source never renders live: it is already a page', () => {
-    expect(isLiveHtml('page.html', 'doc-html')).toBe(false);
-    expect(isLiveHtml('page.htm', 'slides-html')).toBe(false);
-  });
-});
-
 describe('derivedKey', () => {
-  /* A cached PDF is the one thing here that can drift from the brand source,
-     because hashes are immutable and nothing else invalidates it. */
   it('carries the cache version, so a brand change retires old artifacts', () => {
     const key = derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'slides', 'pdf');
     expect(key).toBe(`acme/Xk92mQ7bTp01/d/v${CACHE_VERSION}/deck.md.slides.pdf`);
-    expect(key).toContain('/d/v');
   });
 
-  it('keys by resolved mode, so .pdf and its explicit spelling share one object', () => {
-    const sniffed = derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'slides', 'pdf');
-    const explicit = derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'slides', 'pdf');
-    expect(sniffed).toBe(explicit);
-    expect(derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'doc', 'pdf')).not.toBe(sniffed);
+  it('keys by resolved mode, so a doc render never collides with a deck one', () => {
+    const slides = derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'slides', 'pdf');
+    expect(derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'doc', 'pdf')).not.toBe(slides);
   });
 
-  it('page mode keys both outputs, bare .png sharing the full shot', () => {
-    expect(pageExt('png')).toBe('full.png');
-    expect(pageExt('full-png')).toBe('full.png');
-    expect(pageExt('pdf')).toBe('pdf');
-    expect(derivedKey('acme', 'Xk92mQ7bTp01', 'page.html', 'page', 'full.png'))
-      .toBe(`acme/Xk92mQ7bTp01/d/v${CACHE_VERSION}/page.html.page.full.png`);
+  it('keys a page mode by its extension', () => {
+    expect(derivedKey('acme', 'Xk92mQ7bTp01', 'page.html', 'page', 'png'))
+      .toBe(`acme/Xk92mQ7bTp01/d/v${CACHE_VERSION}/page.html.page.png`);
+  });
+
+  /* A generation's stamp rides in the source name, which is what keeps each
+     version's render its own immutable object. */
+  it('keys each generated version separately', () => {
+    const first = derivedKey('acme', 'Xk92mQ7bTp01', 'deck.1000.md', 'slides', 'pdf');
+    const second = derivedKey('acme', 'Xk92mQ7bTp01', 'deck.2000.md', 'slides', 'pdf');
+    expect(first).not.toBe(second);
   });
 
   it('sits under d/, which no upload may claim', () => {
@@ -157,17 +109,15 @@ describe('derivedKey', () => {
 
 describe('formatsFor', () => {
   const suffixes = (source: string) => formatsFor(source).map((s) => s.suffix);
-  const tiled = (source: string) => formatsFor(source).filter((s) => s.tile).map((s) => s.suffix);
 
-  it('offers a markdown source its family and nothing else', () => {
-    expect(suffixes('deck.md')).toEqual([
-      '.slides.html', '.doc.html', '.slides.pdf', '.doc.pdf', '.txt', '.pdf',
-    ]);
+  it('offers a markdown source the pdf and nothing else', () => {
+    expect(suffixes('deck.md')).toEqual(['.pdf']);
     expect(suffixes('notes.markdown')).toEqual(suffixes('deck.md'));
+    expect(suffixes('deck.1712.md')).toEqual(['.pdf']);
   });
 
-  it('offers an uploaded page the print and the shots', () => {
-    expect(suffixes('page.html')).toEqual(['.pdf', '.png', '.full.png']);
+  it('offers an uploaded page the print and the shot', () => {
+    expect(suffixes('page.html')).toEqual(['.pdf', '.png']);
     expect(suffixes('page.htm')).toEqual(suffixes('page.html'));
   });
 
@@ -176,32 +126,11 @@ describe('formatsFor', () => {
     expect(formatsFor('notes.pdf')).toEqual([]);
   });
 
-  /* The admin page shows a spelling only when its name says what comes back:
-     the sniffing ones answer their URL without a tile of their own. */
-  it('tiles the pinned spellings, keeping the sniffing ones quiet', () => {
-    expect(tiled('deck.md')).toEqual(['.slides.html', '.doc.html', '.slides.pdf', '.doc.pdf', '.txt']);
-    expect(tiled('page.html')).toEqual(['.pdf', '.png']);
-  });
-
-  it('waits only on what a browser has to draw, and only when the mode is pinned', () => {
-    const awaits = (source: string) => new Map(formatsFor(source).map((s) => [s.suffix, s.awaits]));
-    expect(awaits('deck.md')).toEqual(new Map([
-      ['.slides.html', null], ['.doc.html', null],
-      ['.slides.pdf', 'slides.pdf'], ['.doc.pdf', 'doc.pdf'],
-      ['.txt', null],
-      // Bare `.pdf` derives, but which key it lands under is not known until
-      // the sniff runs, so no tile could poll for it.
-      ['.pdf', null],
-    ]));
-    expect(awaits('page.html')).toEqual(new Map([
-      ['.pdf', 'page.pdf'], ['.png', 'page.full.png'], ['.full.png', 'page.full.png'],
-    ]));
-  });
-
-  it('marks every spelling that reaches a browser, sniffing ones included', () => {
-    const derived = (source: string) => formatsFor(source).filter((s) => s.derived).map((s) => s.suffix);
-    expect(derived('deck.md')).toEqual(['.slides.pdf', '.doc.pdf', '.pdf']);
-    expect(derived('page.html')).toEqual(['.pdf', '.png', '.full.png']);
+  /* A markdown render sniffs, so its mode is not known until the bytes are
+     read; an uploaded page is always navigated. */
+  it('pins a mode only where the source kind decides it', () => {
+    expect(formatsFor('deck.md').map((s) => s.mode)).toEqual([null]);
+    expect(formatsFor('page.html').map((s) => s.mode)).toEqual(['page', 'page']);
   });
 
   it('answers the same set resolveExport enforces', () => {
@@ -217,6 +146,7 @@ describe('formatsFor', () => {
   it('stems a source down to what a suffix hangs off', () => {
     expect(stemOf('deck.md')).toBe('deck');
     expect(stemOf('notes.markdown')).toBe('notes');
+    expect(stemOf('deck.1712.md')).toBe('deck.1712');
     expect(stemOf('a/b.page.html')).toBe('a/b.page');
     expect(stemOf('hero.png')).toBe('hero.png');
   });
@@ -227,15 +157,17 @@ describe('parseDerivedKey', () => {
   const HASH = 'Xk92mQ7bTp01';
   const strip = (key: string) => key.slice(derivedPrefix(SPACE, HASH).length);
 
-  /* The inverse has to cover the catalog exactly: a format the status route
-     cannot decompose reports "pending" forever, however well it renders. */
+  /* The inverse has to cover the vocabulary exactly: a render the index page
+     cannot decompose is one it will never list, however well it rendered. */
   it('decomposes every key derivedKey can build', () => {
-    for (const source of ['deck.md', 'notes.markdown', 'a/b.name.md', 'page.html']) {
-      for (const spec of formatsFor(source)) {
-        if (!spec.mode || !spec.ext) continue;
-        const key = derivedKey(SPACE, HASH, source, spec.mode, spec.ext);
-        expect(parseDerivedKey(strip(key))).toEqual({ source, mode: spec.mode, ext: spec.ext });
-      }
+    const cases = [
+      ['deck.md', 'slides', 'pdf'], ['deck.md', 'doc', 'pdf'],
+      ['a/b.name.1712.md', 'slides', 'pdf'],
+      ['page.html', 'page', 'pdf'], ['page.html', 'page', 'png'],
+    ] as const;
+    for (const [source, mode, ext] of cases) {
+      const key = derivedKey(SPACE, HASH, source, mode, ext);
+      expect(parseDerivedKey(strip(key))).toEqual({ source, mode, ext });
     }
   });
 
@@ -255,13 +187,6 @@ describe('parseDerivedKey', () => {
     expect(parseCheckKey('deck.md.slides.pdf')).toBeNull();
     expect(parseCheckKey('check.json')).toBeNull();
   });
-
-  it('recognises the vocabulary the tiles and the poll trade in', () => {
-    expect(isRenderedKey('slides.pdf')).toBe(true);
-    expect(isRenderedKey('page.full.png')).toBe(true);
-    expect(isRenderedKey('slides.full.png')).toBe(false);
-    expect(isRenderedKey(undefined)).toBe(false);
-  });
 });
 
 /* The docs are what a model reads before it asks for a URL, so a row they list
@@ -277,7 +202,7 @@ describe('the published docs list the catalog', () => {
     expect(new Set(listed)).toEqual(new Set(['.md', ...offered('deck.md')]));
   });
 
-  it('llms.txt holds both columns, the untiled spellings included', () => {
+  it('llms.txt holds both columns', () => {
     const doc = readFileSync('public/llms.txt', 'utf8');
     const listed = (re: RegExp) => new Set([...doc.matchAll(re)].map((m) => `.${m[1]}`));
     expect(listed(/^ {4}deck\.(\S+) /gm)).toEqual(new Set(['.md', ...offered('deck.md')]));

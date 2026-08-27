@@ -9,7 +9,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
-import { MODEL, repairNote, runPrompt } from '../../src/transforms/prompt.ts';
+import { MODEL, runPrompt } from '../../src/transforms/prompt.ts';
 import { checksFor } from './checks.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -51,33 +51,18 @@ for (const f of await readdir(join(HERE, 'fixtures'))) {
 }
 const MUST = JSON.parse(await readFile(join(HERE, 'fixtures', 'must-keep.json'), 'utf8'));
 
-/* `fix` reads a finished deck, not raw notes, so it takes its own fixture rather
-   than the cross-product. Pointing it at meeting notes would grade a repair pass
-   on material it is never handed, and every case would fail for the wrong
-   reason. `slides` is what upload.ts passes it from the check verdict. */
-const REPAIR_CASE = {
-  name: 'fix',
-  file: 'clipping-deck.md',
-  slides: [3],
-};
-
 const filter = process.argv[2] ?? '';
 const cases = [];
 for (const [name, prompt] of prompts) {
-  if (name === REPAIR_CASE.name) {
-    const id = `${name}:${REPAIR_CASE.file}`;
-    const text = fixtures.get(REPAIR_CASE.file);
-    if (text !== undefined && id.includes(filter)) {
-      cases.push({ id, name, prompt, file: REPAIR_CASE.file, text, slides: REPAIR_CASE.slides });
-    }
-    continue;
-  }
   for (const [file, text] of fixtures) {
-    if (file === REPAIR_CASE.file) continue; // a finished deck is not raw material
     const id = `${name}:${file}`;
     if (id.includes(filter)) cases.push({ id, name, prompt, file, text });
   }
 }
+
+/* One fixture per case here, where the Worker composes several: the graders
+   score the format and the voice, and both read the same whatever the input was
+   assembled from. A multi-source case would grade the join, not the prompt. */
 if (cases.length === 0) {
   console.error(`no case matches "${filter}"`);
   process.exit(2);
@@ -87,11 +72,7 @@ const outDir = join(HERE, 'out');
 await mkdir(outDir, { recursive: true });
 
 async function grade(c) {
-  /* `repairNote` rather than a hand-written string, so the repair case is graded
-     on the exact note the Worker builds from the check verdict. */
-  const output = await runPrompt(
-    ai, c.prompt, c.file, c.text, c.slides ? repairNote(c.slides) : undefined,
-  );
+  const output = await runPrompt(ai, c.prompt, [{ path: c.file, text: c.text }]);
   if (output === null) {
     return { id: c.id, failed: [{ name: 'answered', pass: false, detail: 'runPrompt returned null' }] };
   }

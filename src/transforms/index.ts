@@ -1,56 +1,62 @@
 /**
- * The transform registry: what `?transform=` on POST /up accepts. The format
- * lives here, server-side, so the model that uploads hands over raw material
- * instead of following a per-format skill - and a prompt edit reaches every
- * uploader with nothing republished. Each prompt is its own .md because the
- * eval harness (evals/transforms/) reads the same files off disk; this file
- * only binds names to them for the Worker bundle.
+ * The generation catalog: what the working page offers and what its generate
+ * route accepts. The format lives here, server-side, so whoever uploads hands
+ * over raw material instead of following a per-format skill - and a prompt edit
+ * reaches every share with nothing republished. Each prompt is its own .md
+ * because the eval harness (evals/transforms/) reads the same files off disk;
+ * this file only binds names, copy, and prompts together for the Worker bundle.
  */
 
 import agendaPrompt from './agenda.md';
 import deckPrompt from './deck.md';
-import fixPrompt from './fix.md';
-import performancePrompt from './performance.md';
-import presentationPrompt from './presentation.md';
 import renewalPrompt from './renewal.md';
+import shipSummaryPrompt from './ship-summary.md';
 import type { AiRunner } from '../lib/types';
-import { repairNote, runPrompt } from './prompt';
+import { type TransformSource, runPrompt } from './prompt';
 
-/* A Map: the name arrives off the URL, an open key. */
-export const TRANSFORMS = new Map([
-  ['agenda', agendaPrompt],
-  ['renewal', renewalPrompt],
-  ['performance', performancePrompt],
-  ['presentation', presentationPrompt],
-  ['deck', deckPrompt],
-  ['fix', fixPrompt],
-]);
+export interface Generation {
+  /** The name the POST body carries and the stem the output lands under. */
+  name: string;
+  label: string;
+  sub: string;
+  prompt: string;
+}
 
-/* ~50k tokens: far past any notes file, far under the context window, and a
-   bounded spend per upload. */
+/** Order is button order on the working page. */
+export const GENERATIONS: Generation[] = [
+  { name: 'deck', label: 'deck', prompt: deckPrompt,
+    sub: 'a Marp deck, one idea per slide' },
+  { name: 'agenda', label: 'agenda', prompt: agendaPrompt,
+    sub: 'a meeting someone could run from it' },
+  { name: 'renewal', label: 'renewal summary', prompt: renewalPrompt,
+    sub: 'what the engagement delivered, for the client' },
+  { name: 'ship-summary', label: 'ship summary', prompt: shipSummaryPrompt,
+    sub: "the week's work, deck-shaped" },
+];
+
+/* A Map: the name arrives off a POST body, an open key. */
+const PROMPTS = new Map(GENERATIONS.map((g) => [g.name, g.prompt]));
+
+export function promptFor(name: string): string | undefined {
+  return PROMPTS.get(name);
+}
+
+/* ~50k tokens across the whole run: far past any notes file, far under the
+   context window, and a bounded spend per generation. Per run rather than per
+   file, because several ticked sources compose into one prompt now. */
 export const MAX_TRANSFORM_BYTES = 200_000;
 
-/** The files a transform rewrites; everything else rides along untouched. */
+/** The files a generation can read; everything else is material a browser
+    renders, not text a model can compose from. */
 export function transformable(path: string): boolean {
   return /\.(md|markdown|txt)$/i.test(path);
 }
 
-/**
- * `fix` is the repair pass, and the one transform that takes an argument: which
- * slides clipped. It reads a finished deck rather than raw notes, so it is the
- * one name that belongs on a re-upload instead of a first one.
- *
- * Bounded on purpose. A restructure prompt is allowed to reshape a document; a
- * repair is allowed to cut a named slide and nothing else, which is what makes
- * it safe to point at work a human already approved.
- */
-export const REPAIR = 'fix';
-
-export async function runTransform(
-  ai: AiRunner, name: string, filename: string, text: string,
-  slides: readonly number[] = [],
+/** Many sources in, one document out, in the order the caller ticked them. */
+export function runTransform(
+  ai: AiRunner, name: string, sources: readonly TransformSource[],
 ): Promise<string | null> {
-  const prompt = TRANSFORMS.get(name);
-  if (prompt === undefined) return null;
-  return runPrompt(ai, prompt, filename, text, name === REPAIR ? repairNote(slides) : undefined);
+  const prompt = promptFor(name);
+  if (prompt === undefined) return Promise.resolve(null);
+  return runPrompt(ai, prompt, sources);
 }

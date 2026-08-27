@@ -1,6 +1,6 @@
 # transforms - live-model evals
 
-`?transform=` sends client-bound content through a real model, so a prompt or
+Generation sends client-bound content through a real model, so a prompt or
 model edit needs evidence, not vibes. This suite runs every prompt in
 `src/transforms/` against every fixture here, on the live model over the REST
 API, through the same `runPrompt` the Worker calls - what passes here is what
@@ -19,9 +19,9 @@ Run it by hand:
 
 The token wants the dashboard's "Workers AI" template; the account id sits on
 the dashboard's Workers overview. Pass both per run (or via `op run`) - never
-into a file. The full matrix is 15 calls, well under a cent.
+into a file. The full matrix is 12 calls, well under a cent.
 
 Outputs land in `out/` (gitignored). Read them after any prompt edit: the
 checks gate structure and fidelity, not tone. This never joins CI - it spends
 inference and carries a token, and the deterministic half of the feature is
-already `tests/transform.test.ts`.
+already `tests/generate.test.ts`.

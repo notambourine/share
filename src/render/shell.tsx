@@ -12,12 +12,14 @@
 
 import type { Child } from 'hono/jsx';
 import { raw } from 'hono/html';
-import type { Meta, MetaFile } from '../lib/types';
+import type { Meta } from '../lib/types';
+import type { ArtifactIndex, IndexFile, IndexRender } from '../lib/artifact';
 import { kindOf, extOf } from '../lib/keys';
-import type { ExportSpec, RenderedKey } from '../lib/exportPath';
+import type { ExportSpec } from '../lib/exportPath';
 import { formatsFor, stemOf } from '../lib/exportPath';
 import { fileSuffix } from '../lib/link';
 import { fmtSize } from '../lib/format';
+import { GENERATIONS, transformable } from '../transforms';
 import { LOCKUP } from '../brand';
 
 /* Re-exported because the routes import it from here; it lives in lib/ so the
@@ -261,41 +263,100 @@ export function fileShell(o: ShellCommon, view: ShellView): string {
 
 /**
  * The spellings a listed file answers to, as links beside it. The same catalog
- * the admin tiles read, so a format is added in exportPath.ts and shows up in
- * both places. Relative hrefs, so a signed artifact's `/k/` segment rides along
- * in the resolved URL and this never has to know the tier.
- *
- * A bare `.md` sniffs deck-or-document from its own content, which a recipient
- * cannot guess; naming every spelling is what lets them pick.
+ * the working page's tiles read, so a format is added in exportPath.ts and shows
+ * up in both places. Relative hrefs, so nothing here has to know the origin.
  */
-function spellings(path: string): Child | null {
-  const offered = formatsFor(path).filter((spec) => spec.tile);
-  if (offered.length === 0) return null;
-  const stem = encodeURI(stemOf(path));
+function spellings(exports: string[]): Child | null {
+  if (exports.length === 0) return null;
   return (
     <span class="spellings">
-      {offered.map((spec) => <a href={`${stem}${spec.suffix}`}>{spec.label}</a>)}
+      {exports.map((path) => <a href={encodeURI(path)}>{path.slice(path.lastIndexOf('.') + 1)}</a>)}
     </span>
   );
 }
 
-export function dirShell(hash: string, files: MetaFile[]): string {
+function fileRow(file: IndexFile, label?: string): Child {
+  return (
+    <li>
+      <span class="fname">
+        <a href={encodeURI(file.path)}>{label ?? file.path}</a>
+        {spellings(file.exports)}
+      </span>
+      <span class="caption">{fmtSize(file.size)}</span>
+    </li>
+  );
+}
+
+/** The overflow verdict, in the reader's words. Public on purpose: an external
+    agent reads it off this page's JSON and re-generates. */
+function verdict(render: IndexRender): Child | null {
+  const check = render.check;
+  if (!check || check.overflow.length === 0) return null;
+  const n = check.overflow;
+  return (
+    <span class="caption warn">
+      {n.length === 1 ? `slide ${n[0]} overflows` : `slides ${n.join(', ')} overflow`}
+    </span>
+  );
+}
+
+/**
+ * The public index: what this share holds, with nothing locked beyond the
+ * unguessable hash. One URL, two representations - a browser gets this page and
+ * an `Accept: application/json` request gets the same model as JSON, which is
+ * what an external agent reads.
+ *
+ * A generation lists its newest version under the bare name and keeps every
+ * older stamp linked, so a link already handed over never stops answering.
+ */
+export function indexShell(index: ArtifactIndex, meta: Meta): string {
+  const { uploads, generations, renders } = index;
+  const bytes = meta.files.reduce((n, f) => n + f.size, 0);
   return layout({
-    title: hash,
+    title: index.hash,
+    bodyAttrs: { class: 'index' },
     body: (
-      <div class="doc listing">
-        <p class="eyebrow">{`${files.length} ${files.length === 1 ? 'file' : 'files'}`}</p>
-        <ul class="files">
-          {files.map((f) => (
-            <li>
-              <span class="fname">
-                <a href={encodeURI(f.path)}>{f.path}</a>
-                {spellings(f.path)}
-              </span>
-              <span class="caption">{fmtSize(f.size)}</span>
-            </li>
-          ))}
-        </ul>
+      <div class="admin-wrap">
+        <div class="filehead">
+          <h1>{index.hash}</h1>
+          <span class="path">
+            {`${index.space} · ${meta.files.length} ${meta.files.length === 1 ? 'file' : 'files'} · ${
+              fmtSize(bytes)} · ${expiryText(meta, index.createdAt)}`}
+          </span>
+        </div>
+
+        {generations.map((gen) => (
+          <div class="panel">
+            <p class="cardlabel">{gen.name}</p>
+            <ul class="files">
+              {gen.versions.map((v, i) => fileRow(v, i === 0 ? `${gen.name}.md (newest)` : v.path))}
+            </ul>
+          </div>
+        ))}
+
+        {uploads.length === 0 ? null : (
+          <div class="panel">
+            <p class="cardlabel">sources</p>
+            <ul class="files">{uploads.map((f) => fileRow(f))}</ul>
+          </div>
+        )}
+
+        {renders.length === 0 ? null : (
+          <div class="panel">
+            <p class="cardlabel">renders</p>
+            <ul class="files">
+              {renders.map((r) => (
+                <li>
+                  <span class="fname">
+                    <a href={encodeURI(r.path)}>{r.path}</a>
+                    {verdict(r)}
+                  </span>
+                  <span class="caption">{r.key}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     ),
   });
@@ -352,38 +413,27 @@ interface Tile {
   sub: string;
   thumb: Child;
   fmt?: string;
-  /** Derived render this tile waits on, keyed by source path; admin.js polls
-      the status route and paints the state. Only the binary formats have one:
-      an html target renders on the request that asks for it, so it is ready the
-      moment the upload lands. Nothing prerenders any more, so every tile that
-      waits also says "click to generate" and its own GET fires the render. */
-  status?: { src: string; awaits: RenderedKey };
 }
 
 function srcThumb(text: string): Child {
   return <span class="srctext">{text}</span>;
 }
 
-/** The source spelling shows the markdown; everything else shows a page in the
-    shape it comes out. */
 function thumbFor(spec: ExportSpec): Child {
-  if (spec.format === 'txt') return srcThumb('---\nmarp: true\n---\n# the plan');
   return spec.portrait ? THUMB_PORT : THUMB_LAND;
 }
 
-/** One tile per spelling the catalog tiles: the two html targets pin a mode -
-    the same words read as slides or as a document - and are ready on arrival,
-    because the Worker renders them per request. Only what a browser has to draw
-    carries a status. Targets stay under the shipped grammar; none carry `c=`. */
+/** One tile per spelling the catalog offers. Every one goes through a browser,
+    so a cmd+clicked tab holds until the bytes are ready: `exportArtifact`
+    renders inline on the first GET. Targets carry no `c=`. */
 function exportTiles(path: string, tag: string): Tile[] {
   const stem = encodeURI(stemOf(path));
-  return formatsFor(path).filter((spec) => spec.tile).map((spec) => ({
+  return formatsFor(path).map((spec) => ({
     target: `${stem}${spec.suffix}`,
     label: `${tag}${spec.label}`,
     sub: spec.sub,
     thumb: thumbFor(spec),
-    fmt: spec.badge ?? undefined,
-    status: spec.awaits ? { src: path, awaits: spec.awaits } : undefined,
+    fmt: spec.badge,
   }));
 }
 
@@ -434,13 +484,9 @@ function tilesFor(meta: Meta): Tile[] {
 
 function tileHtml(base: string, t: Tile): Child {
   return (
-    <a
-      class="tile" href={`${base}${t.target}`} target="_blank" rel="noopener"
-      data-src={t.status?.src} data-await={t.status?.awaits}
-      data-gen={t.status ? '1' : undefined}
-    >
+    <a class="tile" href={`${base}${t.target}`} target="_blank" rel="noopener">
       <span class="thumb">{t.thumb}{t.fmt ? <span class="fmt">{t.fmt}</span> : null}</span>
-      <span class="tlabel"><span class="t">{t.label}</span><span class="s">{t.sub}</span>{t.status ? <span class="tstate"></span> : null}</span>
+      <span class="tlabel"><span class="t">{t.label}</span><span class="s">{t.sub}</span></span>
       <button class="copyicon" type="button" data-copy-href aria-label="copy link">{COPY_ICON}</button>
     </a>
   );
@@ -468,9 +514,6 @@ function pressedTtl(meta: Meta): string | null {
 export interface AdminView {
   meta: Meta;
   origin: string;
-  /** `k/<viewtoken>/` on the signed tier, '' on the open tier. The tiles'
-      links must travel, so they ride a view token, never this page's `?c=`. */
-  kSeg: string;
   now: number;
   /** Epoch seconds this page's `?c=` dies. The page counts down from it rather
       than taking the credential apart. */
@@ -478,15 +521,49 @@ export interface AdminView {
 }
 
 /**
- * The admin page: format tiles, TTL chips, delete. Served only behind a live
- * `?c=` (src/routes/serve.ts); the token itself appears nowhere in the markup -
- * public/admin.js reads it from location.search and calls the write routes.
- * The locked block is the client-side degrade when the countdown dies: the
- * links keep serving, so it says how to re-open rather than restating them.
+ * The text files a generation can read, as checkboxes. Order is the upload's
+ * own, and the POST sends the ticked order, so which file leads the composed
+ * document is the sender's call rather than a sort.
+ */
+function sourcePicker(meta: Meta): Child | null {
+  const text = meta.files.filter((f) => transformable(f.path));
+  if (text.length === 0) return null;
+  return (
+    <div class="panel">
+      <p class="cardlabel">generate</p>
+      <p class="note">Tick what feeds it, then pick a format. The result lands as a new
+        version beside the sources; nothing you already sent changes.</p>
+      <ul class="picks">
+        {text.map((f) => (
+          <li>
+            <label>
+              <input type="checkbox" data-source value={f.path} />
+              <span>{f.path}</span>
+            </label>
+            <span class="caption">{fmtSize(f.size)}</span>
+          </li>
+        ))}
+      </ul>
+      <div class="chiprow">
+        {GENERATIONS.map((g) => (
+          <button class="chip" type="button" data-generate={g.name} title={g.sub}>{g.label}</button>
+        ))}
+      </div>
+      <p class="note" data-genstate></p>
+    </div>
+  );
+}
+
+/**
+ * The working page: generation, format tiles, TTL chips, delete. Served only
+ * behind a live `?c=` (src/routes/serve.ts); the token itself appears nowhere in
+ * the markup - public/admin.js reads it from location.search and calls the write
+ * routes. The locked block is the client-side degrade when the countdown dies:
+ * the links keep serving, so it says how to re-open rather than restating them.
  */
 export function adminShell(view: AdminView): string {
-  const { meta, origin, kSeg, now: t, adminExp } = view;
-  const base = `${origin}/${meta.space}/${meta.hash}/${kSeg}`;
+  const { meta, origin, now: t, adminExp } = view;
+  const base = `${origin}/${meta.space}/${meta.hash}/`;
   const artifact = `${meta.space}/${meta.hash}`;
   const single = meta.files.length === 1 ? meta.files[0] : null;
   const bytes = meta.files.reduce((n, f) => n + f.size, 0);
@@ -524,11 +601,13 @@ export function adminShell(view: AdminView): string {
             <button class="abtn abtn-primary arm-only" type="button" data-fire>yes, delete it</button>
             <button class="abtn abtn-ghost arm-only" type="button" data-disarm>keep it</button>
           </div>
+          {sourcePicker(meta)}
           <div class="tiles">
             {tilesFor(meta).map((tile) => tileHtml(base, tile))}
           </div>
-          <p class="note">Click a card to open it in a new tab; the corner icon copies its link.
-            None of these carry this page's token.</p>
+          <p class="note">Click a card to open it in a new tab; the tab holds until the
+            render lands. The corner icon copies its link, and none of these carry this
+            page's token.</p>
           {single ? null : (
             <ul class="files">
               {meta.files.map((f) => (
@@ -552,7 +631,7 @@ export function adminShell(view: AdminView): string {
             <div class="panel">
               <p class="cardlabel">this page</p>
               <p class="note">Works for 5 minutes; each edit restarts the clock. After that
-                this URL falls back to the plain view. Re-open:</p>
+                this URL falls back to the public index. Re-open:</p>
               <code class="cmd">{remint}</code>
             </div>
           </div>
@@ -561,8 +640,8 @@ export function adminShell(view: AdminView): string {
           <div class="panel">
             <p class="cardlabel">this page</p>
             <p class="note">The admin window for this page has closed. Every link you already
-              sent keeps serving; to change the expiry or delete the share, re-open the
-              admin link:</p>
+              sent keeps serving; to generate again, change the expiry, or delete the share,
+              re-open the admin link:</p>
             <code class="cmd">{remint}</code>
           </div>
         </div>
@@ -571,17 +650,16 @@ export function adminShell(view: AdminView): string {
   });
 }
 
-export function errorShell(status: 401 | 404): string {
-  const [title, msg] = status === 401
-    ? ['This link needs a key', 'Ask whoever sent it for a fresh signed link.']
-    : ['Nothing here', 'The link may have expired or been revoked.'];
+/** One status, because the hash is the only credential: a link that does not
+    resolve is gone, expired, or was never one. */
+export function errorShell(status: 404): string {
   return layout({
-    title,
+    title: 'Nothing here',
     body: (
       <div class="card">
         <p class="eyebrow">{status}</p>
-        <h2>{title}</h2>
-        <p>{msg}</p>
+        <h2>Nothing here</h2>
+        <p>The link may have expired or been revoked.</p>
       </div>
     ),
   });

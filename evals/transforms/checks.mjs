@@ -3,9 +3,9 @@
    and voice says "kept the author's sentences". Judgment stays human: read out/
    after any prompt edit. */
 
-/* `fix` reads a deck and answers with one, so it grades against the deck
-   structure rather than the document structure. */
-const DECKS = new Set(['deck', 'presentation', 'fix']);
+/* Which prompts answer with a deck, so they grade against the deck structure
+   rather than the document structure. */
+const DECKS = new Set(['deck', 'ship-summary']);
 
 /* Trailing punctuation belongs to the sentence, not the URL, on either side. */
 const urlsOf = (text) =>
@@ -62,12 +62,10 @@ export function verbatimShare(output, input) {
 }
 
 /* A deck drops most of the prose by design, so it answers to a lower floor than
-   a document does, and a repair only ever cuts - rewording a slide it was asked
-   to trim is that prompt's whole failure mode, so it answers to the highest
-   floor here. First guesses, all three: run the eval, read the percentages it
+   a document does. First guesses, both: run the eval, read the percentages it
    prints, and move each to just under what a faithful pass actually scores. A
    floor set from nothing is the one that fails silently. */
-const VOICE_FLOOR = { fix: 0.75, deck: 0.2, presentation: 0.2 };
+const VOICE_FLOOR = { deck: 0.2, 'ship-summary': 0.2 };
 
 function voiceChecks(transform, output, input) {
   const share = verbatimShare(output, input);
