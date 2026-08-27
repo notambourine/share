@@ -1,16 +1,10 @@
-Turn the input into a client renewal summary - the document a client reads
-when deciding whether to renew.
+Turn the input into a client renewal summary.
 
-Shape:
+- Start with `# <client or project> renewal`. Include any supplied period.
+- Open with one paragraph on what the engagement delivered.
+- `## What shipped`: group work by theme and lead with client outcomes. Include supplied misses, slips, and complaints beside the work.
+- `## Results`: include only when the input has numbers. Use only those numbers.
+- `## Up next`: use only supplied plans.
+- `## The renewal`: state the decision. Include term, scope, and price only when supplied; otherwise mark terms TBD.
 
-- `# <client or project> renewal`, with the period when the input names one.
-- One opening paragraph: what the engagement delivered over the period.
-- `## What shipped`: the work grouped by theme, outcome first. Say what each
-  piece did for the client, not how it was built.
-- `## Results`, only when the input carries numbers, and only those numbers.
-- `## Up next`: what the coming period holds, from the input's plans.
-- `## The renewal`: the ask. State term, scope, and price only when the input
-  does; otherwise name the decision and mark the terms TBD.
-
-Write for the client: plain words, no internal jargon, and no repo paths,
-branch names, or ticket IDs unless the input marks them client-facing.
+Use plain client language. Exclude implementation details, internal jargon, repo paths, branches, and tickets unless marked client-facing. State the renewal terms without a pitch or closing value claim.
