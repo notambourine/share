@@ -262,19 +262,31 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     const html = await (await fetchWorker(env, pageReq(token))).text();
     expect(html).toContain('value="notes.txt"');
     expect(html).toContain('value="log.md"');
-    expect(html.match(/data-source/g)).toHaveLength(2);
+    expect(html.match(/name="sources"/g)).toHaveLength(2);
     // A picture is material a browser renders, never text a model composes from.
     expect(html).not.toContain('value="hero.png"');
     for (const name of ['deck', 'agenda', 'renewal', 'ship-summary']) {
-      expect(html).toContain(`data-generate="${name}"`);
+      expect(html).toContain(`value="${name}"`);
     }
+  });
+
+  /* A form submits somewhere, so the page that carries one is the only page
+     allowed to: every other shell can host uploaded HTML. */
+  it('relaxes form-action to self on the working page alone', async () => {
+    const env = seededEnv({ files: [{ path: 'notes.md', size: 40, type: 'text/markdown' }] });
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const page = await fetchWorker(env, pageReq(token));
+    expect(page.headers.get('content-security-policy')).toContain("form-action 'self'");
+
+    const pub = await fetchWorker(env, new Request(`https://share.test/${SPACE}/${HASH}/`));
+    expect(pub.headers.get('content-security-policy')).toContain("form-action 'none'");
   });
 
   it('leaves the generate panel off a share with no text in it', async () => {
     const env = seededEnv({ files: [{ path: 'hero.png', size: 900, type: 'image/png' }] });
     const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
     const html = await (await fetchWorker(env, pageReq(token))).text();
-    expect(html).not.toContain('data-generate');
+    expect(html).not.toContain('data-genform');
   });
 
   it('missing, expired, or foreign token falls through to the public index', async () => {

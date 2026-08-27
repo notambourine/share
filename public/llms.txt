@@ -58,6 +58,14 @@ a bad file or name, 413 refuses a run over 200,000 bytes of text with the count
 and the files, 502 means the model call failed and nothing stored, 503 means the
 AI binding is absent.
 
+The document is the only thing a generation writes; no manifest records it, so
+the index page and the bare alias both find it by listing. The request holds for
+the length of the model call - a few seconds - which is how the working page's
+form gets away with submitting into a new tab and no polling anywhere. A form
+POST (`application/x-www-form-urlencoded`, repeated `sources` fields) answers 303
+to the version instead of the JSON above, so ask with
+`Accept: application/json` to get data.
+
 The config write answers {c, exp, expiresAt, expiry}: a fresh 5-minute token
 with the epoch it dies (each edit restarts the clock; adopt the new c) plus the
 expiry it committed, rendered. The ttl counts from upload; a ttl the artifact

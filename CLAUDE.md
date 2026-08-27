@@ -37,13 +37,26 @@
   link ever made with nothing to invalidate. Only `.pdf` and `.png` reach the
   `BROWSER` binding, and only they cache under `d/v<N>/` behind a hand-bumped
   `CACHE_VERSION`.
-- A generation writes `<name>.<epoch>.md` into `f/` and appends it to
-  `meta.files`; a bare `<name>.md` or `<name>.pdf` resolves to the highest epoch
-  by listing, never through a stored pointer. Never overwrite a version and
-  never add a pointer object: an older stamp keeps its own URL, which is the
-  whole reason re-generating is safe on a link already sent. A derived key hangs
-  off the source's full stamped name, so each version's render stays immutable
-  while the bare alias is mutable by design.
+- A generation writes `<name>.<epoch>.md` into `f/` and nothing else. It must
+  never touch `meta.json`: that is a read-modify-write, so two runs finishing at
+  once would drop one another's row and orphan a document nothing links to.
+  `meta.files` is the record of what was *uploaded*, written once at upload;
+  anything under `f/` it does not name is a generation, which is what
+  `listGenerated` in `src/lib/r2.ts` reads. Renders were always found this way
+  (`readRenders` in `src/lib/artifact.ts`) and have never had the race.
+- A bare `<name>.md` or `<name>.pdf` resolves to the highest epoch by listing,
+  never through a stored pointer. Never overwrite a version and never add a
+  pointer object: an older stamp keeps its own URL, which is the whole reason
+  re-generating is safe on a link already sent. A derived key hangs off the
+  source's full stamped name, so each version's render stays immutable while the
+  bare alias is mutable by design.
+- The working page generates by submitting a real form into a new tab, and the
+  route answers `303` to the version it wrote. That is the no-poll rule applied
+  to a mutation: a POST navigation holds the tab exactly like the render GETs do,
+  so never reintroduce a fetch that reports completion, and never a GET that
+  generates - a scanner prefetches a link and would spend a model call. The
+  working page is therefore the one shell served with `form-action 'self'`
+  (`ADMIN_CSP`); every other shell can host uploaded HTML and keeps `'none'`.
 - One-time dashboard setup: README.md "Setup from zero". Token add, rotate,
   offboard, and delivery: `scripts/add-employee.sh` (its header is the runbook).
 - This repo is public. Client names never enter it; committed examples use

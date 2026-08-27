@@ -1,10 +1,10 @@
 /**
  * Version stamping and the bare-name alias.
  *
- * A generation lands as `<name>.<epoch>.md` and joins `meta.files`; the bare
- * `<name>.md` and `<name>.pdf` follow whichever stamp is highest, resolved by
- * listing rather than by a stored pointer. Every older stamp keeps its own URL,
- * which is what makes re-generating safe on a link already handed over.
+ * A generation lands as `<name>.<epoch>.md` under `f/` and is named nowhere else;
+ * the bare `<name>.md` and `<name>.pdf` follow whichever stamp is highest,
+ * resolved by listing rather than by a stored pointer. Every older stamp keeps
+ * its own URL, which is what makes re-generating safe on a link already sent.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -54,16 +54,24 @@ describe('highest-epoch selection', () => {
   });
 });
 
+const NOTES = '# notes\n';
+
+/* A real share: one upload in meta, and the versions as objects under `f/` and
+   nothing more - which is all the generate route writes. Seeding them into
+   meta.files too would let every case below pass with the listing broken. */
 function seededEnv(stamps: number[]): TestEnv {
-  const files = stamps.map((s) => ({
-    path: `deck.${s}.md`, size: deckText(s).length, type: 'text/markdown; charset=utf-8',
-  }));
   const objects = new Map(stamps.map((s) => [`${SPACE}/${HASH}/f/deck.${s}.md`, deckText(s)]));
   return testEnv({
     objects: {
       [`${SPACE}/${HASH}/meta.json`]: JSON.stringify({
-        space: SPACE, hash: HASH, uploader: 'tom', createdAt: NOW, expiresAt: null, files,
+        space: SPACE,
+        hash: HASH,
+        uploader: 'tom',
+        createdAt: NOW,
+        expiresAt: null,
+        files: [{ path: 'notes.md', size: NOTES.length, type: 'text/markdown; charset=utf-8' }],
       }),
+      [`${SPACE}/${HASH}/f/notes.md`]: NOTES,
       ...Object.fromEntries(objects),
     },
   });
@@ -93,6 +101,13 @@ describe('the alias through the router', () => {
   it('404s a bare name no stamp answers', async () => {
     const env = seededEnv([1712]);
     expect((await ask(env, 'agenda.md')).status).toBe(404);
+  });
+
+  /* The upload keeps its own name: nothing sweeps a source into the version list
+     just because it sits under the same prefix. */
+  it('leaves the uploaded source alone', async () => {
+    const env = seededEnv([1712]);
+    expect(await (await ask(env, 'notes.md', '*/*')).text()).toBe(NOTES);
   });
 
   /* Each version renders to its own key, so the newest PDF is never the older

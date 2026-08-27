@@ -1,6 +1,6 @@
 import type { Env } from '../lib/types';
 import type { ParsedRoute } from '../lib/route';
-import { payloadKey, readPayload, readMeta, isExpired } from '../lib/r2';
+import { payloadKey, readPayload, readMeta, isExpired, listGenerated } from '../lib/r2';
 import { parseSigningKeys } from '../lib/sign';
 import { verifyAdminToken } from '../lib/admin';
 import { viewModeFor } from '../lib/negotiate';
@@ -10,7 +10,7 @@ import { exportArtifact } from './export';
 import { rawBytes } from '../lib/bytes';
 import { fileShell, indexShell, errorShell, adminShell, type ShellCommon } from '../render/shell';
 import { renderCode, renderSource } from '../render/markdown';
-import { htmlResponse, jsonResponse, wantsJson } from '../lib/http';
+import { ADMIN_CSP, htmlResponse, jsonResponse, wantsJson } from '../lib/http';
 import { now } from '../lib/clock';
 
 /** Past this a shell would carry more bytes than a download costs, and
@@ -62,7 +62,12 @@ export async function serve(
     const keys = c ? parseSigningKeys(env) : null;
     const v = c && keys ? await verifyAdminToken(keys, space, hash, c, t) : null;
     if (v?.ok) {
-      return htmlResponse(adminShell({ meta, origin: route.origin, now: t, adminExp: v.exp }));
+      /* The one shell with a form, so the one shell that may submit anywhere. */
+      return htmlResponse(
+        adminShell({ meta, origin: route.origin, now: t, adminExp: v.exp }),
+        200,
+        { 'content-security-policy': ADMIN_CSP },
+      );
     }
   }
 
@@ -80,16 +85,24 @@ export async function serve(
     }
   }
 
-  const paths = meta.files.map((f) => f.path);
-  /* A bare source name follows the newest generation: `deck.md` resolves to the
-     highest `deck.<epoch>.md` this share holds. An uploaded file that owns the
-     name is found by the exact lookup above it and never reaches here. */
-  if (!paths.includes(filePath) && stemOf(filePath) !== filePath) {
-    const current = latestStamped(paths, stemOf(filePath));
-    if (current) filePath = current;
+  /* Uploads are named in meta; a generation is only ever found by listing, so a
+     name meta already holds costs no listing at all - which is every plain
+     upload, the common read on this route. */
+  let file = meta.files.find((f) => f.path === filePath);
+  let files = meta.files;
+  if (!file) {
+    files = [...meta.files, ...await listGenerated(env, meta)];
+    /* A bare source name follows the newest generation: `deck.md` resolves to
+       the highest `deck.<epoch>.md` this share holds. An uploaded file that owns
+       the name was found by the exact lookup above and never reaches here. */
+    if (stemOf(filePath) !== filePath) {
+      const current = latestStamped(files.map((f) => f.path), stemOf(filePath));
+      if (current) filePath = current;
+    }
+    file = files.find((f) => f.path === filePath);
   }
 
-  const file = meta.files.find((f) => f.path === filePath);
+  const paths = files.map((f) => f.path);
   if (!file) {
     /* A poster is not a row of its own, so it resolves off the parent that
        owns it - and always as bytes, because og:image is what asks. */
@@ -100,7 +113,7 @@ export async function serve(
        `notes.pdf` serves its own bytes instead of re-rendering `notes`. */
     const wanted = resolveExport(paths, filePath);
     if (!wanted) return htmlResponse(errorShell(404), 404);
-    const src = meta.files.find((f) => f.path === wanted.source);
+    const src = files.find((f) => f.path === wanted.source);
     if (!src) return htmlResponse(errorShell(404), 404);
     return exportArtifact(request, env, {
       space, hash, url, source: wanted.source, format: wanted.format, size: src.size,

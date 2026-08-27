@@ -312,7 +312,10 @@ function verdict(render: IndexRender): Child | null {
  */
 export function indexShell(index: ArtifactIndex, meta: Meta, t: number = now()): string {
   const { uploads, generations, renders } = index;
-  const bytes = meta.files.reduce((n, f) => n + f.size, 0);
+  /* Counted off the model, not meta.files: a generation is never named there, so
+     the header would otherwise report the sources and call it the whole share. */
+  const listed = [...uploads, ...generations.flatMap((g) => g.versions)];
+  const bytes = listed.reduce((n, f) => n + f.size, 0);
   return layout({
     title: index.hash,
     bodyAttrs: { class: 'index' },
@@ -321,7 +324,7 @@ export function indexShell(index: ArtifactIndex, meta: Meta, t: number = now()):
         <div class="filehead">
           <h1>{index.hash}</h1>
           <span class="path">
-            {`${index.space} · ${meta.files.length} ${meta.files.length === 1 ? 'file' : 'files'} · ${
+            {`${index.space} · ${listed.length} ${listed.length === 1 ? 'file' : 'files'} · ${
               fmtSize(bytes)} · ${expiryText(meta, t)}`}
           </span>
         </div>
@@ -522,23 +525,30 @@ export interface AdminView {
 }
 
 /**
- * The text files a generation can read, as checkboxes. Order is the upload's
- * own, and the POST sends the ticked order, so which file leads the composed
- * document is the sender's call rather than a sort.
+ * The text files a generation can read, as checkboxes in upload order - which is
+ * also the order they reach the prompt, because a form serializes its boxes as
+ * they sit rather than as they were ticked.
+ *
+ * A real form, submitting into a new tab: the POST is a navigation, so that tab
+ * holds through the model call and the route's 303 lands it on the version that
+ * was written. Nothing here reports completion and nothing polls. The `action` is
+ * absent on purpose - public/admin.js fills it in, because it carries the `?c=`
+ * token and the token appears nowhere in this markup.
  */
 function sourcePicker(meta: Meta): Child | null {
   const text = meta.files.filter((f) => transformable(f.path));
   if (text.length === 0) return null;
   return (
-    <div class="panel">
+    <form class="panel" method="post" target="_blank" rel="noopener" data-genform>
       <p class="cardlabel">generate</p>
-      <p class="note">Tick what feeds it, then pick a format. The result lands as a new
-        version beside the sources; nothing you already sent changes.</p>
+      <p class="note">Tick what feeds it, then pick a format. It opens in a new tab and
+        takes a few seconds. The result lands as a new version beside the sources;
+        nothing you already sent changes.</p>
       <ul class="picks">
         {text.map((f) => (
           <li>
             <label>
-              <input type="checkbox" data-source value={f.path} />
+              <input type="checkbox" name="sources" value={f.path} />
               <span>{f.path}</span>
             </label>
             <span class="caption">{fmtSize(f.size)}</span>
@@ -547,11 +557,11 @@ function sourcePicker(meta: Meta): Child | null {
       </ul>
       <div class="chiprow">
         {GENERATIONS.map((g) => (
-          <button class="chip" type="button" data-generate={g.name} title={g.sub}>{g.label}</button>
+          <button class="chip" type="submit" name="name" value={g.name} title={g.sub}>{g.label}</button>
         ))}
       </div>
       <p class="note" data-genstate></p>
-    </div>
+    </form>
   );
 }
 
@@ -653,6 +663,26 @@ export function adminShell(view: AdminView): string {
 
 /** One status, because the hash is the only credential: a link that does not
     resolve is gone, expired, or was never one. */
+/**
+ * A refusal a tab can read. The working page generates by submitting a form, so
+ * a run that is over budget or whose model call failed answers a navigation, and
+ * a JSON blob rendered as text would be the whole page. The message is the
+ * route's own sentence: it already names the byte count or the file.
+ */
+export function noticeShell(heading: string, message: string): string {
+  return layout({
+    title: heading,
+    body: (
+      <div class="card">
+        <p class="eyebrow">generate</p>
+        <h2>{heading}</h2>
+        <p>{message}</p>
+        <p class="note">Close this tab and try again from the working page.</p>
+      </div>
+    ),
+  });
+}
+
 export function errorShell(status: 404): string {
   return layout({
     title: 'Nothing here',

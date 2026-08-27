@@ -8,9 +8,14 @@
  * old status route's rule that "which slides clip is sender-only material": an
  * external agent reads the verdict off this page and re-generates, and the index
  * already shows the deck those slides are in.
+ *
+ * Uploads come from meta.json; generations and renders are both discovered by
+ * listing, so nothing on this page depends on a manifest a concurrent write
+ * could have clobbered.
  */
 
 import type { Env, Meta, MetaFile } from './types';
+import { listGenerated } from './r2';
 import type { RenderedKey } from './exportPath';
 import {
   baseOf, derivedPrefix, formatsFor, parseCheckKey, parseDerivedKey,
@@ -58,12 +63,14 @@ export type ArtifactIndex = {
   renders: IndexRender[];
 };
 
-function indexFile(file: MetaFile): IndexFile {
+/** An upload reports no stamp whatever it is named: which side of the split a
+    file sits on is settled by meta.files, never guessed off the filename. */
+function indexFile(file: MetaFile, generated: boolean): IndexFile {
   const stem = stemOf(file.path);
   return {
     path: file.path,
     size: file.size,
-    stamp: stampOf(file.path),
+    stamp: generated ? stampOf(file.path) : null,
     exports: formatsFor(file.path).map((spec) => `${stem}${spec.suffix}`),
   };
 }
@@ -109,15 +116,11 @@ async function readRenders(env: Env, meta: Meta): Promise<IndexRender[]> {
 }
 
 export async function buildIndex(env: Env, meta: Meta): Promise<ArtifactIndex> {
-  const uploads: IndexFile[] = [];
+  const uploads = meta.files.map((f) => indexFile(f, false));
   const generated = new Map<string, IndexFile[]>();
-  for (const file of meta.files) {
-    const entry = indexFile(file);
-    if (entry.stamp === null) {
-      uploads.push(entry);
-      continue;
-    }
+  for (const file of await listGenerated(env, meta)) {
     const name = baseOf(file.path);
+    const entry = indexFile(file, true);
     const versions = generated.get(name);
     if (versions) versions.push(entry);
     else generated.set(name, [entry]);

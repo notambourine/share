@@ -52,8 +52,12 @@ async function gen(env: TestEnv, body: GenerateBody, c?: string) {
 }
 
 describe('POST /<space>/<hash>/generate', () => {
-  it('lands the output stamped and adds it to meta.files', async () => {
+  /* The document is the only write. meta.json is left exactly as it was, which
+     is what makes two runs finishing at once unable to drop each other: there is
+     no manifest to read, modify, and write back. */
+  it('lands the output stamped and writes nothing else', async () => {
     const env = seededEnv(memoryAi([{ response: FORMATTED }]));
+    const before = env.BUCKET.objects.get(`${SPACE}/${HASH}/meta.json`);
     const res = await gen(env, { name: 'agenda', sources: ['notes.txt'] });
     expect(res.status).toBe(201);
     const body = await res.json<{ path: string; bare: string }>();
@@ -61,10 +65,73 @@ describe('POST /<space>/<hash>/generate', () => {
     expect(body.bare).toBe('agenda.md');
 
     expect(env.BUCKET.objects.get(`${SPACE}/${HASH}/f/${body.path}`)).toBe(FORMATTED);
+    expect(env.BUCKET.objects.get(`${SPACE}/${HASH}/meta.json`)).toBe(before);
     const meta = await readMeta(env, SPACE, HASH);
-    expect(meta?.files.map((f) => f.path)).toContain(body.path);
+    expect(meta?.files.map((f) => f.path)).not.toContain(body.path);
     // The sources are untouched: a generation adds, never rewrites.
     expect(env.BUCKET.objects.get(`${SPACE}/${HASH}/f/notes.txt`)).toBe(RAW);
+  });
+
+  /* The version is discovered by listing, so it has to answer on its own URL and
+     under the bare alias without anything having recorded it. */
+  it('serves the version it just wrote, and the bare name follows it', async () => {
+    const env = seededEnv(memoryAi([{ response: FORMATTED }]));
+    const { path } = await (await gen(env, { name: 'agenda', sources: ['notes.txt'] }))
+      .json<{ path: string }>();
+
+    for (const url of [path, 'agenda.md']) {
+      const res = await fetchWorker(env, new Request(`https://share.test/${SPACE}/${HASH}/${url}?raw`));
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe(FORMATTED);
+    }
+  });
+
+  /* Two runs in one second would collide on the stamp, which the plan forbids:
+     an older version keeps its own URL, so nothing may overwrite one. */
+  it('steps the stamp forward rather than overwriting a version', async () => {
+    const env = seededEnv(memoryAi([{ response: FORMATTED }]));
+    const first = await (await gen(env, { name: 'deck', sources: ['log.md'] })).json<{ path: string }>();
+    const second = await (await gen(env, { name: 'deck', sources: ['log.md'] })).json<{ path: string }>();
+    expect(second.path).not.toBe(first.path);
+    expect(env.BUCKET.objects.get(`${SPACE}/${HASH}/f/${first.path}`)).toBe(FORMATTED);
+  });
+
+  /* The working page submits a form into a new tab, so the tab that held through
+     the model call has to land on the version rather than on a JSON blob. */
+  it('answers a form POST with a 303 to the version it wrote', async () => {
+    const env = seededEnv(memoryAi([{ response: FORMATTED }]));
+    const token = await mintAdminToken(KEYS, SPACE, HASH, NOW + ADMIN_SECS);
+    const form = new URLSearchParams({ name: 'deck' });
+    form.append('sources', 'log.md');
+    const res = await fetchWorker(env, new Request(
+      `https://share.test/${SPACE}/${HASH}/generate?c=${token}`,
+      {
+        method: 'POST',
+        body: form,
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      },
+    ));
+    expect(res.status).toBe(303);
+    // Relative, so it resolves beside `generate` and drops the token.
+    expect(res.headers.get('location')).toMatch(/^deck\.\d+\.md$/);
+  });
+
+  it('answers a form POST it refuses with a page, not JSON', async () => {
+    const env = seededEnv(memoryAi([new Error('boom')]));
+    const token = await mintAdminToken(KEYS, SPACE, HASH, NOW + ADMIN_SECS);
+    const form = new URLSearchParams({ name: 'deck' });
+    form.append('sources', 'log.md');
+    const res = await fetchWorker(env, new Request(
+      `https://share.test/${SPACE}/${HASH}/generate?c=${token}`,
+      {
+        method: 'POST',
+        body: form,
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      },
+    ));
+    expect(res.status).toBe(502);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    expect(await res.text()).toContain('the model call failed');
   });
 
   /* Many-to-one is the point: the material for a deck is a notes file plus a

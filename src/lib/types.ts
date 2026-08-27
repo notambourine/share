@@ -30,8 +30,15 @@ export interface StoredRange {
   length: number;
 }
 
+/** One row of a listing. Size comes off it because a generated file is found this
+    way and never named in meta.json, so its row would otherwise cost a HEAD. */
+export interface StoredListing {
+  key: string;
+  size: number;
+}
+
 export interface StoredPage {
-  objects: { key: string }[];
+  objects: StoredListing[];
   delimitedPrefixes: string[];
   truncated: boolean;
   cursor?: string;

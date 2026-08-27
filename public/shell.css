@@ -314,8 +314,10 @@ body.locked .locked-only { display: block; }
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6);
   margin-top: var(--sp-6); }
 @media (max-width: 700px) { .cols { grid-template-columns: 1fr; } }
+/* margin: 0 because the generate panel is a <form>, and the HTML default
+   stylesheet gives one a bottom margin a <div> never had. */
 .panel { background: var(--bg-card); border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: var(--sp-6); }
+  border-radius: var(--r-md); padding: var(--sp-6); margin: 0; }
 .cardlabel { font-family: var(--font-accent); font-size: var(--fs-label);
   font-weight: var(--fw-semibold); color: var(--fg2);
   margin: 0 0 var(--sp-4); }
@@ -327,6 +329,9 @@ body.locked .locked-only { display: block; }
   border: 1px solid var(--line); border-radius: var(--r-pill);
   padding: var(--sp-2) var(--sp-4); cursor: pointer; }
 .chip:hover { color: var(--fg1); border-color: var(--accent); }
+/* Held down for a moment after a generation submits, so a double-click does not
+   spend a second model call. */
+.chip:disabled { opacity: 0.45; cursor: default; }
 .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent);
   color: var(--fg-on-pink); }
 

@@ -3,9 +3,10 @@
    The Worker serves this page only behind a live token, so a missing c= means
    a stale tab - lock straight away.
 
-   Nothing polls. The tiles are real anchors and the Worker renders inline on the
-   first GET, so a cmd+clicked tab holds until the bytes land; the only fetches
-   here are the three writes. */
+   Nothing polls. The tiles are real anchors, the generate control is a real form
+   posting into a new tab, and the Worker does the work inline on that request -
+   so a cmd+clicked tab holds until the bytes land. The only fetches here are the
+   two writes that have nothing to open: the TTL chips and delete. */
 
 import { parseObject, textAt, numberAt } from '../lib/json';
 import type { JsonObject } from '../lib/json';
@@ -13,6 +14,8 @@ import { now } from '../lib/clock';
 
 let c = new URLSearchParams(location.search).get('c');
 const actions = document.getElementById('actions');
+const found = document.querySelector('[data-genform]');
+const genform = found instanceof HTMLFormElement ? found : null;
 
 function lock(): void {
   document.body.classList.add('locked');
@@ -48,10 +51,18 @@ if (!c || !actions) {
   /* Sliding window: each config write answers a fresh token and the epoch it
      dies; adopt both so the address bar, the next write, and the countdown all
      agree. */
+  /* Where the generate form posts. Set here rather than rendered, because the
+     action carries the token and the token appears nowhere in the markup. */
+  function pointForm(): void {
+    if (genform) genform.action = `${location.pathname}generate?c=${c}`;
+  }
+  pointForm();
+
   function adopt(fresh: string, freshExp: number): void {
     c = fresh;
     exp = freshExp;
     history.replaceState(null, '', `${location.pathname}?c=${fresh}`);
+    pointForm();
     tick();
   }
 
@@ -104,56 +115,36 @@ if (!c || !actions) {
     });
   }
 
-  /* Generation: the ticked files, in tick order, then one POST. The answer
-     names the version that landed, which is a link the reader can open now -
-     the page does not reload, because a stale c= in the address bar would. */
+  /* Generation is the page's one form, submitting into a new tab. The browser
+     holds that tab through the model call and the route answers 303 to the
+     version it wrote, so nothing here waits on a result, reports one, or polls.
+     What is left is the token, the empty-pick guard, and swallowing a
+     double-click. */
   const state = document.querySelector('[data-genstate]');
-  const ticked: string[] = [];
 
   function say(text: string): void {
     if (state) state.textContent = text;
   }
 
-  for (const box of document.querySelectorAll('[data-source]')) {
-    if (!(box instanceof HTMLInputElement)) continue;
-    box.addEventListener('change', () => {
-      const at = ticked.indexOf(box.value);
-      if (box.checked && at === -1) ticked.push(box.value);
-      else if (!box.checked && at !== -1) ticked.splice(at, 1);
-    });
-  }
-
-  for (const button of document.querySelectorAll('[data-generate]')) {
-    if (!(button instanceof HTMLElement)) continue;
-    button.addEventListener('click', () => {
-      const name = button.dataset.generate ?? '';
-      if (ticked.length === 0) {
-        say('Tick at least one file first.');
+  if (genform) {
+    const submits = genform.querySelectorAll('button[type="submit"]');
+    const arm = (on: boolean): void => {
+      for (const b of submits) {
+        if (b instanceof HTMLButtonElement) b.disabled = !on;
+      }
+    };
+    genform.addEventListener('submit', (e) => {
+      if (genform.querySelectorAll('input[name="sources"]:checked').length === 0) {
+        e.preventDefault();
+        say('Tick what feeds it first.');
         return;
       }
-      say(`Generating the ${name}. This takes a few seconds.`);
-      void send(`${location.pathname}generate?c=${c}`, {
-        method: 'POST',
-        body: JSON.stringify({ name, sources: ticked }),
-      }).then((out) => {
-        const path = out && textAt(out, 'path');
-        if (!path) {
-          say(`The ${name} did not generate. Try again, or tick less material.`);
-          return;
-        }
-        say('');
-        /* A real anchor, appended rather than assigned as markup, so the
-           filename never crosses back through an HTML string. */
-        const link = document.createElement('a');
-        link.href = path;
-        link.target = '_blank';
-        link.rel = 'noopener';
-        link.textContent = path;
-        state?.replaceChildren(document.createTextNode('Ready: '), link);
-      }).catch(() => {
-        // A dropped POST must not leave "Generating" standing forever.
-        say(`The ${name} did not generate. Try again.`);
-      });
+      say('Generating in a new tab. This takes a few seconds.');
+      /* Deferred a tick, not disabled inline: a submitter disabled inside its own
+         submit handler is dropped from the entry list, so the POST would arrive
+         with no name at all. */
+      setTimeout(() => arm(false), 0);
+      setTimeout(() => arm(true), 2000);
     });
   }
 
