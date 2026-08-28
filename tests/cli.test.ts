@@ -19,8 +19,18 @@ const BIN = join(process.cwd(), 'bin', 'share.ts');
 const DEAD = 'http://127.0.0.1:9'; // unroutable: reaching a fetch error means the token resolved
 
 function run(args: string[], env: Record<string, string>) {
-  const clean = { ...process.env, ...env };
+  const clean: Record<string, string | undefined> = { ...process.env, ...env };
   if (!('SHARE_TOKEN' in env)) delete clean.SHARE_TOKEN;
+  // Windows' real var is `Path` (or another casing), not `PATH`: the spread above
+  // is case-sensitive, so setting PATH left the original casing's key behind it,
+  // and spawnSync handed Windows a duplicate-keyed env block - which is what was
+  // crashing node.exe with STATUS_STACK_BUFFER_OVERRUN, nondeterministically, on
+  // whichever spawn drew the short straw.
+  if ('PATH' in env) {
+    for (const key of Object.keys(clean)) {
+      if (key !== 'PATH' && key.toUpperCase() === 'PATH') delete clean[key];
+    }
+  }
   const r = spawnSync(process.execPath, [BIN, ...args], {
     env: clean,
     encoding: 'utf8',
