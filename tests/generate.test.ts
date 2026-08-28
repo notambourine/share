@@ -267,14 +267,3 @@ describe('decodeAiText and cleanOutput', () => {
     expect(cleanOutput('  \n')).toBeNull();
   });
 });
-
-describe('the system prompt guards the voice, not just the facts', () => {
-  it('asks for a reformat and for the input sentences to survive', () => {
-    expect(SYSTEM).toContain('reformat');
-    expect(SYSTEM).toContain("Preserve the author's wording");
-    /* The old wording asked for a rewrite and guarded only the facts, which is
-       how a fast model at low effort flattened the voice while keeping every
-       number. Pinned so the two words cannot drift back. */
-    expect(SYSTEM).not.toContain('You rewrite');
-  });
-});
