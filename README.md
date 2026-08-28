@@ -8,71 +8,46 @@ curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
   -F f=@out/report.html https://share.notambourine.com/up/acme
 ```
 
-The same URL renders a branded page in a browser and serves raw bytes to
-`<img src>` and curl. Markdown renders as a deck or a document, decided from its
-own content, code gets syntax highlighting, and a folder upload with an
-`index.html` serves as a real page with its relative assets intact.
+One URL, three answers. A browser gets a branded page: markdown as a deck or a
+document decided from its own content, code highlighted, a folder with an
+`index.html` as a real page with its relative assets intact. `<img src>` and curl
+get raw bytes. An unfurl crawler, split off by User-Agent because Slack asks
+exactly like curl, gets the shell for its `og:` tags so a link draws a card;
+images keep the bytes, since Slack renders those itself. Video has no frame a
+Worker could cut, so `nt-share put` cuts one at upload. Markdown URLs also take
+`deck.pdf`, uploaded pages `page.pdf` and `page.png`.
 
-An unfurl crawler is the third answer, split off by User-Agent because Slack
-asks exactly like curl. It gets the shell for its `og:`/`twitter:` tags, so a
-link draws a card instead of nothing. An image is the exception and keeps the
-bytes: Slack renders those into the message on its own. A video has no frame a
-Worker could cut, so `nt-share put` cuts one at upload (ffmpeg, or `qlmanage` on
-macOS) and sends it alongside - see `src/lib/poster.ts`. Without either tool the
-upload still lands and the card is text only.
-
-A markdown URL also takes `deck.pdf` for a branded PDF, and an uploaded page
-takes `page.pdf` and `page.png`. Two spellings, no grammar: deck-or-document
-comes from the content, and the pages that print these links generate them.
-
-The upload answers a second link on stderr, live five minutes: the **working
-page**. That is where a sender ticks which uploaded text files feed a
-generation - deck, agenda, renewal summary, ship summary - moves the expiry, or
+Upload answers a second link on stderr, live five minutes: the **working page**,
+where a sender ticks which uploaded files feed a generation, moves the expiry, or
 deletes the share. A generation lands stamped (`deck.<epoch>.md`) and the bare
 `deck.md` follows the newest stamp, so re-generating never moves a link already
-sent. Every share's root is a public **index page** listing its sources, every
-generated version, and every render, in HTML or as JSON on `Accept:
-application/json`.
+sent. Every share's root is an **index page** of sources, versions, and renders:
+HTML, or JSON on `Accept: application/json`.
 
 ## How it holds together
 
-- **Cloudflare Worker + R2**, free tier. The Worker routes, verifies one
-  HMAC, and fills a template; rendering happens in the browser with vendored,
-  pinned libraries (no CDN script on a host that serves client material).
+- **Cloudflare Worker + R2**, free tier. Everything renders in the Worker on the
+  GET; client bundles carry interaction only, and no CDN script runs on a host
+  that serves client material.
 - **The hash is the credential.** 12 base62 chars (~71 bits), never enumerable,
-  never indexed (`X-Robots-Tag` on every response). Nothing else gates a read,
-  which is what keeps a relative asset inside an uploaded folder working.
+  never indexed. Nothing else gates a read, which is what keeps a relative asset
+  inside an uploaded folder working.
 - **Everything expires.** Artifacts default to 90 days, the working page to five
-  minutes, deletes are soft into `_trash/` with a 90-day lifecycle purge. A
-  nightly cron sweeps expired uploads.
+  minutes; deletes are soft into `_trash/` and a nightly cron sweeps.
 - **No secrets in this repo.** Bearer tokens live as sha256 hashes in a Worker
-  secret and signing keys rotate by key id. The source being public costs
-  nothing; the URLs are the locks.
+  secret and signing keys rotate by key id. The URLs are the locks.
 
-## API
+## API and CLI
 
-`GET /llms.txt` documents everything in plain text. `GET /SKILL.md` is a
-drop-in Claude skill. `bin/share.ts` is the CLI (`install`, `put`, `admin`);
-`install` puts it on PATH as `nt-share`, so the skill can call it by name. The
-terminal does two things - upload, and re-open a working page - because
-everything else a sender needs is on the page itself.
+`GET /llms.txt` documents everything in plain text. `GET /SKILL.md` is a drop-in
+Claude skill, served from the bundle so it cannot drift from the installed copy.
+`bin/share.ts` is the CLI (`install`, `put`, `admin`); the terminal only uploads
+and re-opens a working page, because everything else is on the page itself.
 
-`install` writes three files into the target dir: `nt-share.mjs` resolves the
-newest installed plugin copy and imports it, so a plugin upgrade never strands
-the entry point, and `nt-share` plus `nt-share.cmd` are one-line wrappers onto
-it for sh and for cmd.exe. Both wrappers land on every platform, because one
-home directory can be shared between Windows and WSL. Version comparison lives
-in the resolver rather than a shell pipeline: `sort -V` has no cmd.exe
-equivalent, and every plain string sort ranks `0.9.0` above `0.10.0`.
-
-A consumer carries only a stub, so the hosted skill stays the single source
-of truth and never drifts. `GET /SKILL.md` is served from the bundle rather
-than `public/`: `src/skill.ts` imports the skill file, so the served bytes and
-the installed skill cannot diverge. The canonical stub lives at `skills/share/SKILL.md`,
-which with `.claude-plugin/plugin.json` makes this repo an installable Claude
-Code plugin: the org marketplace (`notambourine/claude-plugin`) lists it by
-reference, so one user-scope install works in every repo. A repo that wants
-the capability without the plugin copies the same stub:
+Consumers carry only a stub, so the hosted skill stays the single source of
+truth. `skills/share/SKILL.md` plus `.claude-plugin/plugin.json` make this repo
+an installable Claude Code plugin listed by the org marketplace; a repo that
+wants the capability without the plugin copies the same stub:
 
 ```markdown
 ---
@@ -84,46 +59,30 @@ Fetch https://share.notambourine.com/SKILL.md and follow it exactly.
 
 ## Setup from zero
 
-One-time Cloudflare dashboard work, recorded for a rebuild or a new account.
-Deploys themselves are hands-off after step 2.
+One-time dashboard work, recorded for a rebuild. Deploys are hands-off after
+step 2.
 
-1. **R2 bucket**: create `notambourine-share` (name must match
-   `wrangler.jsonc`). Add an object lifecycle rule: prefix `_trash/`, action
-   *Delete objects*, age 90 days. Leave public access off; the Worker binding
-   is the only read path; the bucket stays private.
-2. **Connect the repo**: Workers & Pages → Create → Workers → import this
-   repository. The deploy command's default `npx wrangler deploy` is correct,
-   but the build command is empty and this Worker does not run without it: set
-   Settings → Build → *Build command* to `npm run build:client`. Skip it and
-   every file that build writes into `public/` 404s, so a deck renders a blank
-   slide, a PDF export never finishes, and there are no fonts and no favicon.
-   Workers Builds ignores a `build.command` in `wrangler.jsonc`, so this
-   dashboard field is the only place the build lives.
-   Every push to `main` deploys; the cron trigger ships with the config.
-3. **Secrets**: on the Worker: Settings → Variables and Secrets, each as type
-   *Secret* (values are JSON strings; the Worker parses them):
-   - `TOKENS`: map of name → sha256 of that person's bearer token. Built and
-     reprinted by `scripts/add-employee.sh`; the 1Password vault is the source
-     of truth and this secret is derived from it (Cloudflare secrets are
-     write-only, so every change re-pastes the whole map).
-   - `SIGNING_KEYS`: `{"v1":"<openssl rand -base64 32>"}`. The working page's
-     `?c=` token signs with it. Rotate by adding `v2` (new tokens mint with it,
-     `v1` tokens still verify); delete an id to kill its outstanding ones.
-4. **Custom domain**: Worker → Settings → Domains & Routes → add
-   `share.notambourine.com`.
+1. **R2 bucket**: create `notambourine-share` (must match `wrangler.jsonc`). Add a
+   lifecycle rule: prefix `_trash/`, *Delete objects*, 90 days. Leave public
+   access off.
+2. **Connect the repo**: Workers & Pages → Create → Workers → import this repo.
+   The default `npx wrangler deploy` is correct, but the build command is empty
+   and the Worker does not run without it: set Settings → Build → *Build command*
+   to `npm run build:client`. Workers Builds ignores `build.command` in
+   `wrangler.jsonc`, so this field is the only place the build lives.
+3. **Secrets**: Settings → Variables and Secrets, type *Secret*, values as JSON.
+   - `TOKENS`: name → sha256 of a bearer token, built by
+     `scripts/add-employee.sh` from the 1Password vault. Secrets are write-only,
+     so every change re-pastes the whole map.
+   - `SIGNING_KEYS`: `{"v1":"<openssl rand -base64 32>"}`, signing the working
+     page's `?c=`. Rotate by adding `v2`; delete an id to kill its outstanding
+     tokens.
+4. **Custom domain**: add `share.notambourine.com` under Domains & Routes.
 
-Browser Rendering needs no step of its own. The `browser` binding in
-`wrangler.jsonc` is the whole setup, and the deploy applies it; there is no
-account toggle to find and nothing to add under Settings → Bindings, which a
-config-file Worker overwrites on every deploy anyway. What the free plan gives
-is 10 browser-minutes per day account-wide, 3 concurrent browsers, one new
-browser every 20 seconds, and a 60-second browser timeout. Browser minutes are
-the constraint on PDF exports, not CPU: a few seconds per render puts the
-ceiling near a hundred renders a day for the whole account, and past it export
-URLs serve the browser-rendered shell instead of a PDF.
-
-Team tokens (add, rotate, offboard, deliver): `scripts/add-employee.sh`: its
-header is the runbook.
+Browser Rendering needs no step; the `browser` binding is the whole setup. The
+free plan's 10 browser-minutes a day account-wide is the constraint on PDF
+exports, not CPU: the ceiling is near a hundred renders a day, and past it export
+URLs serve the shell.
 
 ## Develop
 
@@ -137,7 +96,5 @@ npm run brand   # gate: public/ holds what @notambourine/brand-kit ships, colors
 ```
 
 `public/fonts/`, `public/logo/`, and the three page bundles are build output, not
-checked in. Run `build:client` before `brand`, which is the order CI uses.
-
-Deploys ride Cloudflare Workers Builds on push to `main`; there is no manual
-deploy step.
+checked in. Run `build:client` before `brand`, the order CI uses. Deploys ride
+Workers Builds on push to `main`; there is no manual deploy step.
