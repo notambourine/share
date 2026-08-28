@@ -2,13 +2,12 @@
  * The dispatcher, through the front door.
  *
  * Precedence in src/worker.ts is the security model - an uploaded file named
- * `config`, `admin`, or `status` keeps its GET - and every test that called a
+ * `config`, `admin`, or `generate` keeps its GET - and every test that called a
  * route function directly was reimplementing the router rather than holding it.
  */
 
 import { describe, expect, it } from 'vitest';
 import { ADMIN_SECS, mintAdminToken } from '../src/lib/admin';
-import { mintToken } from '../src/lib/sign';
 import { now } from '../src/lib/clock';
 import { DECK_THEME, TOKENS } from '../src/brand';
 import type { TestEnv } from './bindings';
@@ -24,7 +23,7 @@ const FILES = [
   { path: 'note.md', size: 8, type: 'text/markdown; charset=utf-8' },
 ];
 
-function seededEnv(tier: 'open' | 'signed' = 'open'): TestEnv {
+function seededEnv(): TestEnv {
   return testEnv({
     signingKeys: JSON.stringify(KEYS),
     /* A 404 from ASSETS, so a route that reaches the static server instead of
@@ -32,7 +31,7 @@ function seededEnv(tier: 'open' | 'signed' = 'open'): TestEnv {
     assets: { fetch: async () => new Response('missing\n', { status: 404 }) },
     objects: {
       [`${SPACE}/${HASH}/meta.json`]: JSON.stringify({
-        space: SPACE, hash: HASH, tier, uploader: 'tom',
+        space: SPACE, hash: HASH, uploader: 'tom',
         createdAt: NOW, expiresAt: null, files: FILES,
       }),
       [`${SPACE}/${HASH}/f/status`]: 'uptime',
@@ -60,11 +59,9 @@ describe('method gates', () => {
       ['/up/acme', 'GET', 405],
       ['/up', 'POST', 404],
       ['/up/acme/extra', 'POST', 404],
-      ['/sign', 'GET', 405],
-      ['/session', 'GET', 405],
-      [`/${SPACE}/`, 'PUT', 405],
       [`/${SPACE}/${HASH}/note.md`, 'PUT', 405],
       [`/${SPACE}/${HASH}/config`, 'PUT', 405],
+      [`/${SPACE}/${HASH}/generate`, 'PUT', 405],
     ];
     for (const [path, method, status] of cases) {
       expect([path, (await fetchWorker(env, at(path, { method }))).status]).toEqual([path, status]);
@@ -77,52 +74,42 @@ describe('method gates', () => {
   });
 });
 
-/* The three names an upload may carry that the router also owns. Losing this
-   would hand an uploader a path the dispatcher answers instead of their file. */
+/* The names an upload may carry that the router also owns. Losing this would
+   hand an uploader a path the dispatcher answers instead of their file. */
 describe('an uploaded file keeps its GET', () => {
-  it('`status` needs ?c= to reach the admin route, and serves bytes without it', async () => {
+  it('serves an uploaded file named `status`, which no route claims now', async () => {
     const env = seededEnv();
     const bare = await fetchWorker(env, at(`/${SPACE}/${HASH}/status`, { headers: { accept: '*/*' } }));
     expect(bare.status).toBe(200);
     expect(await bare.text()).toBe('uptime');
-
-    const c = await mintAdminToken(KEYS, SPACE, HASH, NOW + ADMIN_SECS);
-    const admin = await fetchWorker(env, at(`/${SPACE}/${HASH}/status?c=${c}`));
-    expect(admin.headers.get('content-type')).toContain('application/json');
-    expect(admin.status).toBe(200);
   });
 
-  it('`config` and `admin` are POST-only, so a GET reaches the file', async () => {
+  it('`config`, `admin`, and `generate` are POST-only, so a GET reaches the file', async () => {
     const env = seededEnv();
-    for (const name of ['config', 'admin']) {
+    for (const name of ['config', 'admin', 'generate']) {
       // Not uploaded here, so serve's own 404 is the proof it got that far.
       const res = await fetchWorker(env, at(`/${SPACE}/${HASH}/${name}`));
       expect(res.status).toBe(404);
       expect(res.headers.get('content-type')).toContain('text/html');
     }
   });
-});
 
-describe('the /k/ segment', () => {
-  it('carries the view token off the URL, end to end', async () => {
-    const env = seededEnv('signed');
-    expect((await fetchWorker(env, at(`/${SPACE}/${HASH}/note.md`))).status).toBe(401);
-    const token = await mintToken(KEYS, `${SPACE}/${HASH}`, NOW + 600);
-    const ok = await fetchWorker(env, at(`/${SPACE}/${HASH}/k/${token}/note.md`));
-    expect(ok.status).toBe(200);
+  /* Every write route is behind a credential, so a POST without one refuses
+     rather than reaching the file. */
+  it('the write routes answer their own refusal, not the file', async () => {
+    const env = seededEnv();
+    for (const name of ['config', 'admin', 'generate']) {
+      const res = await fetchWorker(env, at(`/${SPACE}/${HASH}/${name}`, { method: 'POST' }));
+      expect([name, res.status]).toEqual([name, 401]);
+    }
   });
 
-  /* The token is a path segment, so the hrefs a page prints have to carry it.
-     They used to be re-derived from request.url with nothing checking. */
-  it('rides into the links the page prints', async () => {
-    const env = seededEnv('signed');
-    const token = await mintToken(KEYS, `${SPACE}/${HASH}`, NOW + 600);
-    const html = await (await fetchWorker(env, at(`/${SPACE}/${HASH}/k/${token}/note.md`, {
-      headers: { accept: 'text/html' },
-    }))).text();
-    expect(html).toContain(
-      `<meta property="og:url" content="https://share.test/${SPACE}/${HASH}/k/${token}/note.md"/>`,
-    );
+  it('the working page answers a live ?c= at the root and nowhere else', async () => {
+    const env = seededEnv();
+    const c = await mintAdminToken(KEYS, SPACE, HASH, NOW + ADMIN_SECS);
+    const page = await fetchWorker(env, at(`/${SPACE}/${HASH}/?c=${c}`, { headers: { accept: 'text/html' } }));
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('data-ttl');
   });
 });
 
@@ -135,11 +122,6 @@ describe('the trailing-slash nudge', () => {
     expect((await fetchWorker(env, at(`/${SPACE}/${HASH}/note.md`))).status).toBe(200);
   });
 
-  it('nudges the /k/ root too, so the token survives the redirect', async () => {
-    const env = seededEnv();
-    const res = await fetchWorker(env, at(`/${SPACE}/${HASH}/k/v1.0.abc`));
-    expect(res.headers.get('location')).toBe(`https://share.test/${SPACE}/${HASH}/k/v1.0.abc/`);
-  });
 });
 
 /* isStatic still says yes to /vendor/marp/nt-marp.css, so worker.ts asks
@@ -172,8 +154,11 @@ describe('the roots the bundle owns', () => {
     expect(await skill.text()).toContain('nt-share');
   });
 
-  it('404s a space slug that is not one', async () => {
+  /* A space slug alone names no page: answering would confirm the space to
+     whoever guessed it, and there is no list verb left to want it. */
+  it('404s a bare space and a slug that is not one', async () => {
     const env = seededEnv();
+    expect((await fetchWorker(env, at(`/${SPACE}/`))).status).toBe(404);
     expect((await fetchWorker(env, at('/UPPER/'))).status).toBe(404);
     expect((await fetchWorker(env, at(`/${SPACE}/short/`))).status).toBe(404);
   });

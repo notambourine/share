@@ -1,7 +1,8 @@
-import type { Env, Meta, MetaFile } from './types';
+import type { Env, Meta, MetaFile, StoredListing } from './types';
 import { TRASH_PREFIX } from './types';
 import type { JsonObject } from './json';
 import { numberAt, parseObject, recordsAt, textAt } from './json';
+import { contentTypeFor } from './keys';
 
 function decodeFile(record: JsonObject): MetaFile | null {
   const path = textAt(record, 'path');
@@ -17,7 +18,7 @@ function decodeFile(record: JsonObject): MetaFile | null {
 /**
  * meta.json is this Worker's own record, and it still gets decoded: a partial
  * write or an older field set would otherwise reach the router as a `Meta` that
- * lies, and the router is what decides whether a link needs a signature.
+ * lies about which files a share holds.
  */
 export function decodeMeta(text: string): Meta | null {
   const record = parseObject(text);
@@ -25,11 +26,10 @@ export function decodeMeta(text: string): Meta | null {
 
   const space = textAt(record, 'space');
   const hash = textAt(record, 'hash');
-  const tier = textAt(record, 'tier');
   const uploader = textAt(record, 'uploader');
   const createdAt = numberAt(record, 'createdAt');
   const files = recordsAt(record, 'files');
-  if (space === null || hash === null || uploader === null || tier === null) return null;
+  if (space === null || hash === null || uploader === null) return null;
   if (createdAt === null || files === null) return null;
 
   const decoded: MetaFile[] = [];
@@ -39,18 +39,12 @@ export function decodeMeta(text: string): Meta | null {
     decoded.push(one);
   }
 
-  // Absent on every upload that predates transforms and on every plain one.
-  const transform = textAt(record, 'transform');
-
   return {
     space,
     hash,
-    // Anything but the literal `open` demands a token: fail toward the lock.
-    tier: tier === 'open' ? 'open' : 'signed',
     uploader,
     createdAt,
     expiresAt: numberAt(record, 'expiresAt'),
-    ...(transform !== null && { transform }),
     files: decoded,
   };
 }
@@ -84,15 +78,42 @@ export function isExpired(meta: Meta, nowSecs: number): boolean {
   return meta.expiresAt !== null && nowSecs > meta.expiresAt;
 }
 
-export async function listAllKeys(env: Env, prefix: string): Promise<string[]> {
-  const keys: string[] = [];
+export async function listAll(env: Env, prefix: string): Promise<StoredListing[]> {
+  const found: StoredListing[] = [];
   let cursor: string | undefined;
   do {
     const page = await env.BUCKET.list({ prefix, cursor });
-    for (const o of page.objects) keys.push(o.key);
+    for (const o of page.objects) found.push(o);
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
-  return keys;
+  return found;
+}
+
+/**
+ * The generated documents under this hash, found by listing rather than read off
+ * a manifest. The generate route writes one object and touches nothing else, so
+ * two runs landing at once cannot lose each other the way appending to meta.json
+ * could - and renders have always been discovered exactly this way
+ * (`readRenders` in src/lib/artifact.ts).
+ *
+ * meta.files is the record of what was *uploaded*, written once at upload and
+ * never appended to since, so anything under `f/` it does not name is a
+ * generation. That also keeps an upload spelled `report.1712.md` out of a version
+ * history it would otherwise look like it belonged to.
+ *
+ * A poster counts as uploaded even though it is never its own row (see
+ * src/lib/poster.ts): it rode along with a video, so it is a source, not output.
+ */
+export async function listGenerated(env: Env, meta: Meta): Promise<MetaFile[]> {
+  const prefix = `${meta.space}/${meta.hash}/f/`;
+  const uploaded = new Set(meta.files.flatMap((f) => (f.poster ? [f.path, f.poster] : [f.path])));
+  const out: MetaFile[] = [];
+  for (const { key, size } of await listAll(env, prefix)) {
+    const path = key.slice(prefix.length);
+    if (!path || uploaded.has(path)) continue;
+    out.push({ path, size, type: contentTypeFor(path) });
+  }
+  return out;
 }
 
 /**
@@ -101,7 +122,7 @@ export async function listAllKeys(env: Env, prefix: string): Promise<string[]> {
  */
 export async function moveToTrash(env: Env, space: string, hash: string): Promise<number> {
   const prefix = `${space}/${hash}/`;
-  const keys = await listAllKeys(env, prefix);
+  const keys = (await listAll(env, prefix)).map((o) => o.key);
   for (const key of keys) {
     const obj = await env.BUCKET.get(key);
     if (!obj) continue;

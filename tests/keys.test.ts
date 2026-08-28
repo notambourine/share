@@ -24,7 +24,7 @@ describe('space and hash validation', () => {
     expect(isValidSpace('sara-2')).toBe(true);
   });
   it('rejects reserved router names', () => {
-    for (const r of ['up', 'sign', 'session', 'vendor', 'robots.txt', 'logo', 'fonts']) {
+    for (const r of ['up', 'vendor', 'robots.txt', 'logo', 'fonts']) {
       expect(isValidSpace(r)).toBe(false);
     }
   });
@@ -58,7 +58,9 @@ describe('normalizeUploadPath', () => {
   it('rejects names that shadow the record or the router', () => {
     expect(normalizeUploadPath('meta.json')).toBeNull();
     expect(normalizeUploadPath('f/anything.txt')).toBeNull();
-    expect(normalizeUploadPath('k/anything.txt')).toBeNull();
+    // No `k/` guard any more: the segment went with the tier, so an upload may
+    // hold a directory called k.
+    expect(normalizeUploadPath('k/anything.txt')).toBe('k/anything.txt');
     // d/ holds the derived exports; an upload landing there could pose as one.
     expect(normalizeUploadPath('d/deck.md.pdf')).toBeNull();
     expect(normalizeUploadPath('d')).toBeNull();

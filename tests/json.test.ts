@@ -4,7 +4,7 @@ import { decodeTextMap, parseObject } from '../src/lib/json';
 import { decodeMeta } from '../src/lib/r2';
 
 const META = {
-  space: 'acme', hash: 'Xk92mQ7bTp01', tier: 'open', uploader: 'tom',
+  space: 'acme', hash: 'Xk92mQ7bTp01', uploader: 'tom',
   createdAt: 100, expiresAt: null,
   files: [{ path: 'deck.md', size: 8, type: 'text/markdown; charset=utf-8' }],
 };
@@ -37,13 +37,11 @@ describe('decodeMeta', () => {
     expect(decodeMeta(json(META))).toEqual(META);
   });
 
-  /* The router asks meta.tier whether a link needs a signature, so a record
-     that lost the field, or carries a spelling nobody ships, has to land on
-     the locked answer rather than on the open one. */
-  it('demands a token for any tier but the literal open', () => {
-    expect(decodeMeta(json({ ...META, tier: 'signed' }))?.tier).toBe('signed');
-    expect(decodeMeta(json({ ...META, tier: 'Open' }))?.tier).toBe('signed');
-    expect(decodeMeta(json({ ...META, tier: true }))).toBeNull();
+  /* Every share is open now, so a record that still carries the retired tier
+     field decodes without it rather than being refused: those records are the
+     ones already in the bucket. */
+  it('drops a retired field rather than failing the record', () => {
+    expect(decodeMeta(json({ ...META, tier: 'signed' }))).toEqual(META);
   });
 
   it('refuses a record missing a field the router reads', () => {

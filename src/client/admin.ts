@@ -1,41 +1,32 @@
-/* Admin page behavior. The `?c=` token lives in location.search and JS memory
+/* Working-page behavior. The `?c=` token lives in location.search and JS memory
    only (never a cookie, never in the markup); every write re-reads it here.
    The Worker serves this page only behind a live token, so a missing c= means
-   a stale tab - lock straight away. */
+   a stale tab - lock straight away.
 
-import { parseObject, textAt, textsAt, numberAt, recordsAt, numbersAt, isJsonObject } from '../lib/json';
+   Nothing polls. The tiles are real anchors, the generate control is a real form
+   posting into a new tab, and the Worker does the work inline on that request -
+   so a cmd+clicked tab holds until the bytes land. The only fetches here are the
+   two writes that have nothing to open: the TTL chips and delete. */
+
+import { parseObject, textAt, numberAt } from '../lib/json';
 import type { JsonObject } from '../lib/json';
-import { isRenderedKey } from '../lib/exportPath';
 import { now } from '../lib/clock';
-import type { RenderedKey } from '../lib/exportPath';
 
 let c = new URLSearchParams(location.search).get('c');
 const actions = document.getElementById('actions');
-
-let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-function stopPoll(): void {
-  if (!pollTimer) return;
-  clearInterval(pollTimer);
-  pollTimer = null;
-  // A spinner that outlives the poll would lie; leave the overflow chips.
-  for (const st of document.querySelectorAll('.tstate.gen')) {
-    st.className = 'tstate';
-    st.textContent = '';
-  }
-}
+const found = document.querySelector('[data-genform]');
+const genform = found instanceof HTMLFormElement ? found : null;
 
 function lock(): void {
   document.body.classList.add('locked');
-  stopPoll();
 }
 
 /** Every write answers through this, so an expired token locks the tab once. */
 async function send(url: string, init?: RequestInit): Promise<JsonObject | null> {
   const r = await fetch(url, init);
   if (r.status === 401) { lock(); return null; }
-  if (!r.ok) return null;
-  return parseObject(await r.text());
+  const body = parseObject(await r.text());
+  return r.ok ? body : null;
 }
 
 if (!c || !actions) {
@@ -60,10 +51,18 @@ if (!c || !actions) {
   /* Sliding window: each config write answers a fresh token and the epoch it
      dies; adopt both so the address bar, the next write, and the countdown all
      agree. */
+  /* Where the generate form posts. Set here rather than rendered, because the
+     action carries the token and the token appears nowhere in the markup. */
+  function pointForm(): void {
+    if (genform) genform.action = `${location.pathname}generate?c=${c}`;
+  }
+  pointForm();
+
   function adopt(fresh: string, freshExp: number): void {
     c = fresh;
     exp = freshExp;
     history.replaceState(null, '', `${location.pathname}?c=${fresh}`);
+    pointForm();
     tick();
   }
 
@@ -116,92 +115,36 @@ if (!c || !actions) {
     });
   }
 
-  /* Status poll: the route is pure reads, so polling can never spend a browser
-     minute. 3s while any awaited render is missing; stops when everything landed
-     and each slides source has its check, on 401, or at 2 minutes. Ready is
-     silent - only generating and overflow get chrome. */
-  const awaited = document.querySelectorAll('[data-await]');
-  let polled = 0;
+  /* Generation is the page's one form, submitting into a new tab. The browser
+     holds that tab through the model call and the route answers 303 to the
+     version it wrote, so nothing here waits on a result, reports one, or polls.
+     What is left is the token, the empty-pick guard, and swallowing a
+     double-click. */
+  const state = document.querySelector('[data-genstate]');
 
-  /* Nothing prerenders, so every awaited tile is click-to-generate: until clicked
-     it reads "click to generate" and never holds the poll open. */
-  const requested = new Set<Element>();
-
-  interface Source {
-    rendered: RenderedKey[];
-    overflow: number[] | null;
+  function say(text: string): void {
+    if (state) state.textContent = text;
   }
 
-  /** A source row the status route answered with. An unreadable row is dropped,
-      so a partial answer paints what it can rather than nothing. */
-  function decodeSources(out: JsonObject): Map<string, Source> {
-    const rows = recordsAt(out, 'sources') ?? [];
-    const byPath = new Map<string, Source>();
-    for (const row of rows) {
-      const path = textAt(row, 'path');
-      if (path === null) continue;
-      const check = row['check'];
-      byPath.set(path, {
-        rendered: textsAt(row, 'rendered').filter(isRenderedKey),
-        overflow: isJsonObject(check) ? numbersAt(check, 'overflow') : null,
-      });
-    }
-    return byPath;
-  }
-
-  function paint(byPath: Map<string, Source>): boolean {
-    let settled = true;
-    for (const tile of awaited) {
-      if (!(tile instanceof HTMLElement)) continue;
-      const s = byPath.get(tile.dataset.src ?? '');
-      const st = tile.querySelector('.tstate');
-      const key = tile.dataset.await;
-      if (!s || !st || !isRenderedKey(key)) continue;
-      const ready = s.rendered.includes(key);
-      const slides = key.startsWith('slides.');
-      if (slides && s.overflow !== null && s.overflow.length) {
-        const n = s.overflow;
-        st.className = 'tstate err';
-        st.textContent = n.length === 1
-          ? `slide ${n[0]} overflows`
-          : `slides ${n.join(', ')} overflow`;
-      } else if (ready) {
-        st.className = 'tstate';
-        st.textContent = '';
-      } else if (tile.dataset.gen && !requested.has(tile)) {
-        st.className = 'tstate todo';
-        st.textContent = 'click to generate';
-      } else {
-        st.className = 'tstate gen';
-        st.textContent = 'generating';
-        settled = false;
+  if (genform) {
+    const submits = genform.querySelectorAll('button[type="submit"]');
+    const arm = (on: boolean): void => {
+      for (const b of submits) {
+        if (b instanceof HTMLButtonElement) b.disabled = !on;
       }
-      if (slides && s.overflow === null) settled = false;
-    }
-    return settled;
-  }
-
-  function poll(): void {
-    void send(`${location.pathname}status?c=${c}`).then((out) => {
-      // pollTimer gone = capped or settled while this answer was in flight.
-      if (out && pollTimer && paint(decodeSources(out))) stopPoll();
-    }).catch(() => { /* a dropped poll retries on the next tick */ });
-    polled += 3000;
-    if (polled > 120000) stopPoll();
-  }
-
-  if (awaited.length) { pollTimer = setInterval(poll, 3000); poll(); }
-
-  /* The tab's own GET fires the render (the tile stays a real anchor); here
-     only mark it pending and wake the poll back up. */
-  for (const tile of awaited) {
-    if (!(tile instanceof HTMLElement) || !tile.dataset.gen) continue;
-    tile.addEventListener('click', () => {
-      requested.add(tile);
-      const st = tile.querySelector('.tstate');
-      if (st) { st.className = 'tstate gen'; st.textContent = 'generating'; }
-      polled = 0;
-      if (!pollTimer) pollTimer = setInterval(poll, 3000);
+    };
+    genform.addEventListener('submit', (e) => {
+      if (genform.querySelectorAll('input[name="sources"]:checked').length === 0) {
+        e.preventDefault();
+        say('Tick what feeds it first.');
+        return;
+      }
+      say('Generating in a new tab. This takes a few seconds.');
+      /* Deferred a tick, not disabled inline: a submitter disabled inside its own
+         submit handler is dropped from the entry list, so the POST would arrive
+         with no name at all. */
+      setTimeout(() => arm(false), 0);
+      setTimeout(() => arm(true), 2000);
     });
   }
 

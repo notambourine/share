@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-/* Model evals for src/transforms/: every prompt against every fixture on the
-   live model, graded by checks.mjs. Runs src/transforms/prompt.ts itself
-   (node type stripping), so the messages, decoding, and cleanup under eval
-   are the exact code path the Worker runs. Never in CI: it spends inference
-   and carries an API token. See README.md here. */
+/* Model evals for src/transforms/: the cases in fixtures/cases.json on the live
+   model, graded by checks.mjs. Runs src/transforms/prompt.ts itself (node type
+   stripping), so the messages, decoding, and cleanup under eval are the exact
+   code path the Worker runs, and grades through the Worker's own renderer. Never
+   in CI: it spends inference and carries an API token. See README.md here. */
 
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
-import { MODEL, repairNote, runPrompt } from '../../src/transforms/prompt.ts';
-import { checksFor } from './checks.mjs';
+import { MODEL, runPrompt } from '../../src/transforms/prompt.ts';
+import { checksFor, verbatimShare } from './checks.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROMPTS = join(HERE, '..', '..', 'src', 'transforms');
@@ -21,63 +21,64 @@ if (!ACCOUNT || !TOKEN) {
   process.exit(2);
 }
 
+const LOG = join(HERE, 'out', 'calls.jsonl');
+
 /* The binding's shape over the REST endpoint, so runPrompt cannot tell the
-   difference between this and env.AI. */
-const ai = {
-  async run(model, input) {
-    const res = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/${model}`,
-      {
-        method: 'POST',
-        headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
-        body: JSON.stringify(input),
-      },
-    );
-    const body = await res.json();
-    if (!res.ok || body.success === false) {
-      throw new Error(`ai/run ${res.status}: ${JSON.stringify(body.errors ?? body).slice(0, 300)}`);
-    }
-    return body.result ?? body;
-  },
-};
-
-const prompts = new Map();
-for (const f of await readdir(PROMPTS)) {
-  if (f.endsWith('.md')) prompts.set(basename(f, '.md'), await readFile(join(PROMPTS, f), 'utf8'));
+   difference between this and env.AI. One shim per case (via caseId) so
+   concurrent calls in a batch log against the right id. Every request and
+   answer lands in calls.jsonl; nothing but the verdict reaches the console,
+   because the documents themselves are what out/ is for. */
+function makeAi(caseId) {
+  return {
+    async run(model, input) {
+      const startedAt = Date.now();
+      let res;
+      let body;
+      let error = null;
+      try {
+        res = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/${model}`,
+          {
+            method: 'POST',
+            headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+            body: JSON.stringify(input),
+          },
+        );
+        body = await res.json();
+        if (!res.ok || body.success === false) {
+          error = `ai/run ${res.status}: ${JSON.stringify(body.errors ?? body).slice(0, 300)}`;
+        }
+      } catch (e) {
+        error = e instanceof Error ? e.message : String(e);
+      }
+      await appendFile(LOG, `${JSON.stringify({
+        id: caseId, model, ms: Date.now() - startedAt,
+        status: res?.status ?? null, request: input, response: body ?? null, error,
+      })}\n`);
+      if (error) throw new Error(error);
+      return body.result ?? body;
+    },
+  };
 }
-const fixtures = new Map();
-for (const f of await readdir(join(HERE, 'fixtures'))) {
-  if (/\.(md|txt)$/.test(f)) fixtures.set(f, await readFile(join(HERE, 'fixtures', f), 'utf8'));
-}
-const MUST = JSON.parse(await readFile(join(HERE, 'fixtures', 'must-keep.json'), 'utf8'));
 
-/* `fix` reads a finished deck, not raw notes, so it takes its own fixture rather
-   than the cross-product. Pointing it at meeting notes would grade a repair pass
-   on material it is never handed, and every case would fail for the wrong
-   reason. `slides` is what upload.ts passes it from the check verdict. */
-const REPAIR_CASE = {
-  name: 'fix',
-  file: 'clipping-deck.md',
-  slides: [3],
-};
+const CASES = JSON.parse(await readFile(join(HERE, 'fixtures', 'cases.json'), 'utf8'));
 
 const filter = process.argv[2] ?? '';
 const cases = [];
-for (const [name, prompt] of prompts) {
-  if (name === REPAIR_CASE.name) {
-    const id = `${name}:${REPAIR_CASE.file}`;
-    const text = fixtures.get(REPAIR_CASE.file);
-    if (text !== undefined && id.includes(filter)) {
-      cases.push({ id, name, prompt, file: REPAIR_CASE.file, text, slides: REPAIR_CASE.slides });
-    }
-    continue;
-  }
-  for (const [file, text] of fixtures) {
-    if (file === REPAIR_CASE.file) continue; // a finished deck is not raw material
-    const id = `${name}:${file}`;
-    if (id.includes(filter)) cases.push({ id, name, prompt, file, text });
-  }
+for (const spec of CASES) {
+  const id = `${spec.transform}:${spec.name}`;
+  if (!id.includes(filter)) continue;
+  cases.push({
+    ...spec,
+    id,
+    prompt: await readFile(join(PROMPTS, `${spec.transform}.md`), 'utf8'),
+    sources: await Promise.all(spec.sources.map(async (path) => ({
+      path,
+      text: await readFile(join(HERE, 'fixtures', path), 'utf8'),
+    }))),
+  });
 }
+
 if (cases.length === 0) {
   console.error(`no case matches "${filter}"`);
   process.exit(2);
@@ -85,19 +86,28 @@ if (cases.length === 0) {
 
 const outDir = join(HERE, 'out');
 await mkdir(outDir, { recursive: true });
+await writeFile(LOG, '');
 
+function why(failed) {
+  return failed.map((f) => (f.detail ? `${f.name} (${f.detail})` : f.name)).join('; ');
+}
+
+let done = 0;
 async function grade(c) {
-  /* `repairNote` rather than a hand-written string, so the repair case is graded
-     on the exact note the Worker builds from the check verdict. */
-  const output = await runPrompt(
-    ai, c.prompt, c.file, c.text, c.slides ? repairNote(c.slides) : undefined,
-  );
+  const output = await runPrompt(makeAi(c.id), c.prompt, c.sources);
+  done++;
   if (output === null) {
-    return { id: c.id, failed: [{ name: 'answered', pass: false, detail: 'runPrompt returned null' }] };
+    console.error(`  ${c.id} FAIL (null) [${done}/${cases.length}]`);
+    return { id: c.id, failed: [{ name: 'answered', pass: false, detail: 'runPrompt returned null' }], voice: 0 };
   }
-  await writeFile(join(outDir, `${c.name}--${c.file}.md`), `${output}\n`);
-  const facts = MUST[c.file] ?? { keep: [], drop: [] };
-  return { id: c.id, failed: checksFor(c.name, output, c.text, facts).filter((k) => !k.pass) };
+  await writeFile(join(outDir, `${c.transform}--${c.name}.md`), `${output}\n`);
+  /* One input string for the graders, the same join the model saw, so a
+     multi-source case grades against everything it was given. */
+  const input = c.sources.map((s) => s.text).join('\n');
+  const failed = checksFor(c.transform, output, input, c).filter((k) => !k.pass);
+  const voice = verbatimShare(output, input);
+  console.error(`  ${c.id} ${failed.length === 0 ? 'PASS' : 'FAIL'} [${done}/${cases.length}]`);
+  return { id: c.id, failed, voice };
 }
 
 console.error(`${cases.length} cases against ${MODEL}`);
@@ -109,13 +119,14 @@ for (let i = 0; i < cases.length; i += 4) {
 
 let bad = 0;
 for (const r of results) {
+  const voice = `voice ${(r.voice * 100).toFixed(0)}%`;
   if (r.failed.length === 0) {
-    console.log(`PASS ${r.id}`);
+    console.log(`PASS ${r.id.padEnd(28)} ${voice}`);
     continue;
   }
   bad++;
-  const why = r.failed.map((f) => (f.detail ? `${f.name} (${f.detail})` : f.name)).join('; ');
-  console.log(`FAIL ${r.id} - ${why}`);
+  console.log(`FAIL ${r.id.padEnd(28)} ${voice} - ${why(r.failed)}`);
 }
-console.log(`\n${results.length - bad}/${results.length} pass; outputs in evals/transforms/out/`);
+console.log(`\n${results.length - bad}/${results.length} pass; outputs in evals/transforms/out/, raw calls in evals/transforms/out/calls.jsonl`);
+console.log('voice is reported, never gated - see the note in checks.mjs. Read out/ for tone.');
 process.exit(bad === 0 ? 0 : 1);

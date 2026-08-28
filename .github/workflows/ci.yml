@@ -17,16 +17,12 @@ permissions:
 
 jobs:
   verify:
-    # The windows and macos legs exist for bin/share.ts: employees run the CLI
-    # and the session cache on those boxes, and only a real runner proves the
-    # fs paths. ubuntu stays as the cheapest fast-feedback leg.
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    # Steady state is 52s on the slowest leg (windows). The cap is set well above
-    # that for the cold-cache case: three OS legs, and setup-node's cache misses
-    # on every lockfile change, which is when a run is slowest.
+    # ubuntu only. A windows leg existed for bin/share.ts, but the suite that
+    # spawned the CLI cost more in flakes than the coverage was worth; nothing
+    # left in this job touches a platform path.
+    runs-on: ubuntu-latest
+    # The cap is set well above steady state for the cold-cache case: setup-node
+    # misses on every lockfile change, which is when a run is slowest.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -65,10 +61,7 @@ jobs:
       # public/fonts/ and public/logo/ hold what the kit ships file for file,
       # every color is one it defines, and every var() reads a token it still
       # declares. After build:client, which is what writes those two directories.
-      # ubuntu only - the hashes would trip on CRLF if the windows runner
-      # rewrote a text file.
       - run: npm run brand
-        if: matrix.os == 'ubuntu-latest'
 
   # The rule and its reasoning live in scripts/plugin-version.sh, which the
   # PreToolUse hook in .claude/settings.json also runs before a `git push`. This

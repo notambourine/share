@@ -211,11 +211,11 @@ body[data-kind="md"] .stage { justify-content: flex-start; }
   border-radius: var(--r-pill); padding: var(--sp-2) var(--sp-5); cursor: pointer; }
 .deck-nav button:hover { color: var(--fg1); border-color: var(--accent); }
 
-/* ---- admin page (src/render/shell.ts adminShell) ---- */
+/* ---- the index and working pages (src/render/shell.tsx) ---- */
 
-/* Taller than a viewport, so the stage's centering would push the head out
-   of reach; this page reads top-down. */
-body.admin .stage { justify-content: flex-start; }
+/* Both list a share and can outgrow a viewport, so the stage's centering would
+   push the head out of reach; they read top-down. */
+body.admin .stage, body.index .stage { justify-content: flex-start; }
 .admin-wrap { width: 100%; max-width: 960px; align-self: center; }
 
 .pill { font-family: var(--font-accent); font-size: var(--fs-caption);
@@ -288,17 +288,19 @@ body.locked .locked-only { display: block; }
   font-weight: var(--fw-semibold); color: var(--fg1); }
 .tlabel .s { font-size: var(--fs-caption); color: var(--fg3); }
 
-/* Tile state, painted by admin.js from the status poll. Ready is silent;
-   only generating (spinner) and overflow (the brand's error pink) show. */
-.tstate { display: none; font-size: var(--fs-caption); align-items: center; gap: var(--sp-2); }
-.tstate.gen { display: inline-flex; color: var(--fg3); }
-.tstate.gen::before { content: ''; width: 10px; height: 10px;
-  border-radius: var(--r-pill); border: 2px solid var(--line);
-  border-top-color: var(--accent); animation: tstate-spin 0.9s linear infinite; }
-.tstate.err { display: inline-flex; color: var(--accent-fg); }
-.tstate.todo { display: inline-flex; color: var(--fg3); }
-@keyframes tstate-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .tstate.gen::before { animation: none; } }
+/* The generate picker: which files feed a run, in the order they were ticked. */
+.picks { list-style: none; margin: 0 0 var(--sp-4); padding: 0; }
+.picks li { display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3); padding: var(--sp-2) 0; }
+.picks li + li { border-top: 1px solid var(--line-soft); }
+.picks label { display: flex; align-items: center; gap: var(--sp-2);
+  min-width: 0; cursor: pointer; }
+.picks input[type="checkbox"] { accent-color: var(--accent); }
+.picks span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The overflow verdict on the index page: the brand's error pink, because a
+   clipped slide is the one thing on that page a reader has to act on. */
+.caption.warn { color: var(--accent-fg); }
 
 .copyicon { position: absolute; top: var(--sp-3); right: var(--sp-3);
   display: inline-flex; align-items: center; justify-content: center;
@@ -312,8 +314,10 @@ body.locked .locked-only { display: block; }
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6);
   margin-top: var(--sp-6); }
 @media (max-width: 700px) { .cols { grid-template-columns: 1fr; } }
+/* margin: 0 because the generate panel is a <form>, and the HTML default
+   stylesheet gives one a bottom margin a <div> never had. */
 .panel { background: var(--bg-card); border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: var(--sp-6); }
+  border-radius: var(--r-md); padding: var(--sp-6); margin: 0; }
 .cardlabel { font-family: var(--font-accent); font-size: var(--fs-label);
   font-weight: var(--fw-semibold); color: var(--fg2);
   margin: 0 0 var(--sp-4); }
@@ -325,6 +329,9 @@ body.locked .locked-only { display: block; }
   border: 1px solid var(--line); border-radius: var(--r-pill);
   padding: var(--sp-2) var(--sp-4); cursor: pointer; }
 .chip:hover { color: var(--fg1); border-color: var(--accent); }
+/* Held down for a moment after a generation submits, so a double-click does not
+   spend a second model call. */
+.chip:disabled { opacity: 0.45; cursor: default; }
 .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent);
   color: var(--fg-on-pink); }
 

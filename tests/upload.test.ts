@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Env } from '../src/lib/types';
 import { upload } from '../src/routes/upload';
 import { adminConfig } from '../src/routes/admin';
-import { mintSession, sha256hex } from '../src/lib/auth';
+import { sha256hex } from '../src/lib/auth';
 import { now } from '../src/lib/clock';
 import type { TestEnv } from './bindings';
 import { fetchWorker, testEnv } from './bindings';
@@ -26,59 +26,45 @@ async function put(env: Env, auth: string, query = '', accept = 'application/jso
   return upload(req, env, SPACE);
 }
 
-const sessionBearer = async () =>
-  `Bearer ${await mintSession(KEYS, 'tom', now() + 300)}`;
-
-describe('signed-tier upload mints its own link', () => {
-  it('a session token gets a working signed URL with no vault token', async () => {
+describe('one upload, one URL', () => {
+  it('answers the public URL and serves it', async () => {
     const env = await stubEnv();
-    const res = await put(env, await sessionBearer(), '?tier=signed');
+    const res = await put(env, 'Bearer raw-token');
     expect(res.status).toBe(201);
-    const body = await res.json<{ url: string; hash: string; signedUrl: string; signedExp: number }>();
+    const body = await res.json<{ url: string; hash: string; files: string[] }>();
+    expect(body.files).toEqual(['note.md']);
+    expect(body.url).toBe(`https://share.test/${SPACE}/${body.hash}/note.md`);
 
-    const signed = new URL(body.signedUrl);
-    const [, space, hash, k] = signed.pathname.split('/');
-    expect([space, hash, k]).toEqual([SPACE, body.hash, 'k']);
-    expect(body.signedExp).toBeGreaterThan(now());
-
-    // The router does the /k/ split, so the minted URL is handed over whole.
-    const view = await fetchWorker(env, new Request(body.signedUrl, { headers: { accept: '*/*' } }));
+    const view = await fetchWorker(env, new Request(body.url, { headers: { accept: '*/*' } }));
     expect(view.status).toBe(200);
     expect(await view.text()).toContain('hello');
   });
 
-  it('the bare URL still 401s, so the signed one is what put prints', async () => {
+  /* The tier is gone, so a param nobody ships is simply ignored rather than
+     answering a second URL nobody can use. */
+  it('mints no second link and takes no tier', async () => {
     const env = await stubEnv();
-    const res = await put(env, 'Bearer raw-token', '?tier=signed', 'text/plain');
-    const printed = (await res.text()).trim();
-    expect(printed).toContain('/k/');
-
-    const [, space, hash, , , ...rest] = new URL(printed).pathname.split('/');
-    const view = await fetchWorker(env, new Request(`https://share.test/${space}/${hash}/${rest.join('/')}`));
-    expect(view.status).toBe(401);
-  });
-
-  it('honors sign ttl and rejects a bad sign duration', async () => {
-    const env = await stubEnv();
-    const res = await put(env, 'Bearer raw-token', '?tier=signed&sign=forever');
-    expect((await res.json<{ signedExp: number }>()).signedExp).toBe(0);
-
-    expect((await put(await stubEnv(), 'Bearer raw-token', '?tier=signed&sign=nope')).status).toBe(400);
-  });
-
-  it('an open upload mints nothing', async () => {
-    const env = await stubEnv();
-    const res = await put(env, await sessionBearer(), '');
-    const body = await res.json<{ url: string; signedUrl?: string }>();
+    const body = await (await put(env, 'Bearer raw-token', '?tier=signed'))
+      .json<{ url: string; signedUrl?: string }>();
     expect(body.signedUrl).toBeUndefined();
     expect(body.url).not.toContain('/k/');
   });
+
+  it('rejects a bad ttl before a byte lands', async () => {
+    const env = await stubEnv();
+    expect((await put(env, 'Bearer raw-token', '?ttl=nope')).status).toBe(400);
+    expect(env.BUCKET.objects.size).toBe(0);
+  });
+
+  it('refuses an anonymous caller', async () => {
+    expect((await put(await stubEnv(), 'Bearer wrong')).status).toBe(401);
+  });
 });
 
-describe('put answers the admin link', () => {
-  it('mints a working admin link alongside the upload', async () => {
+describe('put answers the working-page link', () => {
+  it('mints a working link alongside the upload', async () => {
     const env = await stubEnv();
-    const res = await put(env, await sessionBearer(), '');
+    const res = await put(env, 'Bearer raw-token');
     const body = await res.json<{ hash: string; adminUrl: string; adminExp: number }>();
     expect(body.adminExp).toBeGreaterThan(now());
 
@@ -102,7 +88,7 @@ describe('put answers the admin link', () => {
     expect(printed.split('\n')).toHaveLength(1);
   });
 
-  it('missing signing keys drop the admin link, not the open upload', async () => {
+  it('missing signing keys drop the working link, not the upload', async () => {
     const env = testEnv({ tokens: JSON.stringify({ tom: await sha256hex('raw-token') }) });
     const res = await put(env, 'Bearer raw-token', '');
     expect(res.status).toBe(201);

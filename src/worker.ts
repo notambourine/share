@@ -5,11 +5,9 @@ import { htmlResponse, textResponse, ROBOTS } from './lib/http';
 import { errorShell, homeShell } from './render/shell';
 import { serve } from './routes/serve';
 import { upload } from './routes/upload';
-import { mint } from './routes/mint';
-import { listSpace } from './routes/list';
 import { del } from './routes/del';
-import { adminConfig, adminRemint, adminStatus } from './routes/admin';
-import { session } from './routes/session';
+import { adminConfig, adminRemint } from './routes/admin';
+import { generate } from './routes/generate';
 import { skillDoc } from './skill';
 import { brandSheet } from './brand';
 import { sweep } from './sweep';
@@ -92,23 +90,12 @@ export default {
       return upload(request, env, segs[1]);
     }
 
-    if (segs[0] === 'sign' && segs.length === 1) {
-      if (request.method !== 'POST') return textResponse('POST only\n', 405);
-      return mint(request, env);
-    }
-
-    if (segs[0] === 'session' && segs.length === 1) {
-      if (request.method !== 'POST') return textResponse('POST only\n', 405);
-      return session(request, env);
-    }
-
     const space = segs[0];
     if (!space || !isValidSpace(space)) return notFound();
 
-    if (segs.length === 1) {
-      if (request.method !== 'GET') return textResponse('GET only\n', 405);
-      return listSpace(request, env, space);
-    }
+    /* A space slug alone names no page: every share is behind its hash, and
+       answering here would confirm the space exists to whoever guessed it. */
+    if (segs.length === 1) return notFound();
 
     const hash = segs[1];
     if (!isValidHash(hash)) return notFound();
@@ -117,15 +104,12 @@ export default {
       if (segs.length !== 2) return textResponse('DELETE /<space>/<hash>/\n', 400);
       return del(request, env, space, hash);
     }
-    /* POST only, so an uploaded file named `config` or `admin` keeps its GET. */
+    /* POST only, so an uploaded file named `config`, `admin`, or `generate`
+       keeps its GET. */
     if (request.method === 'POST' && segs.length === 3) {
       if (segs[2] === 'config') return adminConfig(request, env, space, hash);
       if (segs[2] === 'admin') return adminRemint(request, env, space, hash);
-    }
-    /* GET, but only with `?c=` attached: without the credential the path falls
-       through to serve, so an uploaded file named `status` keeps its GET. */
-    if (request.method === 'GET' && segs.length === 3 && segs[2] === 'status' && url.searchParams.has('c')) {
-      return adminStatus(request, env, space, hash);
+      if (segs[2] === 'generate') return generate(request, env, space, hash);
     }
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return textResponse('GET only\n', 405);

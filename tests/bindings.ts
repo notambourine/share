@@ -9,7 +9,7 @@
 
 import type {
   AiChatInput, AiRunner, AssetServer, Env, Store,
-  StoredHead, StoredObject, StoredPage, StoredValue,
+  StoredHead, StoredListing, StoredObject, StoredPage, StoredValue,
 } from '../src/lib/types';
 import type { JsonValue } from '../src/lib/json';
 import worker from '../src/worker';
@@ -80,15 +80,18 @@ export function memoryStore(seed: Record<string, string> = {}): MemoryStore {
     /* One page: nothing here holds enough keys to paginate, and a test that
        needed a cursor would be testing R2 rather than this Worker. */
     async list({ prefix, delimiter }): Promise<StoredPage> {
+      /* Sized like the real listing, because a generated file's row on the index
+         page reads its size from here rather than from meta.json. */
+      const row = (key: string): StoredListing => ({ key, size: headOf(key)?.size ?? 0 });
       const keys = [...objects.keys()].filter((key) => key.startsWith(prefix));
       if (!delimiter) {
-        return { objects: keys.map((key) => ({ key })), delimitedPrefixes: [], truncated: false };
+        return { objects: keys.map(row), delimitedPrefixes: [], truncated: false };
       }
       const prefixes = new Set<string>();
-      const flat: { key: string }[] = [];
+      const flat: StoredListing[] = [];
       for (const key of keys) {
         const cut = key.indexOf(delimiter, prefix.length);
-        if (cut === -1) flat.push({ key });
+        if (cut === -1) flat.push(row(key));
         else prefixes.add(key.slice(0, cut + delimiter.length));
       }
       return { objects: flat, delimitedPrefixes: [...prefixes], truncated: false };
@@ -137,8 +140,8 @@ const asCtx = (deferrals: Pick<ExecutionContext, 'waitUntil'>): ExecutionContext
 
 /**
  * Through the front door: the dispatch order in src/worker.ts is the security
- * model - an uploaded file named `config`, `admin`, or `status` keeps its GET -
- * and only a test that crosses this seam can hold it.
+ * model - an uploaded file named `config`, `admin`, or `generate` keeps its GET
+ * - and only a test that crosses this seam can hold it.
  */
 export function fetchWorker(env: Env, request: Request): Promise<Response> {
   return worker.fetch(request, env);

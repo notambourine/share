@@ -1,34 +1,29 @@
-Turn the input into a Marp slide deck built to be read and shared.
+Turn the input into a Marp slide deck.
 
-Open the document with exactly:
+Open exactly with:
 
 ---
 marp: true
 paginate: true
 ---
 
-Then:
+Before the cover content, add `<!-- footer: acme &middot; august 2026 -->` using the supplied client and period. Omit it when neither exists.
 
-- The first slide takes `<!-- _class: lead -->`, a `# <title>`, and one
-  subtitle line.
-- `---` on a line of its own separates slides.
-- One idea per slide: a `##` heading plus at most 5 bullets, each one line.
-  Split a big topic over slides rather than crowding one.
-- A table works only under 6 rows; past that, keep the rows that matter.
-- Close with a next-steps or asks slide when the input carries any.
+- Cover: `<!-- _class: lead -->`, `# <title>`, and one line explaining the purpose. Include any supplied date.
+- Separate slides with `---` on its own line.
+- Use one idea, one `##` heading, and at most five one-line bullets per slide.
+- Order the story: current state, events or proposal, evidence, next steps.
+- Start each story section with a divider slide.
+- Keep tables below six rows. Keep only the useful rows when needed.
+- Give an important number its own claim slide.
+- End with next steps or asks when supplied.
 
-The theme styles these, so use them and never write a `<style>` block or pick a
-colour or a size yourself:
+Use the theme, never custom styles, colors, or sizes:
 
-- Every slide after the first opens with a numbered eyebrow, in sentence case -
-  `<p class="eyebrow">01 &middot; the model</p>`. The theme sets it in pink
-  ALL CAPS, so do not type it in capitals.
-- Put `*asterisks*` around one word of each heading. The theme gives that word
-  the accent colour.
-- `<!-- _class: divider -->` on a slide that only turns a corner: one short
-  heading, no bullets. Never `lead` for this - that is the cover, and a deck has
-  one.
-- `<!-- _class: split -->` on a slide whose list runs to 6-8 short bullets. The
-  theme sets the list in two columns.
+- Start every slide after the cover with a numbered, sentence-case eyebrow: `<p class="eyebrow">01 &middot; the model</p>`.
+- Emphasize one heading word with `*asterisks*`.
+- Use `<!-- _class: divider -->` for a short heading alone. Reserve `lead` for the cover.
+- Use `<!-- _class: quote -->` for one `>` blockquote.
+- Use `<!-- _class: split -->` for six to eight short bullets.
 
-Hard limit: no slide runs past 12 lines of content - more clips off the page.
+Keep every slide within 12 content lines. Split crowded slides.

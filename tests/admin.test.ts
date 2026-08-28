@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ADMIN_SECS, mintAdminToken, verifyAdminToken } from '../src/lib/admin';
+import { ADMIN_SECS, ADMIN_SESSION_SECS, mintAdminToken, verifyAdminToken } from '../src/lib/admin';
 import { mintToken, verifyToken } from '../src/lib/sign';
-import { sha256hex, mintSession } from '../src/lib/auth';
+import { sha256hex } from '../src/lib/auth';
 import { now } from '../src/lib/clock';
 import { decodeMeta } from '../src/lib/r2';
 import { adminConfig, adminRemint } from '../src/routes/admin';
@@ -12,24 +12,23 @@ import { fetchWorker, testEnv } from './bindings';
 const KEYS = { v1: 'unit-test-signing-secret' };
 const SPACE = 'acme';
 const HASH = 'Ab3dEf6hIj9k';
-const VIEW_PREFIX = `${SPACE}/${HASH}`;
+const PREFIX = `${SPACE}/${HASH}`;
 const NOW = now();
 const EXP = NOW + ADMIN_SECS;
 const DAY = 86400;
 
 interface SeedOptions {
-  tier?: 'open' | 'signed';
   createdAt?: number;
   tokens?: string;
   files?: { path: string; size: number; type: string }[];
 }
 
 function seededEnv({
-  tier = 'open', createdAt = NOW, tokens,
+  createdAt = NOW, tokens,
   files = [{ path: 'deck.md', size: 6, type: 'text/markdown' }],
 }: SeedOptions = {}): TestEnv {
   const meta = JSON.stringify({
-    space: SPACE, hash: HASH, tier, uploader: 'tom',
+    space: SPACE, hash: HASH, uploader: 'tom',
     createdAt, expiresAt: null,
     files,
   });
@@ -37,14 +36,14 @@ function seededEnv({
     signingKeys: JSON.stringify(KEYS),
     tokens,
     objects: {
-      [`${VIEW_PREFIX}/meta.json`]: meta,
-      [`${VIEW_PREFIX}/f/deck.md`]: '# deck',
+      [`${PREFIX}/meta.json`]: meta,
+      [`${PREFIX}/f/deck.md`]: '# deck',
     },
   });
 }
 
 function storedMeta(env: TestEnv) {
-  const text = env.BUCKET.objects.get(`${VIEW_PREFIX}/meta.json`);
+  const text = env.BUCKET.objects.get(`${PREFIX}/meta.json`);
   const meta = text === undefined ? null : decodeMeta(text);
   return meta ?? expect.fail('meta.json missing or undecodable');
 }
@@ -60,16 +59,16 @@ describe('admin token scope', () => {
     expect((await verifyAdminToken(KEYS, SPACE, HASH, token, NOW)).ok).toBe(true);
   });
 
-  it('a view token fails the admin check', async () => {
-    const view = await mintToken(KEYS, VIEW_PREFIX, EXP);
-    expect(await verifyAdminToken(KEYS, SPACE, HASH, view, NOW)).toMatchObject({
+  /* The scope string is what separates this credential from anything else the
+     same key could ever sign: a token over the bare artifact prefix fails here
+     on the signature rather than on a check someone has to remember to write. */
+  it('a token over another scope fails, in both directions', async () => {
+    const other = `${await mintToken(KEYS, `${PREFIX}@${NOW}`, EXP)}.${NOW}`;
+    expect(await verifyAdminToken(KEYS, SPACE, HASH, other, NOW)).toMatchObject({
       ok: false, reason: 'bad-signature',
     });
-  });
-
-  it('an admin token fails the view check', async () => {
     const admin = await mintAdminToken(KEYS, SPACE, HASH, EXP);
-    expect(await verifyToken(KEYS, VIEW_PREFIX, admin, NOW)).toMatchObject({
+    expect(await verifyToken(KEYS, PREFIX, admin.replace(/\.\d+$/, ''), NOW)).toMatchObject({
       ok: false, reason: 'bad-signature',
     });
   });
@@ -90,6 +89,19 @@ describe('admin token scope', () => {
       ok: false, reason: 'expired',
     });
   });
+
+  /* The origin rides in the clear but under the signature, so moving it to buy
+     a longer session fails on the signature, and an exp past the session fails
+     even when correctly signed. */
+  it('never outlives the session it was first minted in', async () => {
+    const origin = NOW - ADMIN_SESSION_SECS;
+    const past = await mintAdminToken(KEYS, SPACE, HASH, NOW + 60, origin);
+    expect(await verifyAdminToken(KEYS, SPACE, HASH, past, NOW)).toMatchObject({ ok: false, reason: 'expired' });
+    const live = await mintAdminToken(KEYS, SPACE, HASH, EXP, NOW - 60);
+    const moved = live.replace(/\.\d+$/, `.${NOW}`);
+    expect(await verifyAdminToken(KEYS, SPACE, HASH, moved, NOW)).toMatchObject({ ok: false, reason: 'bad-signature' });
+    expect(await verifyAdminToken(KEYS, SPACE, HASH, live.replace(/\.\d+$/, ''), NOW)).toMatchObject({ reason: 'malformed' });
+  });
 });
 
 describe('DELETE with ?c=', () => {
@@ -98,16 +110,16 @@ describe('DELETE with ?c=', () => {
     const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
     const res = await del(delReq(token), env, SPACE, HASH);
     expect(res.status).toBe(204);
-    expect(env.BUCKET.objects.has(`${VIEW_PREFIX}/meta.json`)).toBe(false);
-    expect(env.BUCKET.objects.has(`_trash/${VIEW_PREFIX}/meta.json`)).toBe(true);
+    expect(env.BUCKET.objects.has(`${PREFIX}/meta.json`)).toBe(false);
+    expect(env.BUCKET.objects.has(`_trash/${PREFIX}/meta.json`)).toBe(true);
   });
 
-  it('a view token in c= is refused', async () => {
+  it('a token over another scope in c= is refused', async () => {
     const env = seededEnv();
-    const view = await mintToken(KEYS, VIEW_PREFIX, EXP);
+    const view = await mintToken(KEYS, PREFIX, EXP);
     const res = await del(delReq(view), env, SPACE, HASH);
     expect(res.status).toBe(401);
-    expect(env.BUCKET.objects.has(`${VIEW_PREFIX}/meta.json`)).toBe(true);
+    expect(env.BUCKET.objects.has(`${PREFIX}/meta.json`)).toBe(true);
   });
 
   it('an expired admin token is refused', async () => {
@@ -149,6 +161,20 @@ describe('POST /<space>/<hash>/config', () => {
     expect(storedMeta(env).expiresAt).toBe(NOW + 30 * DAY);
   });
 
+  /* A leaked link could otherwise renew itself every five minutes forever. */
+  it('a refresh is cut at the session hour, and the last one stops renewing', async () => {
+    const env = seededEnv();
+    const origin = NOW - ADMIN_SESSION_SECS + 90;
+    const sent = await mintAdminToken(KEYS, SPACE, HASH, NOW + 60, origin);
+    const res = await adminConfig(configReq(sent, '{"ttl":"30d"}'), env, SPACE, HASH);
+    expect(res.status).toBe(200);
+    const body = await res.json<{ c: string; exp: number }>();
+    expect(body.exp).toBe(origin + ADMIN_SESSION_SECS);
+    expect((await verifyAdminToken(KEYS, SPACE, HASH, body.c, NOW)).ok).toBe(true);
+    // Its own exp is the end of the session, so a later refresh has no room left.
+    expect((await verifyAdminToken(KEYS, SPACE, HASH, body.c, body.exp + 1)).ok).toBe(false);
+  });
+
   it('forever clears the expiry', async () => {
     const env = seededEnv();
     const sent = await mintAdminToken(KEYS, SPACE, HASH, EXP);
@@ -167,10 +193,10 @@ describe('POST /<space>/<hash>/config', () => {
     expect(body.expiresAt).toBeGreaterThanOrEqual(NOW + 7 * DAY);
   });
 
-  it('refuses a missing, view, or expired token and names the re-open verb', async () => {
+  it('refuses a missing, foreign, or expired token and names the re-open verb', async () => {
     const env = seededEnv();
     expect((await adminConfig(configReq(null, '{"ttl":"30d"}'), env, SPACE, HASH)).status).toBe(401);
-    const view = await mintToken(KEYS, VIEW_PREFIX, EXP);
+    const view = await mintToken(KEYS, PREFIX, EXP);
     expect((await adminConfig(configReq(view, '{"ttl":"30d"}'), env, SPACE, HASH)).status).toBe(401);
     const stale = await mintAdminToken(KEYS, SPACE, HASH, NOW - 1);
     const res = await adminConfig(configReq(stale, '{"ttl":"30d"}'), env, SPACE, HASH);
@@ -207,13 +233,10 @@ describe('POST /<space>/<hash>/admin', () => {
     expect(c && (await verifyAdminToken(KEYS, SPACE, HASH, c, NOW)).ok).toBe(true);
   });
 
-  it('refuses sessions and anonymous callers', async () => {
+  it('refuses an anonymous caller and a wrong token', async () => {
     const env = seededEnv({ tokens: await TOKENS() });
     expect((await adminRemint(remintReq(null), env, SPACE, HASH)).status).toBe(401);
-    const sess = await mintSession(KEYS, 'tom', NOW + 600);
-    const res = await adminRemint(remintReq(`Bearer ${sess}`), env, SPACE, HASH);
-    expect(res.status).toBe(401);
-    expect(await res.text()).toContain('only authorizes /up');
+    expect((await adminRemint(remintReq('Bearer wrong'), env, SPACE, HASH)).status).toBe(401);
   });
 
   it('404s on a missing artifact', async () => {
@@ -236,12 +259,13 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     const res = await fetchWorker(env, pageReq(token));
     expect(res.status).toBe(200);
     const html = await res.text();
-    // Five tiles for a single markdown upload: two live views, two PDFs, the source.
-    expect(html).toContain('deck.slides.html');
-    expect(html).toContain('deck.doc.html');
-    expect(html).toContain('deck.slides.pdf');
-    expect(html).toContain('deck.doc.pdf');
-    expect(html).toContain('deck.txt');
+    // One tile for a markdown source: the PDF, deck-or-document from the content.
+    expect(html).toContain('deck.pdf');
+    expect(html.match(/class="tile"/g)).toHaveLength(1);
+    // The retired grammar appears nowhere.
+    for (const gone of ['deck.slides.pdf', 'deck.doc.pdf', 'deck.slides.html', 'deck.txt']) {
+      expect(html).not.toContain(gone);
+    }
     // The re-open verb, the page script, the TTL chips.
     expect(html).toContain(`nt-share admin ${SPACE}/${HASH}`);
     expect(html).toContain('/admin.js');
@@ -251,7 +275,48 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     expect(html).not.toContain('?c=');
   });
 
-  it('missing, expired, or view token falls through to today\'s view', async () => {
+  /* The generation half: which files feed it is the sender's pick, and the
+     format buttons are the whole registry. */
+  it('offers the text files as checkboxes and every generation as a button', async () => {
+    const env = seededEnv({
+      files: [
+        { path: 'notes.txt', size: 40, type: 'text/plain' },
+        { path: 'log.md', size: 60, type: 'text/markdown' },
+        { path: 'hero.png', size: 900, type: 'image/png' },
+      ],
+    });
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const html = await (await fetchWorker(env, pageReq(token))).text();
+    expect(html).toContain('value="notes.txt"');
+    expect(html).toContain('value="log.md"');
+    expect(html.match(/name="sources"/g)).toHaveLength(2);
+    // A picture is material a browser renders, never text a model composes from.
+    expect(html).not.toContain('value="hero.png"');
+    for (const name of ['deck', 'agenda', 'renewal', 'ship-summary']) {
+      expect(html).toContain(`value="${name}"`);
+    }
+  });
+
+  /* A form submits somewhere, so the page that carries one is the only page
+     allowed to: every other shell can host uploaded HTML. */
+  it('relaxes form-action to self on the working page alone', async () => {
+    const env = seededEnv({ files: [{ path: 'notes.md', size: 40, type: 'text/markdown' }] });
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const page = await fetchWorker(env, pageReq(token));
+    expect(page.headers.get('content-security-policy')).toContain("form-action 'self'");
+
+    const pub = await fetchWorker(env, new Request(`https://share.test/${SPACE}/${HASH}/`));
+    expect(pub.headers.get('content-security-policy')).toContain("form-action 'none'");
+  });
+
+  it('leaves the generate panel off a share with no text in it', async () => {
+    const env = seededEnv({ files: [{ path: 'hero.png', size: 900, type: 'image/png' }] });
+    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
+    const html = await (await fetchWorker(env, pageReq(token))).text();
+    expect(html).not.toContain('data-genform');
+  });
+
+  it('missing, expired, or foreign token falls through to the public index', async () => {
     const env = seededEnv();
     const bare = await (await fetchWorker(env, pageReq(null))).text();
     expect(bare).not.toContain('data-ttl');
@@ -259,22 +324,8 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     const staleRes = await fetchWorker(env, pageReq(stale));
     expect(staleRes.status).toBe(200);
     expect(await staleRes.text()).toBe(bare);
-    const view = await mintToken(KEYS, VIEW_PREFIX, EXP);
+    const view = await mintToken(KEYS, PREFIX, EXP);
     expect(await (await fetchWorker(env, pageReq(view))).text()).toBe(bare);
-  });
-
-  it('signed tier: a live c= wins the 401 and the links ride a fresh /k/', async () => {
-    const env = seededEnv({ tier: 'signed' });
-    const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
-    const res = await fetchWorker(env, pageReq(token));
-    expect(res.status).toBe(200);
-    const html = await res.text();
-    const k = /\/k\/(v1\.\d+\.[A-Za-z0-9_-]{22})\/deck\.slides\.html/.exec(html);
-    expect(k).not.toBeNull();
-    expect((await verifyToken(KEYS, VIEW_PREFIX, k![1], NOW)).ok).toBe(true);
-    // Expired c= falls through to the tier's own answer.
-    const stale = await mintAdminToken(KEYS, SPACE, HASH, NOW - 1);
-    expect((await fetchWorker(env, pageReq(stale))).status).toBe(401);
   });
 
   it('c= never wins a file path, only the artifact root', async () => {
@@ -287,31 +338,26 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     expect(html).not.toContain('data-ttl');
   });
 
-  it('markdown tiles carry the hooks the status poll paints', async () => {
+  /* Nothing polls any more: a tile is a real anchor and the Worker renders
+     inline on the first GET, so the tab holds instead of a spinner lying. */
+  it('carries no poll hooks at all', async () => {
     const env = seededEnv();
     const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
     const html = await (await fetchWorker(env, pageReq(token))).text();
-    expect(html).toContain('data-src="deck.md" data-await="slides.pdf"');
-    expect(html).toContain('data-src="deck.md" data-await="doc.pdf"');
-    /* Only the PDFs wait on a browser. The two html tiles render per request, so
-       they are ready on arrival and have no state to paint; the txt tile derives
-       nothing at all. */
-    expect(html.match(/data-await/g)).toHaveLength(2);
-    expect(html.match(/class="tstate"/g)).toHaveLength(2);
-    expect(html.match(/data-gen="1"/g)).toHaveLength(2);
+    for (const gone of ['data-await', 'data-gen="1"', 'tstate', 'data-src']) {
+      expect(html).not.toContain(gone);
+    }
   });
 
-  it('an uploaded page gets its click-to-generate export tiles', async () => {
+  it('an uploaded page gets its two export tiles', async () => {
     const env = seededEnv({ files: [{ path: 'page.html', size: 9, type: 'text/html' }] });
     const token = await mintAdminToken(KEYS, SPACE, HASH, EXP);
     const html = await (await fetchWorker(env, pageReq(token))).text();
     expect(html).toContain('page.pdf');
     expect(html).toContain('page.png');
-    expect(html).not.toContain('page.browser.png');
-    expect(html).toContain('data-src="page.html" data-await="page.full.png" data-gen="1"');
-    // Two exports generate on click; the page tile itself awaits nothing.
-    expect(html.match(/data-gen/g)).toHaveLength(2);
-    expect(html.match(/data-await/g)).toHaveLength(2);
+    expect(html).not.toContain('page.full.png');
+    // The page itself, plus the print and the shot.
+    expect(html.match(/class="tile"/g)).toHaveLength(3);
   });
 
   it('a folder with an index.html reads as one site tile', async () => {
@@ -327,17 +373,5 @@ describe('GET /<space>/<hash>/?c= - the admin page', () => {
     expect(html).toContain('>site<');
     expect(html).not.toContain('hotlink'); // never a tile per asset
     expect(html).toContain('index.html'); // the plain file list still names them
-  });
-});
-
-describe('view routes with an admin token', () => {
-  it('the /k/ slot refuses an admin token where a view token works', async () => {
-    const env = seededEnv({ tier: 'signed' });
-    const at = (token: string) =>
-      new Request(`https://share.example/${SPACE}/${HASH}/k/${token}/deck.md`);
-    const admin = await mintAdminToken(KEYS, SPACE, HASH, EXP);
-    expect((await fetchWorker(env, at(admin))).status).toBe(401);
-    const view = await mintToken(KEYS, VIEW_PREFIX, EXP);
-    expect((await fetchWorker(env, at(view))).status).toBe(200);
   });
 });

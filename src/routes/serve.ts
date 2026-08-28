@@ -1,16 +1,16 @@
 import type { Env } from '../lib/types';
-import { DEFAULT_LINK_DAYS } from '../lib/types';
 import type { ParsedRoute } from '../lib/route';
-import { payloadKey, readPayload, readMeta, isExpired } from '../lib/r2';
-import { mintToken, parseSigningKeys, verifyToken } from '../lib/sign';
+import { payloadKey, readPayload, readMeta, isExpired, listGenerated } from '../lib/r2';
+import { parseSigningKeys } from '../lib/sign';
 import { verifyAdminToken } from '../lib/admin';
 import { viewModeFor } from '../lib/negotiate';
-import { explicitMode, isLiveHtml, resolveExport } from '../lib/exportPath';
+import { latestStamped, resolveExport, stemOf } from '../lib/exportPath';
+import { buildIndex } from '../lib/artifact';
 import { exportArtifact } from './export';
 import { rawBytes } from '../lib/bytes';
-import { fileShell, dirShell, errorShell, adminShell, type ShellCommon } from '../render/shell';
+import { fileShell, indexShell, errorShell, adminShell, type ShellCommon } from '../render/shell';
 import { renderCode, renderSource } from '../render/markdown';
-import { htmlResponse } from '../lib/http';
+import { ADMIN_CSP, htmlResponse, jsonResponse, wantsJson } from '../lib/http';
 import { now } from '../lib/clock';
 
 /** Past this a shell would carry more bytes than a download costs, and
@@ -19,17 +19,16 @@ import { now } from '../lib/clock';
 const MAX_INLINE_BYTES = 1024 * 1024;
 
 /**
- * A markdown source, rendered here rather than in the reader's browser. `mode`
- * null means the content decides, which is the bare `.md` URL; the `.html`
- * spellings pass the mode they pin. Which shell it lands in follows the mode
- * the render resolved, never the one asked for.
+ * A markdown source, rendered here rather than in the reader's browser. Deck or
+ * document comes from the content, always: nothing pins a mode any more, and
+ * which shell it lands in follows what the render resolved.
  */
 async function markdownView(
-  env: Env, space: string, hash: string, mode: 'slides' | 'doc' | null, opts: ShellCommon,
+  env: Env, space: string, hash: string, opts: ShellCommon,
 ): Promise<Response> {
   const text = await readPayload(env, space, hash, opts.path);
   if (text === null) return htmlResponse(errorShell(404), 404);
-  const out = renderSource(text, mode);
+  const out = renderSource(text, null);
   return htmlResponse(out.mode === 'slides'
     ? fileShell(opts, { kind: 'slides', html: out.html, css: out.css })
     : fileShell(opts, { kind: 'md', html: out.html }));
@@ -48,39 +47,28 @@ export async function serve(
   env: Env,
   route: ParsedRoute,
 ): Promise<Response> {
-  const { space, hash, token, rest } = route;
+  const { space, hash, rest } = route;
   const meta = await readMeta(env, space, hash);
   const t = now();
   if (!meta || isExpired(meta, t)) return htmlResponse(errorShell(404), 404);
 
   const url = new URL(request.url);
-  /* Both credentials this route reads are URL-borne, not Bearer, so neither
-     goes through `authorize`; they only share the key set, read once here. */
-  const keys = parseSigningKeys(env);
 
-  /* A live `?c=` wins the artifact root, checked ahead of the signed-tier 401:
-     admin implies view. Invalid, absent, or expired falls through to today's
-     view, never a 401 of its own. Root only - a file path ignores c=. */
+  /* A live `?c=` wins the artifact root: it is the working page, and admin
+     implies view. Invalid, absent, or expired falls through to the public index,
+     never a 401 of its own. Root only - a file path ignores c=. */
   if (rest === '') {
     const c = url.searchParams.get('c');
+    const keys = c ? parseSigningKeys(env) : null;
     const v = c && keys ? await verifyAdminToken(keys, space, hash, c, t) : null;
-    if (v?.ok && keys) {
-      /* The page's links must travel, so on the signed tier they ride a fresh
-         view token at the /sign default life - the admin holder is the
-         uploader, and handing out links is the page's job. */
-      const kSeg = meta.tier === 'signed'
-        ? `k/${await mintToken(keys, `${space}/${hash}`, t + DEFAULT_LINK_DAYS * 86400)}/`
-        : '';
-      return htmlResponse(adminShell({ meta, origin: route.origin, kSeg, now: t, adminExp: v.exp }));
+    if (v?.ok) {
+      /* The one shell with a form, so the one shell that may submit anywhere. */
+      return htmlResponse(
+        adminShell({ meta, origin: route.origin, now: t, adminExp: v.exp }),
+        200,
+        { 'content-security-policy': ADMIN_CSP },
+      );
     }
-  }
-
-  if (meta.tier === 'signed') {
-    // Misconfigured keys read as an unverifiable token: a 401, never a 500 that
-    // would tell a stranger the artifact is there.
-    if (!token || !keys) return htmlResponse(errorShell(401), 401);
-    const v = await verifyToken(keys, `${space}/${hash}`, token, t);
-    if (!v.ok) return htmlResponse(errorShell(401), 401);
   }
 
   let filePath = rest;
@@ -88,33 +76,45 @@ export async function serve(
     if (meta.files.some((f) => f.path === 'index.html')) {
       filePath = 'index.html';
     } else {
-      return htmlResponse(dirShell(hash, meta.files));
+      /* The public index: one URL, two representations. The JSON is what an
+         external agent reads, which is why no route answers status any more. */
+      const index = await buildIndex(env, meta);
+      return wantsJson(request)
+        ? jsonResponse({ ...index })
+        : htmlResponse(indexShell(index, meta, t));
     }
   }
 
-  const file = meta.files.find((f) => f.path === filePath);
+  /* Uploads are named in meta; a generation is only ever found by listing, so a
+     name meta already holds costs no listing at all - which is every plain
+     upload, the common read on this route. */
+  let file = meta.files.find((f) => f.path === filePath);
+  let files = meta.files;
+  if (!file) {
+    files = [...meta.files, ...await listGenerated(env, meta)];
+    /* A bare source name follows the newest generation: `deck.md` resolves to
+       the highest `deck.<epoch>.md` this share holds. An uploaded file that owns
+       the name was found by the exact lookup above and never reaches here. */
+    if (stemOf(filePath) !== filePath) {
+      const current = latestStamped(files.map((f) => f.path), stemOf(filePath));
+      if (current) filePath = current;
+    }
+    file = files.find((f) => f.path === filePath);
+  }
+
+  const paths = files.map((f) => f.path);
   if (!file) {
     /* A poster is not a row of its own, so it resolves off the parent that
        owns it - and always as bytes, because og:image is what asks. */
     if (meta.files.some((f) => f.poster === filePath)) {
       return rawBytes(request, env, payloadKey(space, hash, filePath), filePath, false);
     }
-    /* Exact match first, then the format suffixes, so a file uploaded as
+    /* Exact match first, then the two format suffixes, so a file uploaded as
        `notes.pdf` serves its own bytes instead of re-rendering `notes`. */
-    const wanted = resolveExport(meta.files.map((f) => f.path), filePath);
+    const wanted = resolveExport(paths, filePath);
     if (!wanted) return htmlResponse(errorShell(404), 404);
-    const src = meta.files.find((f) => f.path === wanted.source);
+    const src = files.find((f) => f.path === wanted.source);
     if (!src) return htmlResponse(errorShell(404), 404);
-    /* An `.html` spelling is a mode override, not an artifact: it renders here
-       and stores nothing, so only `.pdf`, `.png`, and `.txt` reach the export. */
-    if (isLiveHtml(wanted.source, wanted.format)) {
-      return markdownView(env, space, hash, explicitMode(wanted.format), {
-        path: wanted.source,
-        rawHref: `${route.dir}${encodeURI(wanted.source)}?raw`,
-        size: src.size,
-        pageHref: route.page,
-      });
-    }
     return exportArtifact(request, env, {
       space, hash, url, source: wanted.source, format: wanted.format, size: src.size,
     });
@@ -147,7 +147,7 @@ export async function serve(
     case 'shell-md':
       return file.size > MAX_INLINE_BYTES
         ? htmlResponse(fileShell(opts, { kind: 'download' }))
-        : markdownView(env, space, hash, null, opts);
+        : markdownView(env, space, hash, opts);
     case 'shell-download': return htmlResponse(fileShell(opts, { kind: 'download' }));
     default:
       return rawBytes(request, env, payloadKey(space, hash, filePath), filePath, mode === 'attachment');

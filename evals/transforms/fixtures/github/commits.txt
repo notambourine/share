@@ -1,0 +1,32 @@
+$ git log --oneline --no-merges --since=2026-08-17 --until=2026-08-24
+repo: acme-storefront  branch: main
+
+3f81a4c fix(checkout): guard against double-submit when 3DS confirm is slow
+d0c2e19 test(checkout): cover the slow-3DS double-submit path
+91ab77e feat(giftcards): schema + migration for gift card balances
+5c30d8b feat(giftcards): redeem endpoint, partial redemption supported
+a71e40f feat(giftcards): balance check on the cart page
+2ee8f31 fix(giftcards): reject a redeem on an expired card instead of 500ing
+b8c1d55 feat(carts): saved carts to 100%, flag saved-carts-v1 retired
+4d9f2a0 chore(carts): drop the saved-carts-v1 flag and its cohort table
+17c6e83 perf(search): cache the typeahead index in KV, p95 38ms -> 11ms
+6a0be47 fix(search): typeahead crashed on a single apostrophe query
+c9e2f16 feat(admin): csv import shows a header-row preview before committing
+2b7d904 docs(admin): rewrite the bulk price import page for the header confusion
+e5f3c81 fix(email): receipt totals rounded down on 3-decimal currencies
+80a1b6d perf(images): preload the hero avif on the home route
+f2c9e40 chore(deps): bump the payments sdk 4.2.1 -> 4.3.0
+44e8a17 fix(account): order history paginated past page 10
+1d5c7b2 feat(loyalty): points ledger behind flag loyalty-mvp, off everywhere
+9e2f108 feat(loyalty): earn rule engine, 1 point per dollar, no redemption yet
+c81b3d6 chore(ci): split the e2e suite into 4 shards, 22min -> 7min
+7a0c294 fix(dashboard): the analytics date picker skipped the last day of a month
+5f1e8a3 revert(dashboard): back out the date picker fix, broke the week view
+0b93c7f fix(dashboard): date picker, again, with the week view covered
+a4d18e2 chore: node 22.6 -> 22.8 on the render fleet
+
+deploy log:
+  2026-08-18 14:02 v2.5.0 -> production, ok
+  2026-08-20 09:41 v2.5.1 -> production, rolled back 09:58 (dashboard week view)
+  2026-08-20 16:20 v2.5.2 -> production, ok
+  2026-08-22 11:07 v2.6.0 -> production, ok

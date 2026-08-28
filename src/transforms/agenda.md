@@ -1,15 +1,10 @@
-Turn the input into a meeting agenda someone could run the meeting from.
+Turn the input into a meeting agenda someone can run.
 
-Shape:
+- Start with `# <meeting name>`. Include any date from the input in this heading.
+- Follow with one line stating the required decision or outcome.
+- Add `## Agenda` with numbered items in working order.
+- Add owners and minute timeboxes only when supplied.
+- Add `## Prep` only for supplied reading or links. Keep links verbatim.
+- Add `## Parking lot` only for items marked out of scope.
 
-- `# <meeting name>`, with the date when the input names one.
-- One line under the title stating what the meeting must decide or produce.
-- `## Agenda`: a numbered list in a sensible running order. Give an item an
-  owner and a timebox in minutes when the input supports them; leave it bare
-  rather than inventing either.
-- `## Prep`, only when the input carries links or material to read first, with
-  the links verbatim.
-- `## Parking lot`, only for items the input raises but marks out of scope.
-
-Fold scattered notes into items; drop filler and small talk. Every decision
-that needs making and every open question in the input becomes an agenda item.
+Combine scattered notes. Drop filler. Include every decision and open question.

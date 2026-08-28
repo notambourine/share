@@ -1,10 +1,11 @@
 /**
- * Signed-tier tokens: a path segment `/k/v1.<exp>.<sig>/`.
- * sig = base64url(HMAC-SHA256(key_v1, "<space>/<hash>|<exp>")) truncated to 128 bits.
- * The signature covers the upload prefix, so one token admits every file inside it.
+ * The HMAC primitive every credential in a URL is built from:
+ * `v1.<exp>.<sig>`, sig = base64url(HMAC-SHA256(key_v1, "<scope>|<exp>"))
+ * truncated to 128 bits. One caller now - the working page's `?c=` token in
+ * src/lib/admin.ts - which owns its scope string and its lifetime.
  *
- * A path segment, never `?k=`: relative URLs drop a query string, so a signed
- * index.html would 401 every ./style.css it loads. Same length either way.
+ * The key set rotates by id: the numerically highest id mints, older ids only
+ * verify, so deleting an id kills its outstanding tokens.
  */
 
 import { decodeTextMap } from './json';

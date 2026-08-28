@@ -9,9 +9,9 @@ curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
 ```
 
 The same URL renders a branded page in a browser and serves raw bytes to
-`<img src>` and curl. Markdown renders as a document (`?slides` makes it a
-deck), code gets syntax highlighting, and a folder upload with an `index.html`
-serves as a real page with its relative assets intact.
+`<img src>` and curl. Markdown renders as a deck or a document, decided from its
+own content, code gets syntax highlighting, and a folder upload with an
+`index.html` serves as a real page with its relative assets intact.
 
 An unfurl crawler is the third answer, split off by User-Agent because Slack
 asks exactly like curl. It gets the shell for its `og:`/`twitter:` tags, so a
@@ -21,9 +21,18 @@ Worker could cut, so `nt-share put` cuts one at upload (ffmpeg, or `qlmanage` on
 macOS) and sends it alongside - see `src/lib/poster.ts`. Without either tool the
 upload still lands and the card is text only.
 
-A markdown URL also takes a format suffix: `deck.pdf` for a branded PDF,
-`deck.slides.pdf` and `deck.doc.pdf` to name the mode yourself, and
-`deck.slides.html` or `deck.doc.html` to pin the mode on a live page.
+A markdown URL also takes `deck.pdf` for a branded PDF, and an uploaded page
+takes `page.pdf` and `page.png`. Two spellings, no grammar: deck-or-document
+comes from the content, and the pages that print these links generate them.
+
+The upload answers a second link on stderr, live five minutes: the **working
+page**. That is where a sender ticks which uploaded text files feed a
+generation - deck, agenda, renewal summary, ship summary - moves the expiry, or
+deletes the share. A generation lands stamped (`deck.<epoch>.md`) and the bare
+`deck.md` follows the newest stamp, so re-generating never moves a link already
+sent. Every share's root is a public **index page** listing its sources, every
+generated version, and every render, in HTML or as JSON on `Accept:
+application/json`.
 
 ## How it holds together
 
@@ -31,12 +40,11 @@ A markdown URL also takes a format suffix: `deck.pdf` for a branded PDF,
   HMAC, and fills a template; rendering happens in the browser with vendored,
   pinned libraries (no CDN script on a host that serves client material).
 - **The hash is the credential.** 12 base62 chars (~71 bits), never enumerable,
-  never indexed (`X-Robots-Tag` on every response). Signed-tier artifacts also
-  need an HMAC token carried as a `/k/<token>/` path segment, so relative
-  assets inside a signed folder keep working.
-- **Everything expires.** Artifacts default to 90 days, links to 30, deletes
-  are soft into `_trash/` with a 90-day lifecycle purge. A nightly cron sweeps
-  expired uploads.
+  never indexed (`X-Robots-Tag` on every response). Nothing else gates a read,
+  which is what keeps a relative asset inside an uploaded folder working.
+- **Everything expires.** Artifacts default to 90 days, the working page to five
+  minutes, deletes are soft into `_trash/` with a 90-day lifecycle purge. A
+  nightly cron sweeps expired uploads.
 - **No secrets in this repo.** Bearer tokens live as sha256 hashes in a Worker
   secret and signing keys rotate by key id. The source being public costs
   nothing; the URLs are the locks.
@@ -44,9 +52,10 @@ A markdown URL also takes a format suffix: `deck.pdf` for a branded PDF,
 ## API
 
 `GET /llms.txt` documents everything in plain text. `GET /SKILL.md` is a
-drop-in Claude skill. `bin/share.ts` is the CLI (`install`, `put`, `sign`,
-`admin`, `check`, `ls`, `rm`); `install` puts it on PATH as `nt-share`, so the
-skill can call it by name.
+drop-in Claude skill. `bin/share.ts` is the CLI (`install`, `put`, `admin`);
+`install` puts it on PATH as `nt-share`, so the skill can call it by name. The
+terminal does two things - upload, and re-open a working page - because
+everything else a sender needs is on the page itself.
 
 `install` writes three files into the target dir: `nt-share.mjs` resolves the
 newest installed plugin copy and imports it, so a plugin upgrade never strands
@@ -55,11 +64,6 @@ it for sh and for cmd.exe. Both wrappers land on every platform, because one
 home directory can be shared between Windows and WSL. Version comparison lives
 in the resolver rather than a shell pipeline: `sort -V` has no cmd.exe
 equivalent, and every plain string sort ranks `0.9.0` above `0.10.0`.
-
-`nt-share put <space> --clip` uploads the image on the clipboard with no file
-on disk: `osascript` on macOS, `Clipboard::GetImage` through PowerShell on
-Windows, `wl-paste` or `xclip` on Linux. The bytes come back over stdout, so
-nothing lands in a temp dir on the way.
 
 A consumer carries only a stub, so the hosted skill stays the single source
 of truth and never drifts. `GET /SKILL.md` is served from the bundle rather
@@ -102,9 +106,9 @@ Deploys themselves are hands-off after step 2.
      reprinted by `scripts/add-employee.sh`; the 1Password vault is the source
      of truth and this secret is derived from it (Cloudflare secrets are
      write-only, so every change re-pastes the whole map).
-   - `SIGNING_KEYS`: `{"v1":"<openssl rand -base64 32>"}`. Rotate by adding
-     `v2` (new links mint with it, `v1` links still verify); delete an id to
-     kill its outstanding links.
+   - `SIGNING_KEYS`: `{"v1":"<openssl rand -base64 32>"}`. The working page's
+     `?c=` token signs with it. Rotate by adding `v2` (new tokens mint with it,
+     `v1` tokens still verify); delete an id to kill its outstanding ones.
 4. **Custom domain**: Worker → Settings → Domains & Routes → add
    `share.notambourine.com`.
 
@@ -125,7 +129,7 @@ header is the runbook.
 
 ```
 npm ci
-npm test        # vitest: signing, path safety, negotiation, auth
+npm test        # vitest: signing, path safety, negotiation, auth, versioning
 npm run oxlint  # oxlint plus the vendored anti-slop rules in tools/oxlint/
 npm run types   # tsc --noEmit, Worker and CLI (bin/ runs as .ts, node 22.18+ strips the types)
 npm run build:client  # writes public/: the page bundles, plus fonts/ and logo/ from the brand dep

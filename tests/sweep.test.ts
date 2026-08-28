@@ -14,7 +14,7 @@ const GONE = 'Al3adyTrashd';
 
 function metaFor(space: string, hash: string, expiresAt: number | null): string {
   return JSON.stringify({
-    space, hash, tier: 'open', uploader: 'tom',
+    space, hash, uploader: 'tom',
     createdAt: NOW - 86400, expiresAt,
     files: [{ path: 'note.md', size: 6, type: 'text/markdown' }],
   });

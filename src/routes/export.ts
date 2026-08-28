@@ -9,30 +9,32 @@
  * browser binding is spent only on the two formats that genuinely need a print
  * engine.
  *
- * Derived artifacts cache under `<space>/<hash>/d/v<N>/`. Delete and the nightly
- * sweep list the whole `<space>/<hash>/` prefix, so they trash and purge with
- * their upload and need nothing here.
+ * Derived artifacts cache under `<space>/<hash>/d/v<N>/`, keyed by the source's
+ * full name - a generation's stamp included - so each version's render is its
+ * own object. Delete and the nightly sweep list the whole `<space>/<hash>/`
+ * prefix, so they trash and purge with their upload and need nothing here.
  */
 
 import type { Env } from '../lib/types';
 import {
   type ExportFormat, type RenderMode,
-  explicitMode, derivedKey, checkKey, sniffDeck, isPageSource, pageExt,
+  derivedKey, checkKey, attemptKey, sniffDeck, isPageSource,
 } from '../lib/exportPath';
+import { now } from '../lib/clock';
 import { render, renderPage, type Artifacts, type PageArtifacts } from '../lib/pdf';
 import { printHtml, pdfOptionsFor } from '../render/export';
 import { rawBytes } from '../lib/bytes';
-import { payloadKey, readPayload } from '../lib/r2';
+import { readPayload } from '../lib/r2';
 import { errorShell } from '../render/shell';
 import { htmlResponse, ROBOTS } from '../lib/http';
 
 export interface ExportTarget {
   space: string;
   hash: string;
-  /** The uploaded markdown file the suffix hangs off. */
+  /** The source file the suffix hangs off. */
   source: string;
   format: ExportFormat;
-  /** The requested URL, so the `/k/` segment and the directory ride along. */
+  /** The requested URL, so the directory rides along. */
   url: URL;
   size: number;
 }
@@ -42,8 +44,7 @@ function baseName(source: string): string {
   return name.replace(/\.(md|markdown|html?)$/i, '') || name;
 }
 
-/** `deck.slides.pdf` downloads as `deck.pdf`; the mode is grammar, not a name. */
-function downloadName(source: string, ext: 'pdf' | 'txt' | 'png'): string {
+function downloadName(source: string, ext: ExportFormat): string {
   return `${baseName(source)}.${ext}`;
 }
 
@@ -62,12 +63,8 @@ async function store(
 
 /** Null means the browser was unreachable and the caller answers a 202. */
 async function produce(
-  env: Env, space: string, hash: string, source: string, mode: RenderMode, markdown: string, url: URL,
+  env: Env, browser: Fetcher, space: string, hash: string, source: string, mode: RenderMode, markdown: string, url: URL,
 ): Promise<Artifacts | null> {
-  if (!env.BROWSER) {
-    console.log('export: no BROWSER binding');
-    return null;
-  }
   const title = baseName(source);
   const dir = url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1);
   let html: string;
@@ -83,9 +80,26 @@ async function produce(
     console.log(`export: print HTML failed: ${err}`);
     return null;
   }
-  const out = await render(env.BROWSER, html, pdfOptionsFor(mode, title), mode === 'slides');
+  const out = await render(browser, html, pdfOptionsFor(mode, title), mode === 'slides');
   if (out) await store(env, space, hash, source, mode, out);
   return out;
+}
+
+/** One browser per source per minute. The hash is the only credential a reader
+    holds, so this is what bounds the BROWSER bill on a link that got around: a
+    burst of first GETs, or a page that never goes idle, spends one render per
+    window instead of one per request. Written before the render, so the window
+    opens whether or not the render lands. */
+export const ATTEMPT_SECS = 60;
+
+/** True when this request may spend the browser; false inside another's window. */
+async function claimRender(env: Env, space: string, hash: string, source: string, mode: RenderMode): Promise<boolean> {
+  const key = attemptKey(space, hash, source, mode);
+  const t = now();
+  const last = Number(await (await env.BUCKET.get(key))?.text());
+  if (Number.isFinite(last) && t - last < ATTEMPT_SECS) return false;
+  await env.BUCKET.put(key, String(t), { httpMetadata: { contentType: 'text/plain' } });
+  return true;
 }
 
 /** A `.pdf` or `.png` URL must never answer HTML at 200 - a curl -o would
@@ -103,18 +117,18 @@ function rendering202(): Response {
 }
 
 /** The first GET pays the render. One load stores both outputs, so the other
-    tile flips ready on the same click. */
+    spelling is ready on the same click. */
 async function exportPage(request: Request, env: Env, target: ExportTarget): Promise<Response> {
   const { space, hash, source, format, url } = target;
-  const ext = pageExt(format);
-  const key = derivedKey(space, hash, source, 'page', ext);
-  const name = downloadName(source, ext === 'pdf' ? 'pdf' : 'png');
+  const key = derivedKey(space, hash, source, 'page', format);
+  const name = downloadName(source, format);
   if (await env.BUCKET.head(key)) return rawBytes(request, env, key, name, false);
 
   if (!env.BROWSER) {
     console.log('export: no BROWSER binding');
     return rendering202();
   }
+  if (!await claimRender(env, space, hash, source, 'page')) return rendering202();
   const dir = url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1);
   const out = await renderPage(env.BROWSER, `${url.origin}${dir}${encodeURI(source)}`, pdfOptionsFor('page', baseName(source)));
   if (!out) {
@@ -130,7 +144,7 @@ async function storePage(env: Env, space: string, hash: string, source: string, 
     env.BUCKET.put(derivedKey(space, hash, source, 'page', 'pdf'), out.pdf, {
       httpMetadata: { contentType: 'application/pdf' },
     }),
-    env.BUCKET.put(derivedKey(space, hash, source, 'page', 'full.png'), out.fullPng, {
+    env.BUCKET.put(derivedKey(space, hash, source, 'page', 'png'), out.fullPng, {
       httpMetadata: { contentType: 'image/png' },
     }),
   ]);
@@ -139,33 +153,27 @@ async function storePage(env: Env, space: string, hash: string, source: string, 
 export async function exportArtifact(
   request: Request, env: Env, target: ExportTarget,
 ): Promise<Response> {
-  const { space, hash, source, format, url } = target;
+  const { space, hash, source, url } = target;
 
   if (isPageSource(source)) return exportPage(request, env, target);
 
-  /* `.txt` is the source's own bytes as text/plain, always: it renders
-     nothing and survives being pasted where a query string would not. */
-  if (format === 'txt') {
-    return rawBytes(request, env, payloadKey(space, hash, source), downloadName(source, 'txt'), false);
-  }
-
-  let mode = explicitMode(format);
-  let markdown: string | null = null;
-
-  if (!mode) {
-    markdown = await readPayload(env, space, hash, source);
-    if (markdown === null) return htmlResponse(errorShell(404), 404);
-    mode = sniffDeck(markdown) ? 'slides' : 'doc';
-  }
+  /* Deck or document from the content, every time. The bytes have to be read
+     before the cache can be checked, because the sniff is what says which key
+     this render lands under. */
+  const markdown = await readPayload(env, space, hash, source);
+  if (markdown === null) return htmlResponse(errorShell(404), 404);
+  const mode = sniffDeck(markdown) ? 'slides' : 'doc';
 
   const key = derivedKey(space, hash, source, mode, 'pdf');
   const name = downloadName(source, 'pdf');
   if (await env.BUCKET.head(key)) return rawBytes(request, env, key, name, false);
 
-  if (markdown === null) markdown = await readPayload(env, space, hash, source);
-  if (markdown === null) return htmlResponse(errorShell(404), 404);
-
-  const out = await produce(env, space, hash, source, mode, markdown, url);
+  if (!env.BROWSER) {
+    console.log('export: no BROWSER binding');
+    return rendering202();
+  }
+  if (!await claimRender(env, space, hash, source, mode)) return rendering202();
+  const out = await produce(env, env.BROWSER, space, hash, source, mode, markdown, url);
   if (!out) return rendering202();
 
   return rawBytes(request, env, key, name, false);

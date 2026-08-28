@@ -7,5 +7,11 @@ the QA run's "test the skill" framing, each graded on invoking
 path. `allowed_tools: []` on every case, so an eval agent can never upload or
 raise a 1Password prompt; the invoke-or-not decision it grades happens first.
 
+Read the report knowing that `--ablation` defaults to `with-without` whenever the
+target resolves a plugin, and that a `tool_used: Skill` grader under that mode is
+reported as a plugin-fired indicator rather than counted in the score. So
+`invoked-skill` is the signal here and `no-disk-spelunk` is the score. Pass
+`--ablation none` for a single arm that scores both.
+
 `transforms/` is a different suite: live-model evals for `src/transforms/`,
-run by hand with `npm run eval:transforms` - its README has the how.
+run by hand with `npm run evals` - its README has the how.

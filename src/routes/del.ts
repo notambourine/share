@@ -21,10 +21,10 @@ async function adminAuthorized(
 
 /* DELETE /<space>/<hash>/: soft delete into _trash/ (90-day lifecycle rule purges).
    Deletion is the whole revoke story; a per-link denylist would cost a KV read per view.
-   Two credentials: a raw vault token, or a live `?c=` admin token. Sessions stay refused. */
+   Two credentials: a raw vault token, or a live `?c=` working-page token. */
 export async function del(request: Request, env: Env, space: string, hash: string): Promise<Response> {
   if (!(await adminAuthorized(request, env, space, hash))) {
-    const gate = await authorize(request, env, { need: 'vault', flavor: 'text' });
+    const gate = await authorize(request, env, { flavor: 'text' });
     if (gate instanceof Response) return gate;
   }
   const moved = await moveToTrash(env, space, hash);
