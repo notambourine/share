@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@cloudflare/puppeteer": "^1.4.0",
-    "@cloudflare/workers-types": "^5.20260830.1",
+    "@cloudflare/workers-types": "^5.20260831.1",
     "@highlightjs/cdn-assets": "11.12.0",
     "@marp-team/marpit": "^3.2.2",
     "@oxlint/plugins": "^1.80.0",
