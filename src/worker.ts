@@ -17,13 +17,14 @@ import { sweep } from './sweep';
    src/brand.ts, so no copy of the skill or the brand lives under public/. The
    landing page joins them because it wears the same header as every artifact
    shell, and that header inlines the lockup out of the bundle.
-   shell.css, print.css, and nt-code.css are this repo's own chrome and stay
-   static. Every other file under public/ must be named here or by a prefix
+   shell.css, print.css, nt-code.css, and nt-table.css are this repo's own chrome
+   and stay static. Every other file under public/ must be named here or by a prefix
    below - run_worker_first hands this router the whole origin, so a path it
    does not name 404s no matter what sits on disk. */
 const STATIC = new Set([
   '/robots.txt', '/llms.txt',
-  '/shell.css', '/print.css', '/nt-code.css', '/render.js', '/admin.js', '/print.js',
+  '/shell.css', '/print.css', '/nt-code.css', '/nt-table.css',
+  '/render.js', '/admin.js', '/print.js', '/table.js',
 ]);
 
 /* A space slug can never collide with these: isValidSpace rejects a leading

@@ -7,7 +7,8 @@ export const RESERVED = new Set([
   'up', 'f', 'd', '_trash',
   'llms.txt', 'SKILL.md', 'robots.txt', 'favicon.ico', 'favicon.svg',
   'apple-touch-icon.png', 'apple-touch-icon-precomposed.png',
-  'tokens.css', 'shell.css', 'print.css', 'render.js', 'admin.js', 'vendor', 'index.html',
+  'tokens.css', 'shell.css', 'print.css', 'nt-table.css',
+  'render.js', 'admin.js', 'table.js', 'vendor', 'index.html',
   'fonts', 'logo',
 ]);
 
@@ -58,7 +59,7 @@ export function normalizeUploadPath(raw: string): string | null {
   return parts.join('/');
 }
 
-export type Kind = 'image' | 'video' | 'svg' | 'md' | 'html' | 'code' | 'other';
+export type Kind = 'image' | 'video' | 'svg' | 'md' | 'html' | 'code' | 'table' | 'other';
 
 const IMAGE = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'ico', 'bmp']);
 const VIDEO = new Set(['mp4', 'webm', 'mov', 'm4v']);
@@ -66,8 +67,12 @@ const CODE = new Set([
   'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'json', 'jsonc', 'css', 'scss',
   'py', 'rb', 'go', 'rs', 'java', 'kt', 'swift', 'c', 'h', 'cpp', 'hpp',
   'sh', 'bash', 'zsh', 'sql', 'yaml', 'yml', 'toml', 'xml', 'ini', 'txt',
-  'diff', 'patch', 'graphql', 'proto', 'tf', 'dockerfile', 'log', 'csv',
+  'diff', 'patch', 'graphql', 'proto', 'tf', 'dockerfile', 'log',
 ]);
+/* Delimited data, which reads as a grid rather than as source. Papa sniffs which
+   delimiter a file actually uses, so the extension only has to say "this is a
+   table" - a .csv exported with semicolons still lands in the right shell. */
+const TABLE = new Set(['csv', 'tsv']);
 
 export function extOf(path: string): string {
   const base = path.slice(path.lastIndexOf('/') + 1);
@@ -83,6 +88,7 @@ export function kindOf(path: string): Kind {
   if (ext === 'svg') return 'svg';
   if (ext === 'md' || ext === 'markdown') return 'md';
   if (ext === 'html' || ext === 'htm') return 'html';
+  if (TABLE.has(ext)) return 'table';
   if (CODE.has(ext)) return 'code';
   return 'other';
 }
@@ -100,6 +106,7 @@ const TYPES = new Map([
   ['mjs', 'text/javascript; charset=utf-8'], ['cjs', 'text/javascript; charset=utf-8'],
   ['json', 'application/json; charset=utf-8'], ['jsonc', 'application/json; charset=utf-8'],
   ['txt', 'text/plain; charset=utf-8'], ['csv', 'text/csv; charset=utf-8'],
+  ['tsv', 'text/tab-separated-values; charset=utf-8'],
   ['xml', 'application/xml; charset=utf-8'], ['pdf', 'application/pdf'],
   ['yaml', 'text/plain; charset=utf-8'], ['yml', 'text/plain; charset=utf-8'],
   ['zip', 'application/zip'], ['gz', 'application/gzip'], ['tar', 'application/x-tar'],

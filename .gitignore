@@ -19,6 +19,7 @@ node_modules/
 /public/render.js
 /public/admin.js
 /public/print.js
+/public/table.js
 /public/fonts/
 /public/logo/
 

@@ -10,6 +10,7 @@ import { exportArtifact } from './export';
 import { rawBytes } from '../lib/bytes';
 import { fileShell, indexShell, errorShell, adminShell, type ShellCommon } from '../render/shell';
 import { renderCode, renderSource } from '../render/markdown';
+import { parseTable, dataBlock } from '../render/csv';
 import { ADMIN_CSP, htmlResponse, jsonResponse, wantsJson } from '../lib/http';
 import { now } from '../lib/clock';
 
@@ -17,6 +18,15 @@ import { now } from '../lib/clock';
     highlighting them would spend real CPU on a file nobody reads in a browser.
     `?raw` still hands over every byte. */
 const MAX_INLINE_BYTES = 1024 * 1024;
+
+/** Higher than the code ceiling because the cost is different: the grid windows
+    its own rows, so what bounds a csv is the JSON riding the response, not what
+    the browser has to lay out. Roughly 75k rows, which gzips small. */
+const MAX_TABLE_BYTES = 5 * 1024 * 1024;
+
+/** Rows the grid holds. The byte cap is the real gate; this is the second one,
+    for a narrow file that clears 5 MB with far more rows than a reader scrolls. */
+const MAX_TABLE_ROWS = 200_000;
 
 /**
  * A markdown source, rendered here rather than in the reader's browser. Deck or
@@ -40,6 +50,15 @@ async function codeView(
   const text = await readPayload(env, space, hash, opts.path);
   if (text === null) return htmlResponse(errorShell(404), 404);
   return htmlResponse(fileShell(opts, { kind: 'code', html: renderCode(text, opts.path) }));
+}
+
+async function tableView(
+  env: Env, space: string, hash: string, opts: ShellCommon,
+): Promise<Response> {
+  const text = await readPayload(env, space, hash, opts.path);
+  if (text === null) return htmlResponse(errorShell(404), 404);
+  const table = parseTable(text, MAX_TABLE_ROWS);
+  return htmlResponse(fileShell(opts, { kind: 'table', table, json: dataBlock(table) }));
 }
 
 export async function serve(
@@ -148,6 +167,10 @@ export async function serve(
       return file.size > MAX_INLINE_BYTES
         ? htmlResponse(fileShell(opts, { kind: 'download' }))
         : markdownView(env, space, hash, opts);
+    case 'shell-table':
+      return file.size > MAX_TABLE_BYTES
+        ? htmlResponse(fileShell(opts, { kind: 'download' }))
+        : tableView(env, space, hash, opts);
     case 'shell-download': return htmlResponse(fileShell(opts, { kind: 'download' }));
     default:
       return rawBytes(request, env, payloadKey(space, hash, filePath), filePath, mode === 'attachment');

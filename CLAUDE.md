@@ -18,6 +18,14 @@
 - Mermaid is `src/render/mermaid.ts` over `beautiful-mermaid`; upstream mermaid
   measures through `getBBox()`, so never reach for it. Its colors are `var()`s off
   the golden set, and none may name the token it sets.
+- A `.csv` or `.tsv` renders as a grid: the Worker parses it (`src/render/csv.ts`)
+  and ships the first 50 rows as markup plus every row as a
+  `<script type="application/json">` data block, which Tabulator reads in
+  `src/client/table.ts`. That block is the one page whose rows the client draws;
+  it still arrives on the GET, so the no-fetch and no-poll rules hold. Never swap
+  it for a fetch, and never let the static rows go — they are the fallback when a
+  decode fails. Tabulator's stock themes are hardcoded hex and never ship;
+  `public/nt-table.css` is the golden-set port that `npm run brand` gates.
 - Every HTML page comes from `layout()` (`src/render/shell.tsx`), the landing page
   included. Never add a second page under `public/`.
 - `hono/jsx` escapes every filename; never escape by hand, and use `raw()` only for

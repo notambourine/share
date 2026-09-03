@@ -18,6 +18,7 @@ const ENTRIES = [
   ['src/client/render.ts', 'public/render.js'],
   ['src/client/admin.ts', 'public/admin.js'],
   ['src/client/print.ts', 'public/print.js'],
+  ['src/client/table.ts', 'public/table.js'],
 ];
 
 /* Imported here, not at the top, to match vendor.mjs: a script that runs under
