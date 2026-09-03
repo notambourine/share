@@ -1,16 +1,10 @@
-/* The only script a shell loads. Every page arrives rendered from the Worker, so
-   what is left here is the part that is actually interactive: the copy button and
-   deck navigation. */
+/* What most shells load. Every page arrives rendered from the Worker, so what is
+   left here is the part that is actually interactive: the copy button and deck
+   navigation. The grid page loads table.js instead and shares the button. */
 
-const copy = document.querySelector('[data-copy]');
-if (copy) {
-  copy.addEventListener('click', () => {
-    void navigator.clipboard.writeText(location.origin + location.pathname).then(() => {
-      copy.textContent = 'copied';
-      setTimeout(() => { copy.textContent = 'copy link'; }, 1500);
-    });
-  });
-}
+import { wireCopy } from './copy';
+
+wireCopy();
 
 /**
  * One slide at a time, with the index in the hash so a link can point at slide 7.
@@ -62,6 +56,3 @@ function deck(host: Element): void {
 const host = document.querySelector('.deck');
 if (host) deck(host);
 
-/* Nothing to export, but tests/client/render.test.ts imports this for its side
-   effects and a script with no import or export is not a module. */
-export {};

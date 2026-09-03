@@ -20,6 +20,8 @@ import { formatsFor, stemOf } from '../lib/exportPath';
 import { fileSuffix } from '../lib/link';
 import { fmtSize } from '../lib/format';
 import { GENERATIONS, transformable } from '../transforms';
+import { SSR_ROWS } from './csv';
+import type { Table } from '../lib/table';
 import { LOCKUP } from '../brand';
 import { now } from '../lib/clock';
 
@@ -93,6 +95,11 @@ function layout({ title, body, head, bodyAttrs = {}, home = false, bar, script =
    nt-marp.css would leak bare `section` rules onto the rest of the page. */
 const CODE_CSS = <link rel="stylesheet" href="/nt-code.css" />;
 
+/* Tabulator's own themes are hardcoded hex from end to end, so none of them
+   ships: this is the grid dressed in the golden set, and `npm run brand` reads
+   it like any other stylesheet this repo writes. */
+const TABLE_CSS = <link rel="stylesheet" href="/nt-table.css" />;
+
 function fileName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1) || path;
 }
@@ -118,6 +125,9 @@ export type ShellView =
   | { kind: 'video' | 'svg'; posterHref?: string }
   | { kind: 'md' | 'code'; html: string }
   | { kind: 'slides'; html: string; css: string }
+  /** A grid. `table` is the first-window markup, `json` every row the grid
+      reads; both ride this one response. */
+  | { kind: 'table'; table: Table; json: string }
   | { kind: 'download' };
 
 /** The card's picture. An image is its own poster, a video shows the frame the
@@ -161,6 +171,70 @@ function ogTags(o: ShellCommon, image: string | undefined): Child[] {
 /** Filename plus size, the caption every media shell carries. */
 function caption(name: string, size?: number): Child {
   return <p class="caption">{size ? `${name} · ${fmtSize(size)}` : name}</p>;
+}
+
+/**
+ * The grid page. Three things ride one response: the toolbar the grid wires
+ * itself into, the first rows as plain markup, and every row as a JSON data
+ * block. `type="application/json"` is not executable, so `script-src 'self'`
+ * lets it through where an inline `<script>` would be blocked.
+ *
+ * The static table is what a crawler and a no-JS reader get, and what paints
+ * first; public/table.js drops it once the grid has mounted. It is deliberately
+ * a window and not the file - a second full copy of the rows in markup would
+ * roughly triple the page for readers who never see it.
+ */
+function tableBody(name: string, size: number | undefined, rawHref: string, t: Table, json: string): Child {
+  const counts = `${t.total.toLocaleString()} ${t.total === 1 ? 'row' : 'rows'} · ${t.cols.length} ${
+    t.cols.length === 1 ? 'column' : 'columns'}`;
+  const capped = t.rows.length < t.total;
+  return (
+    <div class="doc grid">
+      <p class="caption">{[name, size ? fmtSize(size) : '', counts].filter(Boolean).join(' · ')}</p>
+      <div class="tablebar">
+        <input class="tsearch" type="search" data-search placeholder="search every column"
+          aria-label="search every column" autocomplete="off" />
+        <label class="tgroup">
+          <span>group by</span>
+          <select data-group>
+            <option value="">nothing</option>
+            {t.cols.map((c) => <option value={c.field}>{c.name}</option>)}
+          </select>
+        </label>
+        <span class="spacer"></span>
+        <span class="caption" data-shown></span>
+        <a class="abtn abtn-ghost" href={rawHref} download={name}>csv</a>
+      </div>
+      {capped ? (
+        <p class="caption warn">
+          {`showing the first ${t.rows.length.toLocaleString()} rows of ${
+            t.total.toLocaleString()}. The csv download has all of them.`}
+        </p>
+      ) : null}
+      {t.problems.length === 0 ? null : (
+        <p class="caption warn">{t.problems.join(' · ')}</p>
+      )}
+      {/* Two elements, not one: Tabulator turns the node it is given into
+          `.tabulator` and sets its height inline, so the box that owns the
+          height has to be the parent it cannot claim. */}
+      <div class="gridmount"><div data-grid></div></div>
+      <div class="gridfallback" data-fallback>
+        <table>
+          <thead>
+            <tr>{t.cols.map((c) => <th scope="col">{c.name}</th>)}</tr>
+          </thead>
+          <tbody>
+            {t.rows.slice(0, SSR_ROWS).map((row) => (
+              <tr>{row.map((cell) => <td>{cell === null ? '' : String(cell)}</td>)}</tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* Already serialized, and `</script` already escaped, so it must not be
+          escaped a second time - JSX would turn every quote into an entity. */}
+      <script type="application/json" data-rows>{raw(json)}</script>
+    </div>
+  );
 }
 
 export function fileShell(o: ShellCommon, view: ShellView): string {
@@ -228,6 +302,14 @@ export function fileShell(o: ShellCommon, view: ShellView): string {
         head: [og, CODE_CSS],
         bodyAttrs,
         body: <article class="doc prose">{raw(view.html)}</article>,
+      });
+    case 'table':
+      return layout({
+        title: name,
+        head: [og, TABLE_CSS],
+        bodyAttrs,
+        script: '/table.js',
+        body: tableBody(name, size, rawHref, view.table, view.json),
       });
     case 'slides':
       return layout({
@@ -474,6 +556,9 @@ function tilesFor(meta: Meta): Tile[] {
         break;
       case 'html':
         tiles.push(...pageTiles(f.path, stemTag));
+        break;
+      case 'table':
+        tiles.push({ target: encoded, label: fileName(f.path), sub: 'sortable grid, opens in a tab', thumb: srcThumb(fileName(f.path)), fmt: 'csv' });
         break;
       case 'code':
       case 'other':

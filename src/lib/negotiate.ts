@@ -5,7 +5,7 @@ export type ViewMode =
   | 'attachment'   // the bytes, Content-Disposition: attachment
   | 'page'         // uploaded HTML served as itself
   | 'shell-image' | 'shell-video' | 'shell-svg'
-  | 'shell-code' | 'shell-md'
+  | 'shell-code' | 'shell-md' | 'shell-table'
   | 'shell-download';
 
 /**
@@ -64,6 +64,7 @@ export function viewModeFor(
     case 'video': return 'shell-video';
     case 'svg': return 'shell-svg';
     case 'md': return 'shell-md';
+    case 'table': return params.get('view') === 'source' ? 'shell-code' : 'shell-table';
     case 'code': return 'shell-code';
     case 'html': return params.get('view') === 'source' ? 'shell-code' : 'page';
     default: return 'shell-download';
