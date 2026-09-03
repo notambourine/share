@@ -42,7 +42,14 @@ function byDate(a: Cell, b: Cell): number {
   return x - y;
 }
 
-function columnDef(col: Column): ColumnDefinition {
+/** Gaps, and only gaps. A column every row filled has nothing to say down
+    here, and `count` under all six columns printed the row height six times. */
+function gaps(values: Cell[]): string {
+  const filled = values.filter((v) => v !== null && v !== '').length;
+  return filled === values.length ? '' : `${filled.toLocaleString()} filled`;
+}
+
+function columnDef(col: Column, index: number): ColumnDefinition {
   const numeric = col.type === 'number';
   return {
     title: col.name,
@@ -56,9 +63,10 @@ function columnDef(col: Column): ColumnDefinition {
     headerFilterParams: col.facets
       ? { values: col.facets, clearable: true, autocomplete: true, listOnEmpty: true }
       : { elementAttributes: { title: `filter ${col.name}` } },
-    /* A number column totals; the rest count. Something under every column
-       means the footer reads as a row rather than as scattered figures. */
-    bottomCalc: numeric ? 'sum' : 'count',
+    /* A number totals, the leading column names the row, and the rest stay
+       empty unless they have gaps to report. The rule on top of the row is
+       what makes it read as a summary; a figure in every cell is noise. */
+    bottomCalc: numeric ? 'sum' : index === 0 ? () => 'total' : gaps,
     bottomCalcParams: numeric ? { precision: 2 } : undefined,
     resizable: true,
     minWidth: 90,

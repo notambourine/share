@@ -27,6 +27,10 @@ body[data-kind="table"] .stage { justify-content: flex-start; }
   flex-wrap: wrap;
 }
 
+/* The one figure in the bar the grid worked out rather than read, so it takes
+   the accent the totals take and a filtered count speaks in the same voice. */
+.tablebar [data-shown] { color: var(--accent-fg); }
+
 .tsearch {
   flex: 1 1 16em;
   min-width: 12em;
@@ -82,10 +86,26 @@ body[data-kind="table"] .stage { justify-content: flex-start; }
   text-align: left;
   white-space: nowrap;
 }
-.gridfallback th { color: var(--fg1); font-weight: var(--fw-semibold); }
+.gridfallback th {
+  color: var(--fg1);
+  font-weight: var(--fw-semibold);
+  background: var(--accent-soft);
+  border-bottom: 2px solid var(--accent);
+}
 .gridfallback td { color: var(--fg2); }
 
-/* ---- Tabulator ---- */
+/* ---- Tabulator ----
+
+   Where the pink goes, and it is a rule rather than a taste: the accent marks
+   the chrome and the figures the grid worked out for itself - the header band,
+   the two rules that bracket it, the totals, the live row count - and never a
+   cell that came out of the file. So the reader can tell at a glance which
+   numbers are theirs and which are ours, and 200 rows of data stay legible
+   instead of reading as one pink smear.
+
+   --accent-soft is translucent, which is the whole trick: the sorted column
+   lays a second coat of the same token over the header's and comes out a step
+   deeper without a second value to keep in sync. */
 
 .tabulator {
   position: relative;
@@ -101,7 +121,7 @@ body[data-kind="table"] .stage { justify-content: flex-start; }
   position: relative;
   box-sizing: border-box;
   width: 100%;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 2px solid var(--accent);
   background: var(--bg-raised);
   color: var(--fg1);
   font-family: var(--font-accent);
@@ -122,7 +142,7 @@ body[data-kind="table"] .stage { justify-content: flex-start; }
   flex-direction: column;
   justify-content: flex-start;
   border-right: 1px solid var(--line-soft);
-  background: var(--bg-raised);
+  background: var(--accent-soft);
   text-align: left;
   vertical-align: bottom;
   overflow: hidden;
@@ -142,7 +162,18 @@ body[data-kind="table"] .stage { justify-content: flex-start; }
   vertical-align: bottom;
 }
 .tabulator .tabulator-header .tabulator-col.tabulator-sortable .tabulator-col-title { padding-right: 22px; }
-.tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover { background: var(--bg-input); cursor: pointer; }
+.tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover { cursor: pointer; }
+
+/* The second coat, on the content box rather than the column, so it layers over
+   the band instead of replacing it. Tabulator writes `none` on the other
+   sortable columns, so the attribute alone names the one being sorted by. */
+.tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover .tabulator-col-content,
+.tabulator .tabulator-header .tabulator-col:is([aria-sort=ascending], [aria-sort=descending]) .tabulator-col-content {
+  background: var(--accent-soft);
+}
+.tabulator .tabulator-header .tabulator-col:is([aria-sort=ascending], [aria-sort=descending]) {
+  color: var(--accent-fg);
+}
 
 /* Triangles, drawn as borders the way the stock themes draw them: the arrow is
    a zero-size box and the visible edge is one border. `transparent` is not a
@@ -236,7 +267,9 @@ body[data-kind="table"] .stage { justify-content: flex-start; }
 /* Zebra off the raised surface rather than a tint of its own, so the stripe
    survives a theme swap with the rest of the chrome. */
 .tabulator-row.tabulator-row-even { background: var(--bg-raised); }
-.tabulator-row:hover { background: var(--bg-input); }
+/* An inset edge rather than a border: the row is measured by the virtual DOM
+   and a border on hover would move every row below it by a pixel. */
+.tabulator-row:hover { background: var(--bg-input); box-shadow: inset 2px 0 0 var(--accent); }
 
 .tabulator-row .tabulator-cell {
   display: inline-block;
@@ -252,18 +285,23 @@ body[data-kind="table"] .stage { justify-content: flex-start; }
 }
 
 /* The total row. Pinned by Tabulator into its own holder outside the scrolling
-   table, which is what keeps it on screen at row 200,000. */
+   table, which is what keeps it on screen at row 200,000. The figures read as
+   accent text, which is the one place a number here is worth calling out. */
 .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-calcs,
 .tabulator .tabulator-footer .tabulator-calcs-holder .tabulator-row {
   background: var(--bg-raised);
-  color: var(--fg1);
+  color: var(--accent-fg);
   font-weight: var(--fw-semibold);
 }
+/* The per-group totals, which arrive once per group: a grey rule, so a file
+   grouped into thirty of them does not come back thirty pink lines. */
 .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-calcs.tabulator-calcs-bottom {
   border-top: 2px solid var(--line);
 }
+/* The pink rule the header's is answered by, and the reason the row below it
+   needs no label in every cell to read as a summary. */
 .tabulator .tabulator-footer {
-  border-top: 1px solid var(--line);
+  border-top: 2px solid var(--accent);
   background: var(--bg-raised);
   color: var(--fg1);
   white-space: nowrap;
@@ -274,7 +312,6 @@ body[data-kind="table"] .stage { justify-content: flex-start; }
   width: 100%;
   text-align: left;
   overflow: hidden;
-  border-top: 1px solid var(--line-soft);
   background: var(--bg-raised);
 }
 .tabulator .tabulator-footer .tabulator-calcs-holder .tabulator-row { display: inline-block; }
@@ -302,6 +339,7 @@ body[data-kind="table"] .stage { justify-content: flex-start; }
   padding: var(--sp-2) var(--sp-3);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
   background: var(--bg-input);
   color: var(--fg1);
   font-family: var(--font-accent);
