@@ -19,20 +19,20 @@
   },
   "devDependencies": {
     "@cloudflare/puppeteer": "^1.4.0",
-    "@cloudflare/workers-types": "^5.20260901.1",
+    "@cloudflare/workers-types": "^5.20260902.1",
     "@highlightjs/cdn-assets": "11.12.0",
     "@marp-team/marpit": "^3.2.2",
-    "@oxlint/plugins": "^1.80.0",
-    "@types/node": "^26.4.0",
+    "@oxlint/plugins": "^1.81.0",
+    "@types/node": "^26.4.1",
     "@types/papaparse": "5.5.2",
     "@types/tabulator-tables": "6.3.6",
     "esbuild": "^0.28.2",
-    "happy-dom": "^20.12.0",
+    "happy-dom": "^20.13.1",
     "marked": "18.0.11",
-    "oxlint": "^1.80.0",
+    "oxlint": "^1.81.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
-    "wrangler": "^4.127.1"
+    "wrangler": "^4.128.0"
   },
   "overrides": {
     "@puppeteer/browsers": "^3.2.0"
