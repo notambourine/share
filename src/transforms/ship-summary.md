@@ -11,7 +11,7 @@ Before the cover content, add `<!-- footer: acme &middot; august 2026 -->` using
 
 - Cover: `<!-- _class: lead -->`, `# <project> - <period>`, and one line with the week's headline.
 - Separate slides with `---` on its own line.
-- `## Shipped`: use one slide per theme and at most five bullets. State reader-visible outcomes, not implementation. Omit work without a visible effect.
+- `## Shipped`: use one slide per theme and at most five bullets. State what changed and what the client can now do, not implementation. Connect work to supplied commercial and operational results. Omit work without a visible effect.
 - `## In flight`: include only supplied active work and what it awaits.
 - `## Blocked`: include only supplied blockers and who must act.
 - End with `## Next` using supplied plans.

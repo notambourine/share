@@ -18,9 +18,9 @@ export const GENERATIONS: Generation[] = [
   { name: 'agenda', label: 'agenda', prompt: agendaPrompt,
     sub: 'a meeting someone could run from it' },
   { name: 'renewal', label: 'renewal summary', prompt: renewalPrompt,
-    sub: 'what the engagement delivered, for the client' },
+    sub: 'client outcomes, evidence, and renewal terms' },
   { name: 'ship-summary', label: 'ship summary', prompt: shipSummaryPrompt,
-    sub: "the week's work, deck-shaped" },
+    sub: 'what changed this week and what comes next' },
 ];
 
 const PROMPTS = new Map(GENERATIONS.map((g) => [g.name, g.prompt]));

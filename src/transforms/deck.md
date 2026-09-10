@@ -12,7 +12,7 @@ Before the cover content, add `<!-- footer: acme &middot; august 2026 -->` using
 - Cover: `<!-- _class: lead -->`, `# <title>`, and one line explaining the purpose. Include any supplied date.
 - Separate slides with `---` on its own line.
 - Use one idea, one `##` heading, and at most five one-line bullets per slide.
-- Order the story: current state, events or proposal, evidence, next steps.
+- Lead with the supplied objective. Then order the story: current state, events or proposal, evidence, next steps.
 - Start each story section with a divider slide.
 - Keep tables below six rows. Keep only the useful rows when needed.
 - Give an important number its own claim slide.
