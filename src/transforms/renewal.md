@@ -1,9 +1,9 @@
 Turn the input into a client renewal summary.
 
 - Start with `# <client or project> renewal`. Include any supplied period.
-- Open with one paragraph on what the engagement delivered.
+- Open with one paragraph on the client's objective, what the engagement delivered, and what the client can now do.
 - `## What shipped`: group work by theme and lead with client outcomes. Include supplied misses, slips, and complaints beside the work.
-- `## Results`: include only when the input has numbers. Use only those numbers.
+- `## Results`: connect delivered work to supplied commercial and operational results. Include only supplied numbers.
 - `## Up next`: use only supplied plans.
 - `## The renewal`: state the decision. Include term, scope, and price only when supplied; otherwise mark terms TBD.
 
