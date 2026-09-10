@@ -42,6 +42,7 @@ const MANIFEST = <link rel="manifest" href="/logo/site.webmanifest" />;
 interface PageOpts {
   title: string;
   body: Child;
+  description?: string;
   head?: Child;
   bodyAttrs?: Record<string, string>;
   /** The landing page: no copy button, no renderer, and its own bare title. */
@@ -57,13 +58,14 @@ interface PageOpts {
  * element calls its toString(). A doctype is not an element, so it cannot be
  * JSX and rides as the template's first line.
  */
-function layout({ title, body, head, bodyAttrs = {}, home = false, bar, script = '/render.js' }: PageOpts): string {
+function layout({ title, body, description, head, bodyAttrs = {}, home = false, bar, script = '/render.js' }: PageOpts): string {
   return `<!doctype html>\n${
     <html lang="en">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="robots" content="noindex, nofollow, noarchive, noimageindex" />
+        {description ? <meta name="description" content={description} /> : null}
         <title>{home ? title : `${title} · NoTambourine`}</title>
         <link rel="stylesheet" href="/tokens.css" />
         <link rel="stylesheet" href="/shell.css" />
@@ -452,19 +454,20 @@ export function indexShell(index: ArtifactIndex, meta: Meta, t: number = now()):
  * The bare origin. Whoever lands here followed a share link that expired, or
  * trimmed one back to the domain, so the reader is a prospective client and the
  * copy sells the firm rather than the subdomain. Marketing register, so it says
- * "you"; the fixtures it leans on are in the golden set's SKILL.md.
+ * "you"; its positioning follows the golden set's voice reference.
  */
 export function homeShell(): string {
   return layout({
     home: true,
     title: 'NoTambourine',
+    description: 'Senior engineers working inside your team to build the systems and ways of working your business needs next.',
     body: (
       <div class="card">
-        <p class="eyebrow">boutique AI-enabled engineering</p>
-        <h2>Senior engineers. No <em>tambourine</em>.</h2>
-        <p>Your growth is capped by the stack, not by the ambition. We embed with your team as a hands-on operating partner and put the work in prod.</p>
-        <p>Scope holds, so the estimate is worth something. Tell us what you're building and we'll write back the same day.</p>
-        <a class="btn" href="https://notambourine.com">See how we work</a>
+        <p class="eyebrow">senior engineers, inside your team</p>
+        <h2>Build the systems and ways of working your business needs <em>next</em>.</h2>
+        <p>NoTambourine brings senior engineers into your team to lead delivery.</p>
+        <p>Automate routine work and connect the systems your team relies on.</p>
+        <a class="btn" href="https://notambourine.com">Start a conversation</a>
       </div>
     ),
   });
