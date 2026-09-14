@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: notambourine/wormhook@1270e6a1e7dc2fad0a0abe738a1c56c6e6496cff # v0.31.1
+      - uses: notambourine/wormhook@0ba29092297f7f790eaa73cd2108940b10c99b49 # v0.32.0
         with:
           # No `npm ci` step above: the Socket app owns the dep tree, so this gate
           # is here for Tier 0+1: lifecycle scripts, loaders, CI-config poisoning.
@@ -74,7 +74,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
       - name: zizmor workflow audit
         # `|| true`: zizmor exits 14 on findings, which would abort before the
         # filter runs. Then fail CLOSED on non-JSON: a gate must not wave a PR
