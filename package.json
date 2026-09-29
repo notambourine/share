@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@cloudflare/puppeteer": "^1.4.0",
-    "@cloudflare/workers-types": "^5.20260926.1",
+    "@cloudflare/workers-types": "^5.20260927.1",
     "@highlightjs/cdn-assets": "11.12.0",
     "@marp-team/marpit": "^3.2.3",
     "@oxlint/plugins": "^1.85.0",
@@ -32,7 +32,7 @@
     "oxlint": "^1.85.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2",
-    "wrangler": "^4.141.0"
+    "wrangler": "^4.142.0"
   },
   "overrides": {
     "@puppeteer/browsers": "^3.2.0"
