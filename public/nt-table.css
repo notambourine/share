@@ -267,9 +267,7 @@ body[data-kind="table"] .stage { justify-content: flex-start; }
 /* Zebra off the raised surface rather than a tint of its own, so the stripe
    survives a theme swap with the rest of the chrome. */
 .tabulator-row.tabulator-row-even { background: var(--bg-raised); }
-/* An inset edge rather than a border: the row is measured by the virtual DOM
-   and a border on hover would move every row below it by a pixel. */
-.tabulator-row:hover { background: var(--bg-input); box-shadow: inset 2px 0 0 var(--accent); }
+.tabulator-row:hover { background: var(--bg-input); }
 
 .tabulator-row .tabulator-cell {
   display: inline-block;
@@ -339,7 +337,6 @@ body[data-kind="table"] .stage { justify-content: flex-start; }
   padding: var(--sp-2) var(--sp-3);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
   background: var(--bg-input);
   color: var(--fg1);
   font-family: var(--font-accent);
