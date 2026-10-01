@@ -460,13 +460,13 @@ export function homeShell(): string {
   return layout({
     home: true,
     title: 'NoTambourine',
-    description: 'Senior engineers working inside your team to build the systems and ways of working your business needs next.',
+    description: 'Senior engineers using AI inside your team to ship the systems your business needs next.',
     body: (
       <div class="card">
         <p class="eyebrow">senior engineers, inside your team</p>
-        <h2>Build the systems and ways of working your business needs <em>next</em>.</h2>
-        <p>NoTambourine brings senior engineers into your team to lead delivery.</p>
-        <p>Automate routine work and connect the systems your team relies on.</p>
+        <h2>Ship the systems your business needs <em>next</em>.</h2>
+        <p>NoTambourine brings senior engineers into your team to own delivery and build with AI.</p>
+        <p>Launch a product, improve a core system, automate routine work, or connect your systems and data.</p>
         <a class="btn" href="https://notambourine.com">Start a conversation</a>
       </div>
     ),
