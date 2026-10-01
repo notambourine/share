@@ -13,7 +13,7 @@ Before the cover content, add `<!-- footer: acme &middot; august 2026 -->` using
 - Separate slides with `---` on its own line.
 - `## Shipped`: use one slide per theme and at most five bullets. State what changed and what the client can now do, not implementation. Connect work to supplied commercial and operational results. Omit work without a visible effect.
 - `## In flight`: include only supplied active work and what it awaits.
-- `## Blocked`: include only supplied blockers and who must act.
+- `## Blocked`: include only supplied blockers, who must act, and what waiting, delaying, or not deciding costs.
 - End with `## Next` using supplied plans.
 
 Combine commits, standups, and transcripts by theme. Exclude flags, cohorts, datastores, shard counts, dependency bumps, commit subjects, and ticket numbers unless marked client-facing. Use only supplied numbers.

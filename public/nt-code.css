@@ -26,8 +26,8 @@
 
 /* A diagram rides in a `<pre>` because that is the only shape markdown-it hands
    back untouched (src/render/mermaid.ts). It is not a code block, so shell.css
-   and print.css both spell their `pre` box `:not(.nt-diagram)` rather than have
-   this file undo one. */
+   and nt-prose.css both keep their `pre` box off it rather than have this file
+   undo one. */
 pre.nt-diagram { margin: var(--sp-6) 0; break-inside: avoid; }
 /* The svg carries its own width and height, so `max-width` is what lets a wide
    diagram shrink to the measure instead of pushing the page sideways. The

@@ -96,6 +96,7 @@ function layout({ title, body, description, head, bodyAttrs = {}, home = false, 
    case and gets inlined: it is scoped to that deck's slide sections, and linking
    nt-marp.css would leak bare `section` rules onto the rest of the page. */
 const CODE_CSS = <link rel="stylesheet" href="/nt-code.css" />;
+const PROSE_CSS = <link rel="stylesheet" href="/nt-prose.css" />;
 
 /* Tabulator's own themes are hardcoded hex from end to end, so none of them
    ships: this is the grid dressed in the golden set, and `npm run brand` reads
@@ -301,9 +302,9 @@ export function fileShell(o: ShellCommon, view: ShellView): string {
     case 'md':
       return layout({
         title: name,
-        head: [og, CODE_CSS],
+        head: [og, CODE_CSS, PROSE_CSS],
         bodyAttrs,
-        body: <article class="doc prose">{raw(view.html)}</article>,
+        body: <article class="doc nt-prose">{raw(view.html)}</article>,
       });
     case 'table':
       return layout({
@@ -460,13 +461,13 @@ export function homeShell(): string {
   return layout({
     home: true,
     title: 'NoTambourine',
-    description: 'Senior engineers working inside your team to build the systems and ways of working your business needs next.',
+    description: 'Senior engineers using AI inside your team to ship the systems your business needs next.',
     body: (
       <div class="card">
         <p class="eyebrow">senior engineers, inside your team</p>
-        <h2>Build the systems and ways of working your business needs <em>next</em>.</h2>
-        <p>NoTambourine brings senior engineers into your team to lead delivery.</p>
-        <p>Automate routine work and connect the systems your team relies on.</p>
+        <h2>Ship the systems your business needs <em>next</em>.</h2>
+        <p>NoTambourine brings senior engineers into your team to own delivery and build with AI.</p>
+        <p>Launch a product, improve a core system, automate routine work, or connect your systems and data.</p>
         <a class="btn" href="https://notambourine.com">Start a conversation</a>
       </div>
     ),
