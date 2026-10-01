@@ -87,9 +87,9 @@
   border-radius: var(--r-xs);
   padding: 0.05em 0.35em;
 }
-/* `:not(.nt-diagram)`: a ```mermaid fence lands in a `<pre>` too (see
-   nt-code.css), and a drawn diagram wants none of the code-block box. */
-.nt-prose pre:not(.nt-diagram) {
+/* A renderer that draws a diagram into a `<pre>` (a mermaid fence, say) wants
+   none of the code-block box. */
+.nt-prose pre:not(:has(> svg)) {
   font-size: 0.8125em;
   line-height: 1.6;
   background: var(--bg-card);
@@ -130,5 +130,5 @@
   .nt-prose :is(h1, h2, h3, h4) { break-after: avoid; break-inside: avoid; }
   .nt-prose :is(p, li) { orphans: 2; widows: 2; }
   .nt-prose :is(pre, table, blockquote, img) { break-inside: avoid; }
-  .nt-prose pre:not(.nt-diagram) { white-space: pre-wrap; word-break: break-word; }
+  .nt-prose pre:not(:has(> svg)) { white-space: pre-wrap; word-break: break-word; }
 }
