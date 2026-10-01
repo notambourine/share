@@ -99,7 +99,7 @@ function keyOf(source: string): string {
  *
  * The `<pre>` is markdown-it's price, not a choice: it uses a fence hook's
  * return verbatim only when the string opens with `<pre`, and wraps anything
- * else in `<pre><code>`. shell.css and print.css spell their code-block box
+ * else in `<pre><code>`. shell.css and nt-prose.css spell their code-block box
  * `pre:not(.nt-diagram)` because of it. Both renderers get the same wrapper, so
  * a deck and its own PDF cannot disagree about the markup.
  */

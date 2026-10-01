@@ -25,9 +25,8 @@ import { renderSource } from './markdown';
 /** 1152x648 is 16:9 at the same aspect as Marpit's 1280x720 slide box. */
 const DECK_PAGE = { width: '1152px', height: '648px' };
 
-/* The side margins are the document's measure, because print.css sets none: at
-   10.5pt JetBrains Mono, 24mm gutters leave 162mm of text, which is 71
-   characters. 16mm gave 78, past the readable ceiling. */
+/* nt-prose.css caps the measure at 40em, 66 characters of 10.5pt JetBrains Mono
+   or 148mm; 24mm gutters leave 162mm, so the column sits inside the page box. */
 const DOC_MARGIN = { top: '18mm', right: '24mm', bottom: '20mm', left: '24mm' };
 
 export function pdfOptionsFor(mode: RenderMode, title: string): PDFOptions {
@@ -77,7 +76,7 @@ const FACES: { file: string; family: string; style: string; weight: string }[] =
 
 /* tokens.css is missing here because it is not an asset: src/brand.ts imports it
    from the golden set and it is already a string in this bundle. */
-const SHEETS = ['/nt-code.css', '/print.css'];
+const SHEETS = ['/nt-code.css', '/nt-prose.css', '/print.css'];
 
 function base64(bytes: Uint8Array): string {
   let binary = '';
@@ -170,7 +169,7 @@ export async function printHtml(env: Env, opts: PrintOpts): Promise<string> {
       </head>
       <body>
         {mode === 'slides' ? null : <header class="print-mark">{raw(LOCKUP)}</header>}
-        <main id="content">{raw(out.html)}</main>
+        <main id="content" class={mode === 'slides' ? undefined : 'nt-prose'}>{raw(out.html)}</main>
         <script data-transient="" src={`${origin}${PRINT}`}></script>
       </body>
     </html>

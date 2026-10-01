@@ -15,7 +15,7 @@
 /**
  * Derived artifacts cache under `d/v<N>/`, and they are all binary: PDFs and
  * PNGs, the two formats a print engine has to produce. Bump on any change to
- * tokens.css, nt-marp.css, print.css, or the print HTML; old versions age out
+ * tokens.css, nt-marp.css, nt-prose.css, print.css, or the print HTML; old versions age out
  * with their upload.
  *
  * A stored render is what forces a bump to be a human remembering, which is why
@@ -29,7 +29,7 @@
  * follows whichever stamp is newest, so it names different bytes over time and
  * must never be cached as if it did not.
  */
-export const CACHE_VERSION = 6;
+export const CACHE_VERSION = 7;
 
 /** The two spellings, which are also the two extensions a render lands under. */
 export type ExportFormat = 'pdf' | 'png';

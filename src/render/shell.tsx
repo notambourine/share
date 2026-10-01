@@ -96,6 +96,7 @@ function layout({ title, body, description, head, bodyAttrs = {}, home = false, 
    case and gets inlined: it is scoped to that deck's slide sections, and linking
    nt-marp.css would leak bare `section` rules onto the rest of the page. */
 const CODE_CSS = <link rel="stylesheet" href="/nt-code.css" />;
+const PROSE_CSS = <link rel="stylesheet" href="/nt-prose.css" />;
 
 /* Tabulator's own themes are hardcoded hex from end to end, so none of them
    ships: this is the grid dressed in the golden set, and `npm run brand` reads
@@ -301,9 +302,9 @@ export function fileShell(o: ShellCommon, view: ShellView): string {
     case 'md':
       return layout({
         title: name,
-        head: [og, CODE_CSS],
+        head: [og, CODE_CSS, PROSE_CSS],
         bodyAttrs,
-        body: <article class="doc prose">{raw(view.html)}</article>,
+        body: <article class="doc nt-prose">{raw(view.html)}</article>,
       });
     case 'table':
       return layout({

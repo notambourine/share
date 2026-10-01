@@ -74,65 +74,20 @@ body {
   max-width: 860px;
   align-self: center;
 }
-/* The document view: print.css's `.print-doc` on the dark canvas, so the same
-   words read the same way on screen and on paper. 40em of JetBrains Mono is 66
-   characters, which is the brand's measure; the PDF reaches the same band off
-   its page box, because print.css sets no width. A document reads top-down, so
-   this is the one shell that opts out of the stage's centering. */
+/* A document reads top-down, so it opts out of the stage's centering.
+   nt-prose.css carries everything inside it. */
 body[data-kind="md"] .stage { justify-content: flex-start; }
-
-.doc.prose { max-width: 40em; }
-/* One step down the ramp: the element scale is sized for marketing heroes, and
-   this keeps print.css's heading-to-body ratios. */
-.doc.prose h1 { font-size: var(--fs-h2); }
-.doc.prose h2 { font-size: var(--fs-h3); }
-.doc.prose h3 { font-size: var(--fs-lede); }
-.doc.prose :is(h1, h2, h3, h4) { margin-top: var(--sp-8); margin-bottom: var(--sp-3); }
-.doc.prose :is(h1, h2, h3, h4):first-child { margin-top: 0; }
-.doc.prose p, .doc.prose li { margin-bottom: var(--sp-3); }
-.doc.prose ul, .doc.prose ol { margin: 0 0 var(--sp-4); padding-left: 1.4em; }
-.doc.prose li::marker { color: var(--accent-text); }
-/* The box is the marker, so the bullet beside it is noise. */
-.doc.prose li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.4em; }
-.doc.prose input[type="checkbox"] { accent-color: var(--accent); margin-right: var(--sp-2); }
-.doc.prose del, .doc.prose s { color: var(--fg3); }
-.doc.prose img { max-width: 100%; border-radius: var(--r-sm); }
-.doc.prose blockquote {
-  margin: var(--sp-4) 0;
-  padding-left: var(--sp-4);
-  border-left: 2px solid var(--support);
-  color: var(--fg3);
-}
-
-/* `display: block` is what lets a wide table scroll itself: the render emits no
-   wrapper to hang the overflow on, and the page must never scroll sideways.
-   Hence `max-content` where print says `width: 100%` - a table on paper has a
-   page box to fill, one on screen has a measure to stay inside. */
-.doc.prose table {
-  display: block;
-  width: max-content;
-  max-width: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  margin: 0 0 var(--sp-4);
-}
-.doc.prose :is(th, td) {
-  text-align: left;
-  padding: var(--sp-2) var(--sp-3);
-  border-bottom: 1px solid var(--line-soft);
-}
-.doc.prose th { color: var(--fg1); font-weight: var(--fw-semibold); }
 
 /* `:not(.nt-diagram)`: a ```mermaid fence lands in a `<pre>` too (see
    nt-code.css), and a drawn diagram wants none of the code-block box. */
-.doc pre:not(.nt-diagram) {
+.doc.code pre:not(.nt-diagram) {
   background: var(--bg-card);
   border: 1px solid var(--line-soft);
   border-radius: var(--r-md);
   padding: var(--sp-5);
   overflow-x: auto;
 }
-.doc pre code {
+.doc.code pre code {
   background: none;
   color: var(--fg2);
   padding: 0;
