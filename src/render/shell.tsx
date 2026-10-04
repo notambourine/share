@@ -13,6 +13,7 @@
 import type { Child } from 'hono/jsx';
 import { raw } from 'hono/html';
 import type { Meta } from '../lib/types';
+import { DEFAULT_ARTIFACT_DAYS } from '../lib/types';
 import type { ArtifactIndex, IndexFile, IndexRender } from '../lib/artifact';
 import { kindOf, extOf } from '../lib/keys';
 import type { ExportSpec } from '../lib/exportPath';
@@ -455,32 +456,31 @@ export function indexShell(index: ArtifactIndex, meta: Meta, t: number = now()):
 
 /**
  * The bare origin. Whoever lands here followed a share link that expired, or
- * trimmed one back to the domain, so the reader is a prospective client and the
- * copy sells the firm rather than the subdomain. Marketing register, so it says
- * "you"; its positioning follows the golden set's voice reference.
+ * trimmed one back to the domain, so the copy says what this host is and what
+ * to do about a dead link; the pitch lives on notambourine.com.
  */
 export function homeShell(): string {
   return layout({
     home: true,
-    title: 'Engineering you can see in the numbers.',
-    description: 'Senior engineers who join your team and lead delivery. We handle platform migrations, redesigns, site speed, and ongoing engineering.',
+    title: 'Share · NoTambourine',
+    description: 'Private links NoTambourine uses to send clients reports, decks, agendas, and files.',
     bodyAttrs: { class: 'home' },
     body: (
       <div class="home-col">
         <div class="home-intro">
-          <span class="eyebrow">Boutique AI-native engineering agency</span>
-          <h1 class="display">Engineering you can see in the <em>numbers</em>.</h1>
-          <p class="lede">NoTambourine puts senior engineers inside your team to lead delivery. We take
-            on platform migrations, redesigns, site speed work, and ongoing engineering.</p>
+          <span class="eyebrow">NoTambourine share</span>
+          <h1 class="display">Private links to client <em>work</em>.</h1>
+          <p class="lede">NoTambourine sends clients reports, decks, agendas, and files from here.
+            Each one has its own private link, and only people who have the link can open it.</p>
         </div>
         <div class="nt-card nt-card--support">
-          <span class="nt-badge nt-badge--mint"><span class="nt-badge__dot"></span>Recent result</span>
-          <p>After our most recent redesign launched, traffic rose 20% and conversion rate rose 20%
-            on top of it.</p>
+          <span class="nt-badge nt-badge--mint"><span class="nt-badge__dot"></span>Link not working?</span>
+          <p>Most links expire after {DEFAULT_ARTIFACT_DAYS} days. Nothing here is listed or
+            searchable, so ask your NoTambourine contact for a new link.</p>
         </div>
-        <p>We plan each project around the business result it should produce. Tell us what you want
-          to ship and when.</p>
-        <div><a class="nt-btn nt-btn--primary" href="https://notambourine.com">Start a conversation</a></div>
+        <p>A link opens in the browser, with no account or sign-in. Documents and decks also
+          download as PDF.</p>
+        <div><a class="nt-btn nt-btn--secondary" href="https://notambourine.com">About NoTambourine</a></div>
       </div>
     ),
   });
