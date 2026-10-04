@@ -69,6 +69,7 @@ export function layout({ title, body, description, head, bodyAttrs = {}, home = 
         {description ? <meta name="description" content={description} /> : null}
         <title>{home ? title : `${title} · NoTambourine`}</title>
         <link rel="stylesheet" href="/tokens.css" />
+        {home ? <link rel="stylesheet" href="/components.css" /> : null}
         <link rel="stylesheet" href="/shell.css" />
         {ICONS}
         {home ? MANIFEST : null}
@@ -86,7 +87,7 @@ export function layout({ title, body, description, head, bodyAttrs = {}, home = 
           )}
         </header>
         <main class="stage">{body}</main>
-        {home ? null : <script src={script} defer></script>}
+        {home ? HOME_FOOTER : <script src={script} defer></script>}
       </body>
     </html>
   }`;
@@ -463,17 +464,39 @@ export function homeShell(): string {
     home: true,
     title: 'Engineering you can see in the numbers.',
     description: 'Senior engineers who join your team and lead delivery. We handle platform migrations, redesigns, site speed, and ongoing engineering.',
+    bodyAttrs: { class: 'home' },
     body: (
-      <div class="card">
-        <p class="eyebrow">Boutique AI-native engineering agency</p>
-        <h2>Engineering you can see in the <em>numbers</em>.</h2>
-        <p>NoTambourine puts senior engineers inside your team to lead delivery. We take on platform migrations, redesigns, site speed work, and ongoing engineering. We plan each project around the business result it should produce.</p>
-        <p>After our most recent redesign launched, traffic rose 20% and conversion rate rose 20% on top of it.</p>
-        <a class="btn" href="https://notambourine.com">Start a conversation</a>
+      <div class="home-col">
+        <div class="home-intro">
+          <span class="eyebrow">Boutique AI-native engineering agency</span>
+          <h1 class="display">Engineering you can see in the <em>numbers</em>.</h1>
+          <p class="lede">NoTambourine puts senior engineers inside your team to lead delivery. We take
+            on platform migrations, redesigns, site speed work, and ongoing engineering.</p>
+        </div>
+        <div class="nt-card nt-card--support">
+          <span class="nt-badge nt-badge--mint"><span class="nt-badge__dot"></span>Recent result</span>
+          <p>After our most recent redesign launched, traffic rose 20% and conversion rate rose 20%
+            on top of it.</p>
+        </div>
+        <p>We plan each project around the business result it should produce. Tell us what you want
+          to ship and when.</p>
+        <div><a class="nt-btn nt-btn--primary" href="https://notambourine.com">Start a conversation</a></div>
       </div>
     ),
   });
 }
+
+/* Readers here are clients without SSO; the team links sit below the fold of
+   the pitch, and Access answers anyone else who follows one. */
+const HOME_FOOTER = (
+  <footer class="home-foot">
+    <span>For the team</span>
+    <a href="/admin/shipped">What shipped</a>
+    <a href="/admin/config">Clients and prompts</a>
+    <a href="/SKILL.md">Claude skill</a>
+    <a href="/llms.txt">API</a>
+  </footer>
+);
 
 /* ---- admin page (design B; mock: plan/admin-mock, approved 2026-08-16) ---- */
 

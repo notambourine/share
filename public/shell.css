@@ -108,6 +108,21 @@ body[data-kind="md"] .stage { justify-content: flex-start; }
   align-items: center;
 }
 
+/* Landing page: the kit's hello-world column, read top-down rather than centered. */
+.home .stage { align-items: stretch; justify-content: flex-start; padding: var(--sp-16) var(--sp-6) var(--sp-12); }
+.home-col { width: 100%; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--sp-6); }
+.home-intro { display: flex; flex-direction: column; gap: var(--sp-4); }
+.home-intro h1 { margin: 0; }
+.home-intro .lede { margin: 0; }
+.home-col .nt-card p { margin: var(--sp-2) 0 0; }
+.home-col > p { margin: 0; }
+.home-col .nt-btn, .home-col .nt-btn:hover { border-bottom: 0; }
+.home-foot { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-6); justify-content: center;
+  padding: var(--sp-6); border-top: 1px solid var(--line-soft);
+  font-family: var(--font-accent); font-size: var(--fs-caption); color: var(--fg3); }
+.home-foot a { color: var(--fg2); }
+.home-foot a:hover { color: var(--fg1); }
+
 .btn {
   display: inline-block;
   font-family: var(--font-accent);

@@ -148,6 +148,14 @@ describe('the shells keep their doctype and their chrome', () => {
     expect(fileShell({ path: 'a.png', rawHref: '/x?raw' }, { kind: 'image' })).not.toContain('rel="manifest"');
   });
 
+  it('links the team pages and the kit components from the landing page only', () => {
+    const home = homeShell();
+    expect(home).toContain('href="/admin/shipped"');
+    expect(home).toContain('href="/admin/config"');
+    expect(home).toContain('href="/components.css"');
+    expect(fileShell({ path: 'a.png', rawHref: '/x?raw' }, { kind: 'image' })).not.toContain('/components.css');
+  });
+
   it('presses the chip the stored expiry already is', () => {
     const forever = adminShell({
       meta: meta(['a.txt']),

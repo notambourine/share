@@ -22,6 +22,7 @@ import VARS from '@notambourine/brand-kit/vars.css';
 import LOGO_VARS from '@notambourine/brand-kit/logo-vars.css';
 import ELEMENTS from '@notambourine/brand-kit/elements.css';
 import DECK from '@notambourine/brand-kit/deck.css';
+import COMPONENTS from '@notambourine/brand-kit/components.css';
 /* Inline rather than `<img src="/logo/lockup.svg">`: a PDF header and an
    offline `.html` snapshot both have to carry the mark with no origin to fetch
    from, and inline is also the only form `fill: currentColor` can reach. */
@@ -59,6 +60,7 @@ export { DECK as DECK_THEME };
    deck built outside this Worker can link the same theme. */
 const BRAND_ROUTES = new Map([
   ['/tokens.css', TOKENS],
+  ['/components.css', COMPONENTS],
   ['/vendor/marp/nt-marp.css', DECK],
 ]);
 
