@@ -3,7 +3,7 @@
  * pure and unit tested. The admin tiles and the index page both read it, so a
  * new format is added here and nowhere else.
  *
- * Two spellings, `.pdf` and `.png`. Deck-or-document is never a suffix: it comes
+ * One spelling, `.pdf`. Deck-or-document is never a suffix: it comes
  * from the source's own content, every time, because the pages that print these
  * links generate them and a human typing `deck.slides.pdf` was the only reason a
  * grammar existed.
@@ -13,8 +13,8 @@
  */
 
 /**
- * Derived artifacts cache under `d/v<N>/`, and they are all binary: PDFs and
- * PNGs, the two formats a print engine has to produce. Bump on any change to
+ * Derived artifacts cache under `d/v<N>/`, and they are all PDFs, the one
+ * format a print engine has to produce. Bump on any change to
  * tokens.css, nt-marp.css, nt-prose.css, print.css, or the print HTML; old versions age out
  * with their upload.
  *
@@ -31,32 +31,24 @@
  */
 export const CACHE_VERSION = 7;
 
-/** The two spellings, which are also the two extensions a render lands under. */
-export type ExportFormat = 'pdf' | 'png';
+/** The spelling, which is also the extension a render lands under. */
+export type ExportFormat = 'pdf';
 
-/** What renders: `slides` one page per slide, `doc` A4 print HTML, `page` a
-    navigated upload (the uploaded HTML itself, loaded at its served URL). */
-export type RenderMode = 'slides' | 'doc' | 'page';
+/** What renders: `slides` one page per slide, `doc` A4 print HTML. */
+export type RenderMode = 'slides' | 'doc';
 
 interface FormatRow {
   suffix: string;
   format: ExportFormat;
-  /** Whether a markdown source offers it, and whether an uploaded page does. */
-  md: boolean;
-  page: boolean;
   label: string;
   sub: string;
   /** Portrait thumb - a printed page - rather than landscape. */
   portrait: boolean;
 }
 
-/* Order is tile order. PNG is HTML-only: a markdown source keeps its family, so
-   a md base asked for `.png` invents no render. */
+/* Order is tile order. */
 const FORMATS: FormatRow[] = [
-  { suffix: '.pdf', format: 'pdf', md: true, page: true,
-    label: 'pdf', sub: 'for email attachments', portrait: true },
-  { suffix: '.png', format: 'png', md: false, page: true,
-    label: 'full shot', sub: 'the whole page, one image', portrait: true },
+  { suffix: '.pdf', format: 'pdf', label: 'pdf', sub: 'for email attachments', portrait: true },
 ];
 
 export interface ExportRequest {
@@ -89,11 +81,10 @@ function claim(paths: readonly string[], base: string, ext: RegExp, tie: RegExp)
 }
 
 const MD_EXT = /\.(md|markdown)$/i;
-const PAGE_EXT = /\.html?$/i;
 
 /** `<base>.<epoch>.md` and the rest of the source spellings, so a stamp is read
     back off the same extensions a bare name resolves through. */
-const STAMPED = /^(.*)\.(\d+)\.(?:md|markdown|html?)$/i;
+const STAMPED = /^(.*)\.(\d+)\.(?:md|markdown)$/i;
 
 /**
  * The newest generated version of `base`: a generation lands as
@@ -120,32 +111,17 @@ export function stampOf(path: string): number | null {
   return m ? Number(m[2]) : null;
 }
 
-/** Markdown wins a contested base; `.html` falls back when no `.md` claims it,
-    and a stamped generation answers a bare base that no file spells exactly.
-    `.md` beats `.markdown` (and `.html` beats `.htm`) when one upload holds
-    both spellings (llms.txt). */
+/** A stamped generation answers a bare base that no file spells exactly.
+    `.md` beats `.markdown` when one upload holds both spellings. */
 function sourceFor(paths: readonly string[], base: string): string | null {
   return claim(paths, base, /^(.*)\.(md|markdown)$/i, /\.md$/i)
-    ?? claim(paths, base, /^(.*)\.html?$/i, /\.html$/i)
     ?? latestStamped(paths, base);
-}
-
-/** An HTML source renders as a navigated page rather than from print HTML. */
-export function isPageSource(source: string): boolean {
-  return PAGE_EXT.test(source);
-}
-
-/** Which column of the catalog a file reads; null is a file that exports
-    nothing, which is every upload that is not markdown or a page. */
-function offerColumn(source: string): 'md' | 'page' | null {
-  if (MD_EXT.test(source)) return 'md';
-  return isPageSource(source) ? 'page' : null;
 }
 
 /** The stem a suffix hangs off: `deck.md` -> `deck`, `deck.1712.md` ->
     `deck.1712`. A file that exports nothing keeps its whole name. */
 export function stemOf(source: string): string {
-  return source.replace(MD_EXT, '').replace(PAGE_EXT, '');
+  return source.replace(MD_EXT, '');
 }
 
 /** The name a bare request drops its stamp for: `deck.1712.md` -> `deck`. */
@@ -175,12 +151,10 @@ export function resolveExport(paths: readonly string[], requested: string): Expo
  * `derivedKey` writes. One string per stored artifact, so the modules that
  * speak it cannot drift.
  */
-export type RenderedKey = `${'slides' | 'doc'}.pdf` | `page.${ExportFormat}`;
+export type RenderedKey = `${RenderMode}.${ExportFormat}`;
 
 export function renderedKey(mode: RenderMode, ext: ExportFormat): RenderedKey {
-  /* A print mode goes through print HTML, which only ever lands a pdf; the
-     shots belong to a navigated page. */
-  return mode === 'page' ? `page.${ext}` : `${mode}.pdf`;
+  return `${mode}.${ext}`;
 }
 
 /** One spelling of one source, with everything a tile or a listing needs. */
@@ -188,8 +162,6 @@ export interface ExportSpec {
   /** Hangs off `stemOf(source)`: `deck` + `.pdf`. */
   suffix: string;
   format: ExportFormat;
-  /** The mode this spelling renders in; null when the content decides it. */
-  mode: RenderMode | null;
   label: string;
   sub: string;
   portrait: boolean;
@@ -200,33 +172,22 @@ export interface ExportSpec {
 /** Everything `source` can become, in tile order. Empty for a file that exports
     nothing, which is what makes this the renderable test too. */
 export function formatsFor(source: string): ExportSpec[] {
-  const column = offerColumn(source);
-  if (!column) return [];
-  const specs: ExportSpec[] = [];
-  for (const row of FORMATS) {
-    if (!(column === 'md' ? row.md : row.page)) continue;
-    specs.push({
-      suffix: row.suffix,
-      format: row.format,
-      /* A markdown source sniffs, always; an uploaded page is navigated. */
-      mode: column === 'page' ? 'page' : null,
-      label: row.label,
-      sub: row.sub,
-      portrait: row.portrait,
-      badge: row.format,
-    });
-  }
-  return specs;
+  if (!MD_EXT.test(source)) return [];
+  return FORMATS.map((row) => ({
+    suffix: row.suffix,
+    format: row.format,
+    label: row.label,
+    sub: row.sub,
+    portrait: row.portrait,
+    badge: row.format,
+  }));
 }
 
-/* The whole readiness vocabulary, spelled out: the catalog no longer pins a
-   mode, so the four tails a render can land under are declared rather than
-   derived from suffixes that stopped naming them. */
+/* The whole readiness vocabulary, spelled out: the catalog never pins a mode,
+   so the tails a render can land under are declared here. */
 const TAIL_ROWS: [RenderedKey, { mode: RenderMode; ext: ExportFormat }][] = [
   ['slides.pdf', { mode: 'slides', ext: 'pdf' }],
   ['doc.pdf', { mode: 'doc', ext: 'pdf' }],
-  ['page.pdf', { mode: 'page', ext: 'pdf' }],
-  ['page.png', { mode: 'page', ext: 'png' }],
 ];
 
 /* A Map keyed by string, because a key arrives off a stored object's name. The

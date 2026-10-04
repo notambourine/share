@@ -1,7 +1,7 @@
 {
   "name": "nt-share",
-  "version": "0.19.0",
-  "description": "Share artifacts as branded unguessable links on share.notambourine.com: upload, then generate and revoke from a private working page.",
+  "version": "0.20.0",
+  "description": "Share artifacts as branded unguessable links on share.notambourine.com: upload, then generate and revoke from an SSO-gated working page.",
   "author": {
     "name": "NoTambourine LLC",
     "url": "https://notambourine.com"

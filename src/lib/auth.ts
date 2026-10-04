@@ -1,59 +1,84 @@
-import type { SigningKeys } from './sign';
-import { constantTimeEqual, parseSigningKeys } from './sign';
-import { decodeTextMap } from './json';
+import type { JsonObject } from './json';
+import { numberAt, parseObject, recordsAt, textAt, textsAt } from './json';
 import { jsonResponse, textResponse } from './http';
+import { now } from './clock';
+import { fromB64url } from './b64';
 
-const enc = new TextEncoder();
-
-export async function sha256hex(s: string): Promise<string> {
-  const d = await crypto.subtle.digest('SHA-256', enc.encode(s));
-  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+/** The Access application this Worker trusts. Plain vars: an AUD tag and a team
+    domain identify the app, they do not unlock it. */
+export interface AuthEnv {
+  ACCESS_TEAM_DOMAIN: string;
+  ACCESS_AUD: string;
 }
 
-/** The secrets auth reads, so a test builds one without the storage bindings. */
-export interface AuthEnv {
-  TOKENS: string;
-  SIGNING_KEYS: string;
+const dec = new TextDecoder();
+
+function decodeSegment(s: string): JsonObject | null {
+  try {
+    return parseObject(dec.decode(fromB64url(s)));
+  } catch {
+    return null;
+  }
+}
+
+/* Keyed by team domain and kept for the isolate's life; a kid it has never seen
+   refetches once, which is what picks up an Access key rotation. */
+const certCache = new Map<string, Map<string, CryptoKey>>();
+
+async function fetchCerts(team: string): Promise<Map<string, CryptoKey>> {
+  const res = await fetch(`https://${team}/cdn-cgi/access/certs`);
+  const body = res.ok ? parseObject(await res.text()) : null;
+  const keys = new Map<string, CryptoKey>();
+  for (const jwk of (body && recordsAt(body, 'keys')) ?? []) {
+    const kid = textAt(jwk, 'kid');
+    const n = textAt(jwk, 'n');
+    const e = textAt(jwk, 'e');
+    if (!kid || !n || !e) continue;
+    keys.set(kid, await crypto.subtle.importKey(
+      'jwk', { kty: 'RSA', n, e, alg: 'RS256', ext: true },
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'],
+    ));
+  }
+  certCache.set(team, keys);
+  return keys;
+}
+
+async function certFor(team: string, kid: string): Promise<CryptoKey | null> {
+  return certCache.get(team)?.get(kid) ?? (await fetchCerts(team)).get(kid) ?? null;
+}
+
+/** Access sends `aud` as an array; the spec also allows a bare string. */
+function audiences(claims: JsonObject): string[] {
+  const one = textAt(claims, 'aud');
+  return one === null ? textsAt(claims, 'aud') : [one];
 }
 
 /**
- * `Authorization: Bearer <token>` against a JSON map of name -> sha256 hex.
- * Answers who, never whether; routes go through `authorize` below. Revoking one
- * person is a secret edit.
+ * The email an Access JWT names, or null. Access already checked it at the
+ * edge; this check is what still holds on a route the edge never saw.
  */
-export async function authenticate(
-  request: Request, env: AuthEnv,
-): Promise<string | null> {
-  const h = request.headers.get('authorization');
-  const m = h && /^Bearer\s+(\S+)$/.exec(h);
-  if (!m) return null;
-  const digest = await sha256hex(m[1]);
-  const map = decodeTextMap(env.TOKENS);
-  if (!map) return null;
-  for (const [name, hash] of Object.entries(map)) {
-    if (constantTimeEqual(hash.toLowerCase(), digest)) return name;
-  }
-  return null;
+export async function verifyAccessJwt(token: string, env: AuthEnv, t: number): Promise<string | null> {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const header = decodeSegment(parts[0]);
+  const claims = decodeSegment(parts[1]);
+  if (!header || !claims || textAt(header, 'alg') !== 'RS256') return null;
+  const kid = textAt(header, 'kid');
+  const key = kid && await certFor(env.ACCESS_TEAM_DOMAIN, kid);
+  if (!key) return null;
+  const ok = await crypto.subtle.verify(
+    'RSASSA-PKCS1-v1_5', key, fromB64url(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+  );
+  if (!ok) return null;
+  if (textAt(claims, 'iss') !== `https://${env.ACCESS_TEAM_DOMAIN}`) return null;
+  if (!audiences(claims).includes(env.ACCESS_AUD)) return null;
+  const exp = numberAt(claims, 'exp');
+  if (exp === null || exp < t) return null;
+  return textAt(claims, 'email');
 }
-
-const KEYS_MSG = 'signing keys misconfigured';
 
 /** How a route speaks, so its refusals read like its answers. */
-type Flavor = 'json' | 'text';
-
-export interface Gate {
-  flavor: Flavor;
-  /** Routes that must sign refuse a misconfigured `SIGNING_KEYS` with a 500. */
-  keys?: 'required';
-  /** A route that hides its subject from strangers answers a missing credential
-      its own way rather than admitting the path exists. */
-  anonymous?: () => Response;
-}
-
-export interface Grant {
-  name: string;
-  keys: SigningKeys | null;
-}
+export type Flavor = 'json' | 'text';
 
 function refuse(flavor: Flavor, message: string, status: number): Response {
   return flavor === 'json'
@@ -62,31 +87,18 @@ function refuse(flavor: Flavor, message: string, status: number): Response {
 }
 
 /**
- * The one Bearer gate: who is calling and the keys the verb signs with. One
- * credential kind reaches it - the vault token, which only ever mints - so what
- * is left here is the spelling of a refusal and the misconfigured-keys 500. A
- * route either has a `Grant` or has its refusal already written.
+ * The one gate on every write: who Access says is calling. A browser write must
+ * also come from this origin, because the Access cookie rides along on any
+ * same-site request; the CLI sends no Origin at all.
  */
 export async function authorize(
-  request: Request, env: AuthEnv, gate: Gate & { keys: 'required' },
-): Promise<{ name: string; keys: SigningKeys } | Response>;
-export async function authorize(
-  request: Request, env: AuthEnv, gate: Gate,
-): Promise<Grant | Response>;
-export async function authorize(
-  request: Request, env: AuthEnv, gate: Gate,
-): Promise<Grant | Response> {
-  const name = await authenticate(request, env);
-  if (!name) {
-    if (gate.anonymous) return gate.anonymous();
-    return refuse(gate.flavor, 'unauthorized', 401);
+  request: Request, env: AuthEnv, flavor: Flavor,
+): Promise<{ email: string } | Response> {
+  const origin = request.headers.get('origin');
+  if (origin !== null && origin !== new URL(request.url).origin) {
+    return refuse(flavor, 'cross-origin write refused', 403);
   }
-  const keys = parseSigningKeys(env);
-  if (!keys && gate.keys === 'required') return refuse(gate.flavor, KEYS_MSG, 500);
-  return { name, keys };
-}
-
-/** The same 500, for the `?c=` routes that sign without a Bearer. */
-export function requireKeys(env: { SIGNING_KEYS: string }, flavor: Flavor): SigningKeys | Response {
-  return parseSigningKeys(env) ?? refuse(flavor, KEYS_MSG, 500);
+  const jwt = request.headers.get('cf-access-jwt-assertion');
+  const email = jwt ? await verifyAccessJwt(jwt, env, now()) : null;
+  return email ? { email } : refuse(flavor, 'unauthorized', 401);
 }

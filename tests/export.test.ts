@@ -37,39 +37,17 @@ function get(path: string, accept = BROWSER): Request {
    assertions name are the same string travelling one way. */
 const ask = (env: Env, path: string, accept?: string) => fetchWorker(env, get(path, accept));
 
-describe('page exports (uploaded HTML)', () => {
+/* A share uploaded before HTML was refused can still hold a page; it renders
+   nothing, so no request against it spends a browser. */
+describe('an older share holding HTML exports nothing', () => {
   const PAGE: MetaFile = { path: 'page.html', size: 9, type: 'text/html; charset=utf-8' };
-  const pageWorld = (extra: Record<string, string> = {}) =>
-    world({ [`${SPACE}/${HASH}/f/page.html`]: '<p>hi</p>', ...extra }, [PAGE]);
+  const pageWorld = () => world({ [`${SPACE}/${HASH}/f/page.html`]: '<p>hi</p>' }, [PAGE]);
 
-  it('a cold .png or .pdf answers 202, never HTML at 200', async () => {
+  it('404s .pdf, .png, and the old .full.png spelling', async () => {
     const env = pageWorld();
-    for (const path of ['page.png', 'page.pdf']) {
-      const res = await ask(env, path);
-      expect(res.status).toBe(202);
-      expect(res.headers.get('retry-after')).toBe('5');
+    for (const path of ['page.pdf', 'page.png', 'page.full.png']) {
+      expect([path, (await ask(env, path)).status]).toEqual([path, 404]);
     }
-  });
-
-  it('serves a cached shot', async () => {
-    const env = pageWorld({ [derivedKey(SPACE, HASH, 'page.html', 'page', 'png')]: 'PNGBYTES' });
-    const res = await ask(env, 'page.png');
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toBe('image/png');
-    expect(await res.text()).toBe('PNGBYTES');
-  });
-
-  /* The spelled-out alias is gone with the rest of the grammar: one name per
-     artifact, and the page generates the link. */
-  it('404s the old .full.png spelling', async () => {
-    expect((await ask(pageWorld(), 'page.full.png')).status).toBe(404);
-  });
-
-  it('a real uploaded page.pdf wins its own name', async () => {
-    const env = world({
-      [`${SPACE}/${HASH}/f/page.pdf`]: 'REALPDF',
-    }, [PAGE, { path: 'page.pdf', size: 7, type: 'application/pdf' }]);
-    expect(await (await ask(env, 'page.pdf', '*/*')).text()).toBe('REALPDF');
   });
 });
 

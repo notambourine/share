@@ -6,7 +6,7 @@ import { errorShell, homeShell } from './render/shell';
 import { serve } from './routes/serve';
 import { upload } from './routes/upload';
 import { del } from './routes/del';
-import { adminConfig, adminRemint } from './routes/admin';
+import { adminConfig, adminPage } from './routes/admin';
 import { generate } from './routes/generate';
 import { skillDoc } from './skill';
 import { brandSheet } from './brand';
@@ -85,10 +85,30 @@ export default {
     const segs = pathSegments(path);
     if (!segs) return notFound();
 
+    /* Every write lives under /up/ or /admin/, the two prefixes Cloudflare
+       Access guards; a share's own URLs only ever read. */
     if (segs[0] === 'up') {
       if (request.method !== 'POST') return textResponse('POST only\n', 405);
       if (segs.length !== 2) return textResponse('POST /up/<space>\n', 404);
       return upload(request, env, segs[1]);
+    }
+
+    if (segs[0] === 'admin') {
+      const [, space, hash, verb] = segs;
+      if (!space || !isValidSpace(space) || !hash || !isValidHash(hash) || segs.length > 4) return notFound();
+      const m = request.method;
+      if (!verb && (m === 'GET' || m === 'HEAD')) {
+        if (!path.endsWith('/')) return Response.redirect(`${url.origin}${path}/`, 302);
+        return adminPage(request, env, space, hash);
+      }
+      if (!verb && m === 'DELETE') return del(request, env, space, hash);
+      if (verb === 'config' && m === 'POST') return adminConfig(request, env, space, hash);
+      if (verb === 'generate' && m === 'POST') return generate(request, env, space, hash);
+      return textResponse('no such admin route\n', 404);
+    }
+
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return textResponse('GET only\n', 405);
     }
 
     const space = segs[0];
@@ -100,21 +120,6 @@ export default {
 
     const hash = segs[1];
     if (!isValidHash(hash)) return notFound();
-
-    if (request.method === 'DELETE') {
-      if (segs.length !== 2) return textResponse('DELETE /<space>/<hash>/\n', 400);
-      return del(request, env, space, hash);
-    }
-    /* POST only, so an uploaded file named `config`, `admin`, or `generate`
-       keeps its GET. */
-    if (request.method === 'POST' && segs.length === 3) {
-      if (segs[2] === 'config') return adminConfig(request, env, space, hash);
-      if (segs[2] === 'admin') return adminRemint(request, env, space, hash);
-      if (segs[2] === 'generate') return generate(request, env, space, hash);
-    }
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return textResponse('GET only\n', 405);
-    }
 
     const route = parseRoute(url, segs);
 

@@ -13,6 +13,7 @@ import type {
 } from '../src/lib/types';
 import type { JsonValue } from '../src/lib/json';
 import worker from '../src/worker';
+import { ACCESS } from './access';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -140,8 +141,8 @@ const asCtx = (deferrals: Pick<ExecutionContext, 'waitUntil'>): ExecutionContext
 
 /**
  * Through the front door: the dispatch order in src/worker.ts is the security
- * model - an uploaded file named `config`, `admin`, or `generate` keeps its GET
- * - and only a test that crosses this seam can hold it.
+ * model - every write sits under /up/ or /admin/ - and only a test that crosses
+ * this seam can hold it.
  */
 export function fetchWorker(env: Env, request: Request): Promise<Response> {
   return worker.fetch(request, env);
@@ -165,8 +166,6 @@ export interface TestEnv extends Env {
 
 export interface TestEnvOptions {
   objects?: Record<string, string>;
-  tokens?: string;
-  signingKeys?: string;
   assets?: AssetServer;
   ai?: AiRunner;
 }
@@ -175,8 +174,7 @@ export function testEnv(options: TestEnvOptions = {}): TestEnv {
   return {
     BUCKET: memoryStore(options.objects),
     ASSETS: options.assets ?? noAssets(),
-    TOKENS: options.tokens ?? '{}',
-    SIGNING_KEYS: options.signingKeys ?? '{}',
+    ...ACCESS,
     ...(options.ai && { AI: options.ai }),
   };
 }

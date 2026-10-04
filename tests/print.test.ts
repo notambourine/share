@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { AssetServer } from '../src/lib/types';
+import type { RenderMode } from '../src/lib/exportPath';
 import { printHtml, pdfOptionsFor } from '../src/render/export';
 import { LOCKUP } from '../src/brand';
 import { testEnv } from './bindings';
@@ -28,7 +29,7 @@ function assets(): AssetServer {
 
 const env = testEnv({ assets: assets() });
 
-const print = (mode: 'slides' | 'doc' | 'page', title = 'deck.md') =>
+const print = (mode: RenderMode, title = 'deck.md') =>
   printHtml(env, {
     origin: 'https://share.test',
     baseHref: 'https://share.test/acme/Xk92mQ7bTp01/',
@@ -80,10 +81,8 @@ describe('the markdown arrives rendered, not as a payload to parse', () => {
     expect(html).toContain('svg[data-marpit-svg]');
   });
 
-  /* Raw HTML in markdown passes through here as it does on the shell: an upload
-     is Bearer-gated and already runs on this origin. What went away is the JSON
-     block the markdown used to ride in, so there is no `</script>` escape left to
-     get wrong - the page's own script tag cannot be closed by its content. */
+  /* Raw HTML passes through: the CSP (script-src 'self', no inline) and nosniff on
+     uploaded bytes keep any script inert, and uploads are SSO-gated. */
   it('passes raw HTML through and keeps its own script tag whole', async () => {
     const html = await printHtml(env, {
       origin: 'https://share.test',
@@ -171,8 +170,7 @@ describe('pdfOptionsFor', () => {
     expect(opts.footerTemplate).toContain('class="pageNumber"');
   });
 
-  it('gives a deck the slide box and a page no footer chrome', () => {
+  it('gives a deck the slide box', () => {
     expect(pdfOptionsFor('slides', 't')).toMatchObject({ width: '1152px', height: '648px' });
-    expect(pdfOptionsFor('page', 't').displayHeaderFooter).toBeUndefined();
   });
 });

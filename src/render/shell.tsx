@@ -515,7 +515,7 @@ function thumbFor(spec: ExportSpec): Child {
 
 /** One tile per spelling the catalog offers. Every one goes through a browser,
     so a cmd+clicked tab holds until the bytes are ready: `exportArtifact`
-    renders inline on the first GET. Targets carry no `c=`. */
+    renders inline on the first GET. */
 function exportTiles(path: string, tag: string): Tile[] {
   const stem = encodeURI(stemOf(path));
   return formatsFor(path).map((spec) => ({
@@ -527,21 +527,8 @@ function exportTiles(path: string, tag: string): Tile[] {
   }));
 }
 
-/** An uploaded page leads with itself: the file is the artifact, where a
-    markdown source is only ever read through one of its spellings. */
-function pageTiles(path: string, tag: string): Tile[] {
-  return [
-    { target: encodeURI(path), label: `${tag}page`, sub: 'the uploaded page, opens in a tab', thumb: THUMB_LAND, fmt: 'html' },
-    ...exportTiles(path, tag),
-  ];
-}
-
-/** Tiles are global to the artifact: one group for the thing you'd send.
-    A folder with an index.html reads as one site, never a tile per asset. */
+/** Tiles are global to the artifact: one group for the thing you'd send. */
 function tilesFor(meta: Meta): Tile[] {
-  if (meta.files.some((f) => f.path === 'index.html')) {
-    return [{ target: '', label: 'site', sub: 'the uploaded page, everything inside', thumb: THUMB_LAND, fmt: 'html' }];
-  }
   const tiles: Tile[] = [];
   for (const f of meta.files) {
     // One upload, several files: the stem keys which tile belongs to which.
@@ -557,9 +544,6 @@ function tilesFor(meta: Meta): Tile[] {
           { target: encoded, label: `${tag}page`, sub: 'branded page, opens in a tab', thumb: THUMB_LAND, fmt: 'img' },
           { target: `${encoded}?raw`, label: `${tag}hotlink`, sub: 'the bytes, for img src and unfurls', thumb: srcThumb(`<img src=\n"${fileName(f.path)}">`) },
         );
-        break;
-      case 'html':
-        tiles.push(...pageTiles(f.path, stemTag));
         break;
       case 'table':
         tiles.push({ target: encoded, label: fileName(f.path), sub: 'sortable grid, opens in a tab', thumb: srcThumb(fileName(f.path)), fmt: 'csv' });
@@ -608,9 +592,6 @@ export interface AdminView {
   meta: Meta;
   origin: string;
   now: number;
-  /** Epoch seconds this page's `?c=` dies. The page counts down from it rather
-      than taking the credential apart. */
-  adminExp: number;
 }
 
 /**
@@ -620,15 +601,13 @@ export interface AdminView {
  *
  * A real form, submitting into a new tab: the POST is a navigation, so that tab
  * holds through the model call and the route's 303 lands it on the version that
- * was written. Nothing here reports completion and nothing polls. The `action` is
- * absent on purpose - public/admin.js fills it in, because it carries the `?c=`
- * token and the token appears nowhere in this markup.
+ * was written. Nothing here reports completion and nothing polls.
  */
 function sourcePicker(meta: Meta): Child | null {
   const text = meta.files.filter((f) => transformable(f.path));
   if (text.length === 0) return null;
   return (
-    <form class="panel" method="post" target="_blank" rel="noopener" data-genform>
+    <form class="panel" method="post" action="generate" target="_blank" rel="noopener" data-genform>
       <p class="cardlabel">generate</p>
       <p class="note">Tick what feeds it, then pick a format. It opens in a new tab and
         takes a few seconds. The result lands as a new version beside the sources;
@@ -655,20 +634,16 @@ function sourcePicker(meta: Meta): Child | null {
 }
 
 /**
- * The working page: generation, format tiles, TTL chips, delete. Served only
- * behind a live `?c=` (src/routes/serve.ts); the token itself appears nowhere in
- * the markup - public/admin.js reads it from location.search and calls the write
- * routes. The locked block is the client-side degrade when the countdown dies:
- * the links keep serving, so it says how to re-open rather than restating them.
+ * The working page at `/admin/<space>/<hash>/`: generation, format tiles, TTL
+ * chips, delete. Access guards the path, so the page itself carries no credential.
  */
 export function adminShell(view: AdminView): string {
-  const { meta, origin, now: t, adminExp } = view;
+  const { meta, origin, now: t } = view;
   const base = `${origin}/${meta.space}/${meta.hash}/`;
   const artifact = `${meta.space}/${meta.hash}`;
   const single = meta.files.length === 1 ? meta.files[0] : null;
   const bytes = meta.files.reduce((n, f) => n + f.size, 0);
   const clientLink = `${base}${fileSuffix(meta)}`;
-  const remint = `nt-share admin ${artifact}`;
   const reput = `nt-share put ${meta.space}${single ? ` ${single.path}` : ''}`;
   const pressed = pressedTtl(meta);
 
@@ -678,9 +653,7 @@ export function adminShell(view: AdminView): string {
     script: '/admin.js',
     bar: (
       <>
-        <span class="pill pill-admin admin-only">admin</span>
-        <span class="spacer"></span>
-        <span class="pill admin-only" data-countdown data-exp={adminExp}></span>
+        <span class="pill pill-admin">admin</span>
       </>
     ),
     body: (
@@ -692,7 +665,7 @@ export function adminShell(view: AdminView): string {
             <span data-exp>{expiryText(meta, t)}</span>
           </span>
         </div>
-        <div class="admin-only" id="admin">
+        <div id="admin">
           <div class="actions" id="actions">
             <p class="confirmtext">The live link dies within 10 minutes, not instantly.
               Then re-upload: <code>{reput}</code></p>
@@ -706,8 +679,7 @@ export function adminShell(view: AdminView): string {
             {tilesFor(meta).map((tile) => tileHtml(base, tile))}
           </div>
           <p class="note">Click a card to open it in a new tab; the tab holds until the
-            render lands. The corner icon copies its link, and none of these carry this
-            page's token.</p>
+            render lands. The corner icon copies its public link.</p>
           {single ? null : (
             <ul class="files">
               {meta.files.map((f) => (
@@ -718,31 +690,14 @@ export function adminShell(view: AdminView): string {
               ))}
             </ul>
           )}
-          <div class="cols">
-            <div class="panel">
-              <p class="cardlabel">expiry</p>
-              <div class="chiprow">
-                {['7d', '30d', '90d', 'forever'].map((d) => (
-                  <button class="chip" type="button" data-ttl={d} aria-pressed={d === pressed}>{d}</button>
-                ))}
-              </div>
-              <p class="note">Counts from upload. Links you already sent inherit the change.</p>
-            </div>
-            <div class="panel">
-              <p class="cardlabel">this page</p>
-              <p class="note">Works for 5 minutes; each edit restarts the clock. After that
-                this URL falls back to the public index. Re-open:</p>
-              <code class="cmd">{remint}</code>
-            </div>
-          </div>
-        </div>
-        <div class="locked-only">
           <div class="panel">
-            <p class="cardlabel">this page</p>
-            <p class="note">The admin window for this page has closed. Every link you already
-              sent keeps serving; to generate again, change the expiry, or delete the share,
-              re-open the admin link:</p>
-            <code class="cmd">{remint}</code>
+            <p class="cardlabel">expiry</p>
+            <div class="chiprow">
+              {['7d', '30d', '90d', 'forever'].map((d) => (
+                <button class="chip" type="button" data-ttl={d} aria-pressed={d === pressed}>{d}</button>
+              ))}
+            </div>
+            <p class="note">Counts from upload. Links you already sent inherit the change.</p>
           </div>
         </div>
       </div>

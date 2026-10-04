@@ -4,7 +4,7 @@ const BASE62 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
 /** Top-level path segments the router owns; a space may not take these names. */
 export const RESERVED = new Set([
-  'up', 'f', 'd', '_trash',
+  'up', 'admin', 'f', 'd', '_trash',
   'llms.txt', 'SKILL.md', 'robots.txt', 'favicon.ico', 'favicon.svg',
   'apple-touch-icon.png', 'apple-touch-icon-precomposed.png',
   'tokens.css', 'shell.css', 'print.css', 'nt-prose.css', 'nt-table.css',
@@ -59,7 +59,7 @@ export function normalizeUploadPath(raw: string): string | null {
   return parts.join('/');
 }
 
-export type Kind = 'image' | 'video' | 'svg' | 'md' | 'html' | 'code' | 'table' | 'other';
+export type Kind = 'image' | 'video' | 'svg' | 'md' | 'code' | 'table' | 'other';
 
 const IMAGE = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'ico', 'bmp']);
 const VIDEO = new Set(['mp4', 'webm', 'mov', 'm4v']);
@@ -87,7 +87,6 @@ export function kindOf(path: string): Kind {
   if (VIDEO.has(ext)) return 'video';
   if (ext === 'svg') return 'svg';
   if (ext === 'md' || ext === 'markdown') return 'md';
-  if (ext === 'html' || ext === 'htm') return 'html';
   if (TABLE.has(ext)) return 'table';
   if (CODE.has(ext)) return 'code';
   return 'other';
@@ -100,19 +99,21 @@ const TYPES = new Map([
   ['gif', 'image/gif'], ['avif', 'image/avif'], ['ico', 'image/x-icon'], ['bmp', 'image/bmp'],
   ['svg', 'image/svg+xml'],
   ['mp4', 'video/mp4'], ['webm', 'video/webm'], ['mov', 'video/quicktime'], ['m4v', 'video/mp4'],
-  ['html', 'text/html; charset=utf-8'], ['htm', 'text/html; charset=utf-8'],
   ['md', 'text/markdown; charset=utf-8'], ['markdown', 'text/markdown; charset=utf-8'],
-  ['css', 'text/css; charset=utf-8'], ['js', 'text/javascript; charset=utf-8'],
-  ['mjs', 'text/javascript; charset=utf-8'], ['cjs', 'text/javascript; charset=utf-8'],
   ['json', 'application/json; charset=utf-8'], ['jsonc', 'application/json; charset=utf-8'],
-  ['txt', 'text/plain; charset=utf-8'], ['csv', 'text/csv; charset=utf-8'],
-  ['tsv', 'text/tab-separated-values; charset=utf-8'],
-  ['xml', 'application/xml; charset=utf-8'], ['pdf', 'application/pdf'],
-  ['yaml', 'text/plain; charset=utf-8'], ['yml', 'text/plain; charset=utf-8'],
+  ['csv', 'text/csv; charset=utf-8'], ['tsv', 'text/tab-separated-values; charset=utf-8'],
+  ['pdf', 'application/pdf'],
   ['zip', 'application/zip'], ['gz', 'application/gzip'], ['tar', 'application/x-tar'],
-  ['woff2', 'font/woff2'], ['woff', 'font/woff'],
   ['mp3', 'audio/mpeg'], ['wav', 'audio/wav'],
 ]);
+
+/**
+ * Nothing uploaded may run on this origin: Access shares it, and script here
+ * could ride the SSO cookie. So no HTML, and every code file serves as text/plain.
+ */
+export function isUploadable(path: string): boolean {
+  return kindOf(path) !== 'other' || TYPES.has(extOf(path));
+}
 
 export function contentTypeFor(path: string): string {
   const type = TYPES.get(extOf(path));

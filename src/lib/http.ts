@@ -29,13 +29,12 @@ function csp(formAction: string): string {
   ].join('; ');
 }
 
-/** Every shell that can carry uploaded HTML, which is why it submits nowhere. */
+/** Every public shell, which is why it submits nowhere. */
 export const SHELL_CSP = csp("'none'");
 
 /** The working page, the one shell that submits: a generation is a POST
     navigation, so the new tab holds through the model call instead of polling.
-    `'self'` and not `'none'`, and still not a wildcard - the only form here
-    posts to a route on this origin that already demands the `?c=` token. */
+    `'self'` and not `'none'`, and still not a wildcard. */
 export const ADMIN_CSP = csp("'self'");
 
 export function htmlResponse(html: string, status = 200, extra?: Record<string, string>): Response {
@@ -75,11 +74,7 @@ export function textResponse(text: string, status = 200): Response {
   });
 }
 
-/**
- * Where a POST navigation lands. Relative on purpose: the generate route sits at
- * `<space>/<hash>/generate`, so a bare filename resolves to its sibling and the
- * `?c=` token drops off - the version it just wrote is public.
- */
+/** Where a POST navigation lands: the public URL of what it just wrote. */
 export function seeOther(location: string): Response {
   return new Response(null, {
     status: 303,

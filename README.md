@@ -1,23 +1,22 @@
 # share
 
 `share.notambourine.com`: private artifact sharing for [NoTambourine](https://notambourine.com)
-engagements. One curl line in, one branded unguessable URL out.
+engagements. One upload in, one branded unguessable URL out.
 
 ```
-curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
-  -F f=@out/report.html https://share.notambourine.com/up/acme
+nt-share put acme out/report.md
 ```
 
 One URL, three answers. A browser gets a branded page: markdown as a deck or a
-document decided from its own content, code highlighted, a folder with an
-`index.html` as a real page with its relative assets intact. `<img src>` and curl
+document decided from its own content, code highlighted, a csv as a grid.
+`<img src>` and curl
 get raw bytes. An unfurl crawler, split off by User-Agent because Slack asks
 exactly like curl, gets the shell for its `og:` tags so a link draws a card;
 images keep the bytes, since Slack renders those itself. Video has no frame a
 Worker could cut, so `nt-share put` cuts one at upload. Markdown URLs also take
-`deck.pdf`, uploaded pages `page.pdf` and `page.png`.
+`deck.pdf`.
 
-Upload answers a second link on stderr, live five minutes: the **working page**,
+Upload answers a second link on stderr: the **working page** under `/admin/`,
 where a sender ticks which uploaded files feed a generation, moves the expiry, or
 deletes the share. A generation lands stamped (`deck.<epoch>.md`) and the bare
 `deck.md` follows the newest stamp, so re-generating never moves a link already
@@ -29,20 +28,21 @@ HTML, or JSON on `Accept: application/json`.
 - **Cloudflare Worker + R2**, free tier. Everything renders in the Worker on the
   GET; client bundles carry interaction only, and no CDN script runs on a host
   that serves client material.
-- **The hash is the credential.** 12 base62 chars (~71 bits), never enumerable,
-  never indexed. Nothing else gates a read, which is what keeps a relative asset
-  inside an uploaded folder working.
-- **Everything expires.** Artifacts default to 90 days, the working page to five
-  minutes; deletes are soft into `_trash/` and a nightly cron sweeps.
-- **No secrets in this repo.** Bearer tokens live as sha256 hashes in a Worker
-  secret and signing keys rotate by key id. The URLs are the locks.
+- **The hash is the read credential.** 12 base62 chars (~71 bits), never
+  enumerable, never indexed. Nothing else gates a read.
+- **Cloudflare Access gates every write.** Google SSO covers `/up/*` and
+  `/admin/*`; the Worker re-verifies the Access JWT. No tokens, no secrets.
+- **Uploads are inert.** No HTML, code served as plain text, `nosniff` on bytes,
+  so nothing uploaded runs on the origin the SSO cookie lives on.
+- **Everything expires.** Artifacts default to 90 days; deletes are soft into
+  `_trash/` and a nightly cron sweeps.
 
 ## API and CLI
 
 `GET /llms.txt` documents everything in plain text. `GET /SKILL.md` is a drop-in
 Claude skill, served from the bundle so it cannot drift from the installed copy.
-`cli/share.ts` is the CLI (`install`, `put`, `admin`); the terminal only uploads
-and re-opens a working page, because everything else is on the page itself.
+`cli/share.ts` is the CLI (`install`, `put`); the terminal only uploads, because
+everything else is on the working page. It signs in through `cloudflared`.
 
 Consumers carry only a stub, so the hosted skill stays the single source of
 truth. `skills/share/SKILL.md` plus `.claude-plugin/plugin.json` make this repo
@@ -70,14 +70,12 @@ step 2.
    and the Worker does not run without it: set Settings → Build → *Build command*
    to `npm run build:client`. Workers Builds ignores `build.command` in
    `wrangler.jsonc`, so this field is the only place the build lives.
-3. **Secrets**: Settings → Variables and Secrets, type *Secret*, values as JSON.
-   - `TOKENS`: name → sha256 of a bearer token, built by
-     `scripts/add-employee.sh` from the 1Password vault. Secrets are write-only,
-     so every change re-pastes the whole map.
-   - `SIGNING_KEYS`: `{"v1":"<openssl rand -base64 32>"}`, signing the working
-     page's `?c=`. Rotate by adding `v2`; delete an id to kill its outstanding
-     tokens.
-4. **Custom domain**: add `share.notambourine.com` under Domains & Routes.
+3. **Custom domain**: add `share.notambourine.com` under Domains & Routes.
+4. **Access**: Zero Trust → Access → Applications → Self-hosted. Destinations
+   `share.notambourine.com/up/*` and `share.notambourine.com/admin/*`, Google as
+   the identity provider, one Allow policy on emails ending in
+   `@notambourine.com`. Copy the app's AUD tag and team domain into `vars` in
+   `wrangler.jsonc`.
 
 Browser Rendering needs no step; the `browser` binding is the whole setup. The
 free plan's 10 browser-minutes a day account-wide is the constraint on PDF
@@ -88,7 +86,7 @@ URLs serve the shell.
 
 ```
 npm ci
-npm test        # vitest: signing, path safety, negotiation, auth, versioning
+npm test        # vitest: path safety, negotiation, auth, versioning
 npm run oxlint  # oxlint plus the vendored anti-slop rules in tools/oxlint/
 npm run types   # tsc --noEmit, Worker and CLI (cli/ runs as .ts, node 22.18+ strips the types)
 npm run build:client  # writes public/: the page bundles, plus fonts/ and logo/ from the brand dep

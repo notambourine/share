@@ -41,10 +41,11 @@ describe('viewModeFor', () => {
     expect(viewModeFor('deck.md', CURL, q())).toBe('raw');
   });
 
-  it('html is the page itself everywhere; ?view=source highlights', () => {
-    expect(viewModeFor('index.html', BROWSER, q())).toBe('page');
-    expect(viewModeFor('index.html', CURL, q())).toBe('page');
-    expect(viewModeFor('index.html', BROWSER, q('view=source'))).toBe('shell-code');
+  /* An older share can still hold HTML; it never renders as a page on this origin. */
+  it('html is a download everywhere, never a page', () => {
+    expect(viewModeFor('index.html', BROWSER, q())).toBe('shell-download');
+    expect(viewModeFor('index.html', CURL, q())).toBe('attachment');
+    expect(viewModeFor('index.html', BROWSER, q('raw'))).toBe('attachment');
   });
 
   it('svg never serves inline: shell in browser, attachment raw', () => {
@@ -88,8 +89,8 @@ describe('viewModeFor, unfurl crawlers', () => {
     expect(viewModeFor('shot.png', CURL, q(), SLACK)).toBe('raw');
   });
 
-  it('uploaded html serves as itself, crawler or not', () => {
-    expect(viewModeFor('index.html', CURL, q(), SLACK)).toBe('page');
+  it('uploaded html stays a download card for a crawler too', () => {
+    expect(viewModeFor('index.html', CURL, q(), SLACK)).toBe('shell-download');
   });
 
   /* og:image points at ?raw, and the crawler fetches it with the same UA. Lose

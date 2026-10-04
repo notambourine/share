@@ -1,7 +1,7 @@
 /**
  * share.notambourine.com: artifact sharing Worker.
  * Deployed by Cloudflare Workers Builds (git integration), never `wrangler deploy` by hand.
- * Secrets (dashboard only, never here): TOKENS, SIGNING_KEYS.
+ * No secrets: Cloudflare Access (Google SSO) guards /up/* and /admin/*.
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
@@ -10,6 +10,16 @@
 	// @cloudflare/puppeteer imports node:buffer; the flag is what resolves it.
 	"compatibility_flags": ["nodejs_compat"],
 	"main": "./src/worker.ts",
+	// Access guards the custom domain only; these hostnames would reach the
+	// write routes around it.
+	"workers_dev": false,
+	"preview_urls": false,
+	// The Access app the Worker re-verifies: its team domain and AUD tag. An
+	// empty AUD matches no token, so writes fail closed until it is set.
+	"vars": {
+		"ACCESS_TEAM_DOMAIN": "notambourine.cloudflareaccess.com",
+		"ACCESS_AUD": "252be5cde15d1af7518104505aa6b4ce15d22182fb2892a1a25002b7db72d505"
+	},
 	// src/skill.ts imports the plugin's SKILL.md and serves those exact bytes.
 	// src/brand.ts does the same for the golden set in @notambourine/brand-kit,
 	// so no brand stylesheet is ever copied into public/. The globs reach a

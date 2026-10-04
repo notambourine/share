@@ -140,12 +140,15 @@ describe('the index page', () => {
     expect(body.renders[0].check).toBeNull();
   });
 
-  it('leaves an uploaded site to serve itself rather than an index', async () => {
+  /* An older share can still hold an index.html; uploaded markup never runs
+     on this origin, so the root stays the index page regardless. */
+  it('lists an older share\'s index.html rather than serving it', async () => {
     const env = seededEnv({ [`${SPACE}/${HASH}/f/index.html`]: '<p>hi</p>' }, [
       { path: 'index.html', size: 9, type: 'text/html; charset=utf-8' },
     ]);
-    const res = await fetchWorker(env, root('text/html'));
-    expect(await res.text()).toBe('<p>hi</p>');
+    const html = await (await fetchWorker(env, root('text/html'))).text();
+    expect(html).not.toBe('<p>hi</p>');
+    expect(html).toContain('href="index.html"');
   });
 
   it('404s a hash that is gone, whichever representation asked', async () => {

@@ -135,29 +135,3 @@ export function render(
     return { pdf: new Uint8Array(pdf), check };
   });
 }
-
-/** The layout box the page is measured in; the full shot keeps the width and
-    grows to content height. */
-const PAGE_VIEWPORT = { width: 1280, height: 720 };
-
-export interface PageArtifacts {
-  pdf: Uint8Array;
-  fullPng: Uint8Array;
-}
-
-/**
- * Navigate-based render for an uploaded page: the browser loads the served
- * URL, so relative assets resolve and the source is never rebuilt. One load,
- * two artifacts. Uploaded HTML carries no ready flag, so networkidle0
- * stands in, plus a fonts.ready await for the late face swap idle can miss.
- */
-export function renderPage(binding: Fetcher, url: string, pdfOptions: PDFOptions): Promise<PageArtifacts | null> {
-  return withPage(binding, async (page) => {
-    await page.setViewport(PAGE_VIEWPORT);
-    await page.goto(url, { waitUntil: 'networkidle0', timeout: RENDER_TIMEOUT_MS });
-    await page.evaluate('document.fonts.ready.then(() => 1)');
-    const fullPng = new Uint8Array(await page.screenshot({ fullPage: true }));
-    const pdf = new Uint8Array(await page.pdf(pdfOptions));
-    return { pdf, fullPng };
-  });
-}

@@ -1,10 +1,9 @@
 import type { Env, Meta, MetaFile } from '../lib/types';
 import { DEFAULT_ARTIFACT_DAYS } from '../lib/types';
-import { genSlug, normalizeUploadPath, contentTypeFor, isValidSpace, parseDuration } from '../lib/keys';
+import { genSlug, normalizeUploadPath, contentTypeFor, isUploadable, isValidSpace, parseDuration } from '../lib/keys';
 import { posterParent } from '../lib/poster';
 import { authorize } from '../lib/auth';
 import { publicUrl } from '../lib/link';
-import { mintAdminLink } from '../lib/admin';
 import { payloadKey, writeMeta } from '../lib/r2';
 import { jsonResponse, textResponse, wantsJson } from '../lib/http';
 import { now } from '../lib/clock';
@@ -21,16 +20,13 @@ interface UploadEntry {
  * generates here - a page is rendered by the request that asks for it, and a
  * document is generated from the working page this answers with - so an upload
  * nobody opens spends no browser and no inference budget.
- *
- * Keys ride along but are not required: missing keys only cost the working-page
- * link, and the upload still lands and still serves.
  */
 export async function upload(
   request: Request, env: Env, space: string,
 ): Promise<Response> {
-  const gate = await authorize(request, env, { flavor: 'text' });
+  const gate = await authorize(request, env, 'text');
   if (gate instanceof Response) return gate;
-  const { name: uploader, keys } = gate;
+  const uploader = gate.email;
   if (!isValidSpace(space)) return textResponse('invalid space name\n', 400);
 
   const url = new URL(request.url);
@@ -60,6 +56,7 @@ export async function upload(
     if (!(value instanceof File)) continue;
     const path = normalizeUploadPath(value.name);
     if (!path) return textResponse(`unsafe file path: ${value.name}\n`, 400);
+    if (!isUploadable(path)) return textResponse(`not an allowed file type: ${path}\n`, 400);
     if (seen.has(path)) return textResponse(`duplicate path: ${path}\n`, 400);
     seen.add(path);
     entries.push({ path, blob: value });
@@ -96,13 +93,11 @@ export async function upload(
   await writeMeta(env, meta);
 
   const link = publicUrl(url.origin, meta);
-  // The sender's second link: generation, TTL chips, delete. Live 5 minutes.
-  const admin = keys && await mintAdminLink(keys, url.origin, space, hash, t);
 
   if (wantsJson(request)) {
     return jsonResponse({
       url: link, hash, expiresAt, files: files.map((f) => f.path),
-      ...(admin && { adminUrl: admin.url, adminExp: admin.exp }),
+      adminUrl: `${url.origin}/admin/${space}/${hash}/`,
     }, 201);
   }
   return textResponse(`${link}\n`, 201);

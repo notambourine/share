@@ -1,7 +1,8 @@
 import type { Env, MetaFile } from '../lib/types';
-import { adminToken } from './admin';
+import { authorize } from '../lib/auth';
 import { readMeta, readPayload, isExpired, listAll, payloadKey } from '../lib/r2';
 import { contentTypeFor } from '../lib/keys';
+import { now } from '../lib/clock';
 import { parseObject, textAt, textsAt } from '../lib/json';
 import { htmlResponse, jsonResponse, seeOther, wantsJson } from '../lib/http';
 import { noticeShell } from '../render/shell';
@@ -63,9 +64,9 @@ async function freeStamp(
   return `${name}.${stamp}.md`;
 }
 
-/** Versions one generation name may hold under one hash. The bound on what a
-    leaked working link can spend at the model: counted by listing, so a run
-    that is refused spends nothing, and a concurrent pair overshoots by one. */
+/** Versions one generation name may hold under one hash. The bound on what one
+    share can spend at the model: counted by listing, so a run that is refused
+    spends nothing, and a concurrent pair overshoots by one. */
 export const MAX_VERSIONS = 20;
 
 async function countVersions(env: Env, space: string, hash: string, name: string): Promise<number> {
@@ -76,7 +77,7 @@ async function countVersions(env: Env, space: string, hash: string, name: string
 }
 
 /**
- * POST /<space>/<hash>/generate?c=<token>: many sources in, one document out.
+ * POST /admin/<space>/<hash>/generate: many sources in, one document out.
  *
  * The document is the only thing this route writes. meta.json is not touched, so
  * two runs finishing at once cannot drop each other from a manifest; the index
@@ -89,9 +90,9 @@ async function countVersions(env: Env, space: string, hash: string, name: string
  * version that was written. Nothing polls anywhere.
  */
 export async function generate(request: Request, env: Env, space: string, hash: string): Promise<Response> {
-  const admin = await adminToken(request, env, space, hash);
-  if (admin instanceof Response) return admin;
-  const { t } = admin;
+  const gate = await authorize(request, env, isFormPost(request) ? 'text' : 'json');
+  if (gate instanceof Response) return gate;
+  const t = now();
 
   const ai = env.AI;
   if (!ai) return refuse(request, 503, 'generation unavailable: no AI binding');
@@ -156,5 +157,5 @@ export async function generate(request: Request, env: Env, space: string, hash: 
     const size = new TextEncoder().encode(blob).byteLength;
     return jsonResponse({ path, size, bare: `${name}.md` }, 201);
   }
-  return seeOther(encodeURI(path));
+  return seeOther(`/${space}/${hash}/${encodeURI(path)}`);
 }

@@ -30,16 +30,16 @@
   included. Never add a second page under `public/`.
 - `hono/jsx` escapes every filename; never escape by hand, and use `raw()` only for
   values that are already markup.
-- Precedence in `src/worker.ts` is the security model: an uploaded file named
-  `config`, `admin`, or `generate` keeps its GET. Never move that dispatch into a
-  route matcher. `htmlResponse()` (`src/lib/http.ts`) owns the CSP and `Vary`.
+- Every write lives under `/up/` or `/admin/`, the two prefixes Access guards; a
+  share's own path answers GET and HEAD only. Never add a write route outside
+  them. `htmlResponse()` (`src/lib/http.ts`) owns the CSP and `Vary`.
 - `src/client/` carries the DOM lib, never `@cloudflare/workers-types`, and may
   import from `src/lib/`.
 
 ## Storage model
 
 - Nothing renders or generates at upload; an html view renders per request and
-  stores nothing. Only `.pdf` and `.png` reach `BROWSER` and cache under `d/v<N>/`
+  stores nothing. Only `.pdf` reaches `BROWSER` and caches under `d/v<N>/`
   behind a hand-bumped `CACHE_VERSION`.
 - A generation writes `<name>.<epoch>.md` into `f/` and must never touch
   `meta.json`; that read-modify-write would drop a concurrent run's row.
@@ -57,7 +57,7 @@
   `303`. Never add a fetch that reports completion, and never a GET that generates;
   a scanner would prefetch it and spend a model call.
 - It is the one shell served `form-action 'self'` (`ADMIN_CSP`); every other shell
-  hosts uploaded HTML and keeps `'none'`.
+  keeps `'none'`.
 - `src/transforms/` holds the format server-side; never publish a formatting skill
   for uploaders. `MAX_TRANSFORM_BYTES` refuses rather than truncates.
 - A prompt or model edit runs `npm run evals` by hand before shipping. CI never
@@ -65,23 +65,24 @@
 
 ## Security
 
-- The unguessable hash is the only credential a reader needs, so these
-  prohibitions are the entire protection story.
-- Never put Cloudflare Access on this hostname; uploaded JS runs here and could
-  replay a `CF_Authorization` cookie.
-- Never set a cookie on `notambourine.com` or any subdomain.
-- Never reintroduce a view token or locked tier.
-- `authorize()` (`src/lib/auth.ts`) is the one Bearer gate. Two credentials exist:
-  the vault token, which only mints, and the 5-minute artifact-scoped `?c=`.
-- Never generate or echo a raw bearer token; that is terminal-only work via
-  `scripts/add-employee.sh`.
-- Cloudflare secrets are write-only; the 1Password vault is the source of truth and
-  `TOKENS` derives from it, never hand-edited.
-- Bound the paid bindings by count, never by trust: `?c=` signed over its session's
-  first mint and cut at `ADMIN_SESSION_SECS`; `MAX_VERSIONS` per generation name,
-  counted by listing before the model call; one render per `ATTEMPT_SECS`, claimed
-  by a marker written before the browser opens. Keep every bound a listing or an
-  object the delete and sweep prefixes cover; never a counter in `meta.json`.
+- The unguessable hash is the only credential a reader needs; Cloudflare Access
+  (Google SSO) is the only credential a writer needs. No token, key, or secret
+  of ours exists, and none may be added for auth.
+- Access covers `/up/*` and `/admin/*` only, never the whole hostname: readers
+  are clients without SSO. `authorize()` (`src/lib/auth.ts`) re-verifies the
+  Access JWT on every write and refuses a cross-origin `Origin`.
+- The SSO cookie shares this origin with uploads, so nothing uploaded may run
+  here. Uploads pass `isUploadable()` (`src/lib/keys.ts`): never admit HTML,
+  never serve a code file as anything but `text/plain`, and keep `nosniff` on
+  raw bytes.
+- `workers_dev` and `preview_urls` stay off; either would reach the write routes
+  around Access.
+- Never set a cookie of our own on `notambourine.com` or any subdomain.
+- Bound the paid bindings by count, never by trust: `MAX_VERSIONS` per generation
+  name, counted by listing before the model call; one render per `ATTEMPT_SECS`,
+  claimed by a marker written before the browser opens. Keep every bound a
+  listing or an object the delete and sweep prefixes cover; never a counter in
+  `meta.json`.
 - This repo is public. Client names never enter it; examples use `acme`.
 
 ## Brand
@@ -104,5 +105,4 @@
 - `skills/share/SKILL.md` is the only copy and `src/skill.ts` serves it at
   `/SKILL.md`. Never add a copy under `public/`.
 - `skills/` is the published plugin surface. Never vendor a third-party skill tree.
-- Dashboard setup: README.md "Setup from zero". Tokens: `scripts/add-employee.sh`,
-  whose header is the runbook.
+- Dashboard setup, Access included: README.md "Setup from zero".
