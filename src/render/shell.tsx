@@ -468,18 +468,19 @@ export function homeShell(): string {
     body: (
       <div class="home-col">
         <div class="home-intro">
-          <span class="eyebrow">NoTambourine share</span>
-          <h1 class="display">Private links to client <em>work</em>.</h1>
-          <p class="lede">NoTambourine sends clients reports, decks, agendas, and files from here.
-            Each one has its own private link, and only people who have the link can open it.</p>
+          <span class="eyebrow">Private links for client work</span>
+          <h1 class="display"><em>Share</em>, by NoTambourine.</h1>
+          <p class="lede">Share is where NoTambourine sends work to clients. Each report, deck, or
+            file gets its own link. Anyone with the link can open it; no one else can find it.</p>
         </div>
         <div class="nt-card nt-card--support">
-          <span class="nt-badge nt-badge--mint"><span class="nt-badge__dot"></span>Link not working?</span>
-          <p>Most links expire after {DEFAULT_ARTIFACT_DAYS} days. Nothing here is listed or
-            searchable, so ask your NoTambourine contact for a new link.</p>
+          <span class="nt-badge nt-badge--mint"><span class="nt-badge__dot"></span>Looking for something?</span>
+          <p>Share can't list or search what it holds, and most links expire after
+            {' '}{DEFAULT_ARTIFACT_DAYS} days. If yours stopped working, ask your NoTambourine contact
+            to resend it.</p>
         </div>
-        <p>A link opens in the browser, with no account or sign-in. Documents and decks also
-          download as PDF.</p>
+        <p>Forward a link to anyone on your team; it opens for them too. Documents and decks also
+          save as PDF.</p>
         <div><a class="nt-btn nt-btn--secondary" href="https://notambourine.com">About NoTambourine</a></div>
       </div>
     ),

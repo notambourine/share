@@ -116,7 +116,8 @@ body[data-kind="md"] .stage { justify-content: flex-start; }
 .home-intro .lede { margin: 0; }
 .home-col .nt-card p { margin: var(--sp-2) 0 0; }
 .home-col > p { margin: 0; }
-.home-col .nt-btn, .home-col .nt-btn:hover { border-bottom: 0; }
+/* The kit's bare `a:hover` outranks the button recipe and would tint one edge pink. */
+.home-col .nt-btn--secondary:hover { border-color: var(--fg1); }
 .home-foot { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-6); justify-content: center;
   padding: var(--sp-6); border-top: 1px solid var(--line-soft);
   font-family: var(--font-accent); font-size: var(--fs-caption); color: var(--fg3); }
