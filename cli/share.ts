@@ -6,6 +6,7 @@
 
    nt-share install                                     (put nt-share on PATH)
    nt-share put <space> <file|dir ...> [--ttl <dur>|forever]
+   nt-share shipped <client> [--window 24h|7d|30d|month] [--as agenda|slides]
 
    $SHARE_URL points at a dev Worker.
 
@@ -311,6 +312,17 @@ switch (cmd) {
     if (adminUrl) console.error(`working page: ${adminUrl}`);
     break;
   }
+  case 'shipped': {
+    const [client] = rest;
+    if (!client) die('usage: nt-share shipped <client> [--window 24h|7d|30d|month] [--as agenda|slides]');
+    const body = new URLSearchParams({ client, window: flags.window ?? '7d', format: flags.as ?? 'agenda' });
+    const made = fields(await api('/admin/shipped', { method: 'POST', body }, accessToken()));
+    console.log(required(made, 'url'));
+    console.error(`pdf: ${required(made, 'pdf')}`);
+    console.error(`working page: ${required(made, 'adminUrl')}`);
+    if (made['empty'] === true) console.error('nothing merged or released in that window; the link is the empty digest');
+    break;
+  }
   default:
-    die('commands: install, put; see https://share.notambourine.com/llms.txt');
+    die('commands: install, put, shipped; see https://share.notambourine.com/llms.txt');
 }

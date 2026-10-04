@@ -1,7 +1,8 @@
 /**
  * share.notambourine.com: artifact sharing Worker.
  * Deployed by Cloudflare Workers Builds (git integration), never `wrangler deploy` by hand.
- * No secrets: Cloudflare Access (Google SSO) guards /up/* and /admin/*.
+ * Cloudflare Access (Google SSO) guards /up/* and /admin/*. One secret,
+ * dashboard only: GITHUB_APP_PRIVATE_KEY, for /admin/shipped.
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
@@ -18,7 +19,9 @@
 	// empty AUD matches no token, so writes fail closed until it is set.
 	"vars": {
 		"ACCESS_TEAM_DOMAIN": "notambourine.cloudflareaccess.com",
-		"ACCESS_AUD": "252be5cde15d1af7518104505aa6b4ce15d22182fb2892a1a25002b7db72d505"
+		"ACCESS_AUD": "252be5cde15d1af7518104505aa6b4ce15d22182fb2892a1a25002b7db72d505",
+		// notambourine-velocity, the App ../site's velocity board reads with.
+		"GITHUB_APP_ID": "5187948"
 	},
 	// src/skill.ts imports the plugin's SKILL.md and serves those exact bytes.
 	// src/brand.ts does the same for the golden set in @notambourine/brand-kit,

@@ -36,9 +36,9 @@ export function transformable(path: string): boolean {
 }
 
 export function runTransform(
-  ai: AiRunner, name: string, sources: readonly TransformSource[],
+  ai: AiRunner, name: string, sources: readonly TransformSource[], instructions: readonly string[] = [],
 ): Promise<string | null> {
   const prompt = promptFor(name);
   if (prompt === undefined) return Promise.resolve(null);
-  return runPrompt(ai, prompt, sources);
+  return runPrompt(ai, prompt, sources, instructions);
 }

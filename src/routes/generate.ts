@@ -1,4 +1,4 @@
-import type { Env, MetaFile } from '../lib/types';
+import type { AiRunner, Env, MetaFile } from '../lib/types';
 import { authorize } from '../lib/auth';
 import { readMeta, readPayload, isExpired, listAll, payloadKey } from '../lib/r2';
 import { contentTypeFor } from '../lib/keys';
@@ -62,6 +62,30 @@ async function freeStamp(
   let stamp = t;
   while (await env.BUCKET.head(payloadKey(space, hash, `${name}.${stamp}.md`))) stamp += 1;
   return `${name}.${stamp}.md`;
+}
+
+export interface GenerationRun {
+  ai: AiRunner;
+  env: Env;
+  space: string;
+  hash: string;
+  name: string;
+  sources: TransformSource[];
+  t: number;
+  instructions?: string[];
+}
+
+/** One model call, one stamped file beside the sources; null when the model failed. */
+export async function writeGeneration(run: GenerationRun): Promise<{ path: string; size: number } | null> {
+  const { ai, env, space, hash, name, sources, t, instructions } = run;
+  const out = await runTransform(ai, name, sources, instructions);
+  if (out === null) return null;
+  const path = await freeStamp(env, space, hash, name, t);
+  const blob = `${out}\n`;
+  await env.BUCKET.put(payloadKey(space, hash, path), blob, {
+    httpMetadata: { contentType: contentTypeFor(path) },
+  });
+  return { path, size: new TextEncoder().encode(blob).byteLength };
 }
 
 /** Versions one generation name may hold under one hash. The bound on what one
@@ -144,17 +168,11 @@ export async function generate(request: Request, env: Env, space: string, hash: 
     texts.push({ path: file.path, text });
   }
 
-  const out = await runTransform(ai, name, texts);
-  if (out === null) return refuse(request, 502, 'the model call failed; try again');
-
-  const path = await freeStamp(env, space, hash, name, t);
-  const blob = `${out}\n`;
-  await env.BUCKET.put(payloadKey(space, hash, path), blob, {
-    httpMetadata: { contentType: contentTypeFor(path) },
-  });
+  const written = await writeGeneration({ ai, env, space, hash, name, sources: texts, t });
+  if (written === null) return refuse(request, 502, 'the model call failed; try again');
+  const { path, size } = written;
 
   if (!isFormPost(request) || wantsJson(request)) {
-    const size = new TextEncoder().encode(blob).byteLength;
     return jsonResponse({ path, size, bare: `${name}.md` }, 201);
   }
   return seeOther(`/${space}/${hash}/${encodeURI(path)}`);

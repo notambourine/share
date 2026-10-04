@@ -58,7 +58,7 @@ interface PageOpts {
  * element calls its toString(). A doctype is not an element, so it cannot be
  * JSX and rides as the template's first line.
  */
-function layout({ title, body, description, head, bodyAttrs = {}, home = false, bar, script = '/render.js' }: PageOpts): string {
+export function layout({ title, body, description, head, bodyAttrs = {}, home = false, bar, script = '/render.js' }: PageOpts): string {
   return `<!doctype html>\n${
     <html lang="en">
       <head>

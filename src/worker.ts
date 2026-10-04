@@ -8,6 +8,7 @@ import { upload } from './routes/upload';
 import { del } from './routes/del';
 import { adminConfig, adminPage } from './routes/admin';
 import { generate } from './routes/generate';
+import { configClient, configPage, configPrompt, shippedPage, shippedRun } from './routes/shipped';
 import { skillDoc } from './skill';
 import { brandSheet } from './brand';
 import { sweep } from './sweep';
@@ -94,9 +95,16 @@ export default {
     }
 
     if (segs[0] === 'admin') {
+      const m = request.method;
+      const team = segs.slice(1).join('/');
+      if (team === 'shipped' && m === 'GET') return shippedPage(request, env);
+      if (team === 'shipped' && m === 'POST') return shippedRun(request, env);
+      if (team === 'config' && m === 'GET') return configPage(request, env);
+      if (team === 'config/client' && m === 'POST') return configClient(request, env);
+      if (team === 'config/prompt' && m === 'POST') return configPrompt(request, env);
+
       const [, space, hash, verb] = segs;
       if (!space || !isValidSpace(space) || !hash || !isValidHash(hash) || segs.length > 4) return notFound();
-      const m = request.method;
       if (!verb && (m === 'GET' || m === 'HEAD')) {
         if (!path.endsWith('/')) return Response.redirect(`${url.origin}${path}/`, 302);
         return adminPage(request, env, space, hash);

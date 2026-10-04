@@ -1,5 +1,6 @@
 import type { Env } from './lib/types';
 import { TRASH_PREFIX } from './lib/types';
+import { CONFIG_PREFIX } from './shipped/config';
 import { readMeta, isExpired, moveToTrash } from './lib/r2';
 import { now } from './lib/clock';
 
@@ -18,7 +19,7 @@ export async function sweep(env: Env): Promise<{ scanned: number; trashed: numbe
   do {
     const page = await env.BUCKET.list({ prefix: '', delimiter: '/', cursor });
     for (const p of page.delimitedPrefixes) {
-      if (p !== TRASH_PREFIX) spaces.push(p.replace(/\/$/, ''));
+      if (p !== TRASH_PREFIX && p !== CONFIG_PREFIX) spaces.push(p.replace(/\/$/, ''));
     }
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);

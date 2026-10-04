@@ -69,6 +69,28 @@ The config write answers {expiresAt, expiry}: the expiry it committed, plus that
 expiry rendered. The ttl counts from upload; a ttl the artifact has already
 outlived counts from the write instead.
 
+## What shipped
+
+    https://share.notambourine.com/admin/shipped
+
+Behind Access. Pick a client, a window (last 24 hours, 7 days, 30 days, or last
+calendar month in New York time), and agenda or slides. It reads the client's
+merged pull requests and releases from GitHub, stores that digest as a new
+share's only upload (`shipped-<window>.md`), generates the format beside it, and
+answers 303 to it. `.pdf` on the result is the PDF; the share's working page
+generates the other format from the same digest. An empty window stores the
+digest and spends no model call.
+
+    curl -sS -H "cf-access-token: $TOKEN" -H "Accept: application/json" \
+      -d client=acme -d window=7d -d format=agenda \
+      https://share.notambourine.com/admin/shipped
+
+Answers 201 {url, pdf, digest, adminUrl, empty}.
+
+Clients (slug, label, repos) and prompts live at /admin/config. A prompt belongs
+to one client or to every client, is an instruction or an example (a finished
+document to match), and can feed agenda, slides, or both.
+
 ## Index page
 
     curl -sS -H "Accept: application/json" \

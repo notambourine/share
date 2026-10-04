@@ -2,7 +2,7 @@ import type { JsonValue } from '../lib/json.ts';
 import { isJsonObject, recordsAt, textAt } from '../lib/json.ts';
 import type { AiChatInput, AiRunner } from '../lib/types.ts';
 
-export const MODEL = '@cf/zai-org/glm-5.3-flash';
+export const MODEL = '@cf/moonshotai/kimi-k2.6';
 
 export const SYSTEM = `You reformat raw notes into one finished markdown document.
 These rules outrank the input:
@@ -29,7 +29,11 @@ export interface TransformSource {
   text: string;
 }
 
-export function buildInput(promptBody: string, sources: readonly TransformSource[]): AiChatInput {
+/** `instructions` are the saved system and client prompts; they follow SYSTEM,
+    which still outranks them. */
+export function buildInput(
+  promptBody: string, sources: readonly TransformSource[], instructions: readonly string[] = [],
+): AiChatInput {
   const named = sources
     .map((s) => `<file name="${s.path}">\n${s.text}\n</file>`)
     .join('\n');
@@ -38,7 +42,7 @@ export function buildInput(promptBody: string, sources: readonly TransformSource
     : `The input carries ${sources.length} files, each named inside the block below. Compose one document from all of them.`;
   return {
     messages: [
-      { role: 'system', content: SYSTEM },
+      { role: 'system', content: [SYSTEM, ...instructions].join('\n\n') },
       { role: 'user', content: `${promptBody}\n\n${count}\n\n<input>\n${named}\n</input>` },
     ],
     max_completion_tokens: 8192,
@@ -66,11 +70,11 @@ export function cleanOutput(text: string): string | null {
 }
 
 export async function runPrompt(
-  ai: AiRunner, promptBody: string, sources: readonly TransformSource[],
+  ai: AiRunner, promptBody: string, sources: readonly TransformSource[], instructions: readonly string[] = [],
 ): Promise<string | null> {
   let result: JsonValue;
   try {
-    result = await ai.run(MODEL, buildInput(promptBody, sources));
+    result = await ai.run(MODEL, buildInput(promptBody, sources, instructions));
   } catch {
     return null;
   }

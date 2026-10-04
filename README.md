@@ -23,6 +23,13 @@ deletes the share. A generation lands stamped (`deck.<epoch>.md`) and the bare
 sent. Every share's root is an **index page** of sources, versions, and renders:
 HTML, or JSON on `Accept: application/json`.
 
+**What shipped** (`/admin/shipped`, or `nt-share shipped <client>`) reads a
+client's merged PRs and releases for the last 24 hours, 7 days, 30 days, or last
+calendar month, and writes an agenda or slides into a new share; `.pdf` on the
+result is the PDF. Clients, their repos, and the system and per-client prompts
+(rules plus finished examples to match) live in R2 under `_config/`, edited at
+`/admin/config`, because client names never enter this repo.
+
 ## How it holds together
 
 - **Cloudflare Worker + R2**, free tier. Everything renders in the Worker on the
@@ -76,6 +83,9 @@ step 2.
    the identity provider, one Allow policy on emails ending in
    `@notambourine.com`. Copy the app's AUD tag and team domain into `vars` in
    `wrangler.jsonc`.
+5. **GitHub App key**: secret `GITHUB_APP_PRIVATE_KEY`, the `notambourine-velocity`
+   App's key as PKCS#8 PEM (the same value `../site` holds). Only `/admin/shipped`
+   reads it.
 
 Browser Rendering needs no step; the `browser` binding is the whole setup. The
 free plan's 10 browser-minutes a day account-wide is the constraint on PDF
