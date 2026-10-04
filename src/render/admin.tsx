@@ -7,7 +7,7 @@
 import type { Client, Prompt } from '../shipped/config';
 import { FORMATS, SYSTEM_SCOPE } from '../shipped/config';
 import { WINDOWS } from '../shipped/window';
-import { layout } from './shell';
+import { layout, modelPicker } from './shell';
 
 const BAR = <span class="pill pill-admin">admin</span>;
 
@@ -50,6 +50,7 @@ export function shippedShell(clients: Client[]): string {
                   ))}
                 </div>
               </div>
+              {modelPicker()}
               <div class="chiprow">
                 {FORMATS.map((f) => (
                   <button class="abtn abtn-primary" type="submit" name="format" value={f.key}>{f.label}</button>

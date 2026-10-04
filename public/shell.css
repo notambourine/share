@@ -274,6 +274,7 @@ body.admin .stage, body.index .stage { justify-content: flex-start; }
   margin: 0 0 var(--sp-4); }
 .note { color: var(--fg3); font-size: var(--fs-caption); margin: var(--sp-3) 0 0; }
 
+.picks + .field { margin-bottom: var(--sp-4); }
 .chiprow { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .chip { font-family: var(--font-accent); font-size: var(--fs-caption);
   font-weight: var(--fw-semibold); color: var(--fg2); background: var(--bg-card);

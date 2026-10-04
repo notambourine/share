@@ -15,6 +15,7 @@ import { writeGeneration } from '../routes/generate';
 import type { Client, FormatKey } from './config';
 import { FORMATS, instructionsFor } from './config';
 import type { Span } from './window';
+import type { Model } from '../transforms/prompt';
 
 export type ShippedResult =
   | { ok: true; space: string; hash: string; path: string; source: string; empty: boolean }
@@ -47,12 +48,13 @@ export interface ShippedRun {
   client: Client;
   span: Span;
   format: FormatKey;
+  model: Model;
   uploader: string;
   t: number;
 }
 
 export async function runShipped(run: ShippedRun): Promise<ShippedResult> {
-  const { env, ai, client, span, format, uploader, t } = run;
+  const { env, ai, client, span, format, model, uploader, t } = run;
   if (client.repos.length === 0) return fail(400, `${client.label} has no repos configured`);
 
   let collected: Shipped | { error: string };
@@ -84,7 +86,7 @@ export async function runShipped(run: ShippedRun): Promise<ShippedResult> {
 
   const name = FORMATS.find((f) => f.key === format)?.generation ?? 'agenda';
   const written = await writeGeneration({
-    ai, env, space, hash, name, t,
+    ai, env, space, hash, name, t, model,
     sources: [{ path: source, text }],
     instructions: await instructionsFor(env, client.slug, format),
   });

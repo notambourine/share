@@ -3,7 +3,7 @@ import type { AiRunner } from '../src/lib/types';
 import { readMeta } from '../src/lib/r2';
 import { now } from '../src/lib/clock';
 import { GENERATIONS, MAX_TRANSFORM_BYTES, promptFor } from '../src/transforms';
-import { MODEL, SYSTEM, buildInput, cleanOutput, decodeAiText } from '../src/transforms/prompt';
+import { MODEL, MODELS, SYSTEM, buildInput, cleanOutput, decodeAiText } from '../src/transforms/prompt';
 import type { TestEnv } from './bindings';
 import { fetchWorker, memoryAi, testEnv } from './bindings';
 import { MAX_VERSIONS } from '../src/routes/generate';
@@ -40,6 +40,7 @@ function seededEnv(ai?: AiRunner, files = FILES): TestEnv {
 interface GenerateBody {
   name?: string;
   sources: string[];
+  model?: string;
 }
 
 const GENERATE = `https://share.test/admin/${SPACE}/${HASH}/generate`;
@@ -128,13 +129,25 @@ describe('POST /<space>/<hash>/generate', () => {
   /* Many-to-one is the point: the material for a deck is a notes file plus a
      log plus a transcript, and one prompt composing them is why the working
      page asks which files feed it. */
+  it('runs the picked model at its own effort, and refuses one off the list', async () => {
+    const deepseek = MODELS[2];
+    const ai = memoryAi([{ response: FORMATTED }]);
+    const env = seededEnv(ai);
+    expect((await gen(env, { name: 'agenda', sources: ['notes.txt'], model: deepseek.id })).status).toBe(201);
+    expect(ai.calls[0].model).toBe(deepseek.id);
+    expect(ai.calls[0].input.reasoning_effort).toBe('none');
+
+    expect((await gen(env, { name: 'agenda', sources: ['notes.txt'], model: '@cf/moonshotai/kimi-k2.6' })).status).toBe(400);
+    expect(ai.calls).toHaveLength(1);
+  });
+
   it('composes two sources into one input block, in the ticked order', async () => {
     const ai = memoryAi([{ response: FORMATTED }]);
     const env = seededEnv(ai);
     const res = await gen(env, { name: 'deck', sources: ['log.md', 'notes.txt'] });
     expect(res.status).toBe(201);
     expect(ai.calls).toHaveLength(1);
-    expect(ai.calls[0].model).toBe(MODEL);
+    expect(ai.calls[0].model).toBe(MODEL.id);
     const [system, user] = ai.calls[0].input.messages;
     expect(system.content).toBe(SYSTEM);
     expect(user.content).toContain(promptFor('deck'));

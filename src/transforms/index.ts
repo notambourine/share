@@ -3,7 +3,7 @@ import deckPrompt from './deck.md';
 import renewalPrompt from './renewal.md';
 import shipSummaryPrompt from './ship-summary.md';
 import type { AiRunner } from '../lib/types';
-import { type TransformSource, runPrompt } from './prompt';
+import { type Model, type TransformSource, runPrompt } from './prompt';
 
 export interface Generation {
   name: string;
@@ -37,8 +37,9 @@ export function transformable(path: string): boolean {
 
 export function runTransform(
   ai: AiRunner, name: string, sources: readonly TransformSource[], instructions: readonly string[] = [],
+  model?: Model,
 ): Promise<string | null> {
   const prompt = promptFor(name);
   if (prompt === undefined) return Promise.resolve(null);
-  return runPrompt(ai, prompt, sources, instructions);
+  return runPrompt(ai, prompt, sources, instructions, model);
 }

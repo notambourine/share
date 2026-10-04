@@ -166,7 +166,7 @@ describe('POST /admin/shipped', () => {
 
     expect(github.searches[0]).toContain('is:pr is:merged merged:');
     expect(github.searches[0]).toContain('repo:acme/web');
-    expect(env.ai.calls[0].model).toBe(MODEL);
+    expect(env.ai.calls[0].model).toBe(MODEL.id);
     expect(env.ai.calls[0].input.messages[0].content).toContain('Call it Acme.');
 
     const doc = await fetchWorker(env, new Request(`https://share.test${location}`, { headers: { accept: 'text/html' } }));
@@ -183,6 +183,14 @@ describe('POST /admin/shipped', () => {
     expect(body.digest).toMatch(/shipped-month\.md$/);
     expect(body.adminUrl).toMatch(/\/admin\/acme\/[A-Za-z0-9]{12}\/$/);
     expect(body.empty).toBe(false);
+  });
+
+  it('passes the picked model through to the generation', async () => {
+    const env = await shippedEnv();
+    const res = await run(env, { client: 'acme', window: '7d', format: 'agenda', model: '@cf/qwen/qwen3.8-27b' }, true);
+    expect(res.status).toBe(201);
+    expect(env.ai.calls[0].model).toBe('@cf/qwen/qwen3.8-27b');
+    expect((await run(env, { client: 'acme', window: '7d', format: 'agenda', model: 'gpt-9' }, true)).status).toBe(400);
   });
 
   it('spends no model call on an empty window', async () => {

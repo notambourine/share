@@ -12,6 +12,7 @@ import {
 } from '../shipped/config';
 import { isWindowKey, windowSpan } from '../shipped/window';
 import { runShipped } from '../shipped/run';
+import { MODELS, modelFor } from '../transforms/prompt';
 
 /** A form entry is a string or a File; only the string half carries a value. */
 function isText(value: File | string): value is string {
@@ -62,11 +63,13 @@ export async function shippedRun(request: Request, env: Env): Promise<Response> 
   const format = field(form, 'format');
   if (!isWindowKey(windowKey)) return refuse(400, 'window is one of 24h, 7d, 30d, month');
   if (!isFormatKey(format)) return refuse(400, 'format is agenda or slides');
+  const model = modelFor(field(form, 'model'));
+  if (!model) return refuse(400, `unknown model (${MODELS.map((m) => m.id).join(', ')})`);
   const client = isValidSpace(slug) ? await readClient(env, slug) : null;
   if (!client) return refuse(404, `no client ${slug}; add it at /admin/config`);
 
   const t = now();
-  const out = await runShipped({ env, ai, client, span: windowSpan(windowKey, t), format, uploader: gate.email, t });
+  const out = await runShipped({ env, ai, client, span: windowSpan(windowKey, t), format, model, uploader: gate.email, t });
   if (!out.ok) return refuse(out.status, out.error);
 
   const origin = new URL(request.url).origin;

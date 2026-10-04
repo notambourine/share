@@ -70,7 +70,7 @@ export interface AiChatInput {
   messages: AiMessage[];
   max_completion_tokens: number;
   temperature: number;
-  reasoning_effort: 'low' | 'medium' | 'high';
+  reasoning_effort: 'none' | 'low';
 }
 
 /** No BindingsFit row: workers-types keys `Ai["run"]` to a closed model union

@@ -20,6 +20,7 @@ import { formatsFor, stemOf } from '../lib/exportPath';
 import { fileSuffix } from '../lib/link';
 import { fmtSize } from '../lib/format';
 import { GENERATIONS, transformable } from '../transforms';
+import { MODELS } from '../transforms/prompt';
 import { SSR_ROWS } from './csv';
 import type { Table } from '../lib/table';
 import { LOCKUP } from '../brand';
@@ -594,6 +595,18 @@ export interface AdminView {
   now: number;
 }
 
+/** Both generate forms carry it; admin.js restores the last pick from localStorage. */
+export function modelPicker(): Child {
+  return (
+    <label class="field">
+      <span>model</span>
+      <select name="model" data-model>
+        {MODELS.map((m, i) => <option value={m.id} selected={i === 0}>{m.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
 /**
  * The text files a generation can read, as checkboxes in upload order - which is
  * also the order they reach the prompt, because a form serializes its boxes as
@@ -623,6 +636,7 @@ function sourcePicker(meta: Meta): Child | null {
           </li>
         ))}
       </ul>
+      {modelPicker()}
       <div class="chiprow">
         {GENERATIONS.map((g) => (
           <button class="chip" type="submit" name="name" value={g.name} title={g.sub}>{g.label}</button>

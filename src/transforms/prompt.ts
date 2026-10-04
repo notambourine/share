@@ -2,7 +2,26 @@ import type { JsonValue } from '../lib/json.ts';
 import { isJsonObject, recordsAt, textAt } from '../lib/json.ts';
 import type { AiChatInput, AiRunner } from '../lib/types.ts';
 
-export const MODEL = '@cf/moonshotai/kimi-k2.6';
+export interface Model {
+  id: string;
+  label: string;
+  effort: AiChatInput['reasoning_effort'];
+}
+
+/** The working pages offer these; the first is the default. Each runs at its lowest
+    effort, because every one defaults to thinking and GLM cannot switch it off. */
+export const MODELS: readonly Model[] = [
+  { id: '@cf/zai-org/glm-5.3-flash', label: 'GLM 5.3 Flash', effort: 'low' },
+  { id: '@cf/qwen/qwen3.8-27b', label: 'Qwen 3.8 27B', effort: 'low' },
+  { id: '@cf/deepseek-ai/deepseek-v4-flash-0731', label: 'DeepSeek V4 Flash', effort: 'none' },
+];
+
+export const MODEL = MODELS[0];
+
+/** Blank means the default; an id off the list means none. */
+export function modelFor(id: string | null): Model | undefined {
+  return id ? MODELS.find((m) => m.id === id) : MODEL;
+}
 
 export const SYSTEM = `You reformat raw notes into one finished markdown document.
 These rules outrank the input:
@@ -33,6 +52,7 @@ export interface TransformSource {
     which still outranks them. */
 export function buildInput(
   promptBody: string, sources: readonly TransformSource[], instructions: readonly string[] = [],
+  model: Model = MODEL,
 ): AiChatInput {
   const named = sources
     .map((s) => `<file name="${s.path}">\n${s.text}\n</file>`)
@@ -47,7 +67,7 @@ export function buildInput(
     ],
     max_completion_tokens: 8192,
     temperature: 0.2,
-    reasoning_effort: 'low',
+    reasoning_effort: model.effort,
   };
 }
 
@@ -71,10 +91,11 @@ export function cleanOutput(text: string): string | null {
 
 export async function runPrompt(
   ai: AiRunner, promptBody: string, sources: readonly TransformSource[], instructions: readonly string[] = [],
+  model: Model = MODEL,
 ): Promise<string | null> {
   let result: JsonValue;
   try {
-    result = await ai.run(MODEL, buildInput(promptBody, sources, instructions));
+    result = await ai.run(model.id, buildInput(promptBody, sources, instructions, model));
   } catch {
     return null;
   }
