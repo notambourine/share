@@ -48,12 +48,15 @@ export function isStatic(path: string): boolean {
 }
 
 export async function staticAsset(request: Request, env: Env): Promise<Response> {
-  const alias = ROOT_ICONS.get(new URL(request.url).pathname);
+  const path = new URL(request.url).pathname;
+  const alias = ROOT_ICONS.get(path);
   const req = alias ? new Request(new URL(alias, request.url), request) : request;
   const res = await env.ASSETS.fetch(req);
   const out = new Response(res.body, res);
   out.headers.set('x-robots-tag', ROBOTS);
-  out.headers.set('cache-control', 'public, max-age=3600');
+  // Pages link the chrome at fixed URLs, so a cached copy outlives a deploy and
+  // renders new markup with old rules; revalidating costs one 304.
+  out.headers.set('cache-control', STATIC.has(path) ? 'no-cache' : 'public, max-age=3600');
   return out;
 }
 

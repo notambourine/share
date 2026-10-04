@@ -149,6 +149,11 @@ describe('staticAsset', () => {
     expect(res.headers.get('content-type')).toBe('font/woff2');
   });
 
+  it('makes the chrome revalidate so a deploy reaches open browsers', async () => {
+    const res = await staticAsset(new Request('https://s.test/shell.css'), envWith('css'));
+    expect(res.headers.get('cache-control')).toBe('no-cache');
+  });
+
   /* public/logo/ holds the only bytes, so a root icon has to be rewritten
      rather than copied. A copy is what would drift on the next kit bump. */
   it('rewrites a root icon onto the golden set, and passes everything else through', async () => {

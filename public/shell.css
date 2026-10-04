@@ -300,7 +300,10 @@ code.cmd { display: block; margin-top: var(--sp-2); padding: var(--sp-2) var(--s
 .field input, .field select, .field textarea { font: inherit; color: var(--fg1);
   background: var(--bg-card); border: 1px solid var(--line);
   border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); }
+.field > small { color: var(--fg3); font-size: var(--fs-caption); }
 .field textarea { min-height: 8em; resize: vertical; }
+.config-section { margin-top: var(--sp-8); }
+.config-section .form-stack > h3 { margin: 0; }
 .field input:focus, .field select:focus, .field textarea:focus {
   outline: none; border-color: var(--accent); }
 .radios { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
