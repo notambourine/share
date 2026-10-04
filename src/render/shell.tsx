@@ -461,14 +461,14 @@ export function indexShell(index: ArtifactIndex, meta: Meta, t: number = now()):
 export function homeShell(): string {
   return layout({
     home: true,
-    title: 'NoTambourine',
-    description: 'Senior engineers using AI inside your team to ship the systems your business needs next.',
+    title: 'Engineering you can see in the numbers.',
+    description: 'Senior engineers who join your team and lead delivery. We handle platform migrations, redesigns, site speed, and ongoing engineering.',
     body: (
       <div class="card">
-        <p class="eyebrow">senior engineers, inside your team</p>
-        <h2>Ship the systems your business needs <em>next</em>.</h2>
-        <p>NoTambourine brings senior engineers into your team to own delivery and build with AI.</p>
-        <p>Launch a product, improve a core system, automate routine work, or connect your systems and data.</p>
+        <p class="eyebrow">Boutique AI-native engineering agency</p>
+        <h2>Engineering you can see in the <em>numbers</em>.</h2>
+        <p>NoTambourine puts senior engineers inside your team to lead delivery. We take on platform migrations, redesigns, site speed work, and ongoing engineering. We plan each project around the business result it should produce.</p>
+        <p>After our most recent redesign launched, traffic rose 20% and conversion rate rose 20% on top of it.</p>
         <a class="btn" href="https://notambourine.com">Start a conversation</a>
       </div>
     ),

@@ -23,7 +23,7 @@
   `<script type="application/json">` data block, which Tabulator reads in
   `src/client/table.ts`. That block is the one page whose rows the client draws;
   it still arrives on the GET, so the no-fetch and no-poll rules hold. Never swap
-  it for a fetch, and never let the static rows go — they are the fallback when a
+  it for a fetch, and never let the static rows go; they are the fallback when a
   decode fails. Tabulator's stock themes are hardcoded hex and never ship;
   `public/nt-table.css` is the golden-set port that `npm run brand` gates.
 - Every HTML page comes from `layout()` (`src/render/shell.tsx`), the landing page
