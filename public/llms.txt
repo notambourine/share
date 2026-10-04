@@ -5,49 +5,48 @@ URL, hand it to one person. This file is the whole API.
 
 ## Auth
 
-Writes need `Authorization: Bearer <token>`: your raw vault token. Load it from
-1Password by reference; never paste it into a transcript or a shell history.
-Convention: it lives in your Employee vault as item `share-token`, field
-`credential`. Run a command under this prefix (op run resolves the reference
-from the environment; single-quote the inner command so your shell does not
-expand $SHARE_TOKEN early):
+Writes sit behind Cloudflare Access (Google SSO, @notambourine.com accounts).
+From a terminal, `cloudflared` holds the session:
 
-    SHARE_TOKEN=op://Employee/share-token/credential op run -- sh -c '<command>'
+    cloudflared access login https://share.notambourine.com/up/
+    TOKEN=$(cloudflared access token -app=https://share.notambourine.com/up/)
+
+Send it as `cf-access-token: $TOKEN`. In a browser, the /admin/ pages sign you
+in themselves.
 
 Reads need nothing: the unguessable hash in the URL is the credential.
 
 ## Upload
 
-    curl -sS -H "Authorization: Bearer $SHARE_TOKEN" \
-      -F f=@out/report.html https://share.notambourine.com/up/<space>
+    curl -sS -H "cf-access-token: $TOKEN" \
+      -F f=@out/report.md https://share.notambourine.com/up/<space>
 
 Returns the share URL as plain text (`Accept: application/json` for JSON).
-Multiple `-F f=@...` fields keep their relative paths, so a folder with an
-`index.html` serves as a real page with its own CSS, JS, and images.
+Multiple `-F f=@...` fields keep their relative paths.
+
+Only inert files upload: markdown, text, csv/tsv, json, code (served as plain
+text), pdf, images, svg, video, audio, and zip/gz/tar. HTML is refused with a 400
+naming the file; nothing uploaded ever runs on this origin.
 
 Query parameters:
   ttl=<dur>|forever  fixed artifact expiry, default 90d (e.g. 7d, 12h, 4w)
 
 Nothing renders and nothing generates at upload. With
 `Accept: application/json` the answer carries url, hash, expiresAt, files, and
-adminUrl plus adminExp: the working-page link (see Working page), live for
-5 minutes, for the uploader only - never a link to hand over. The plain-text
-answer stays the one hand-over URL.
+adminUrl: the working page (see below), for the uploader only - never a link to
+hand over. The plain-text answer stays the one hand-over URL.
 
 ## Working page
 
-    curl -sS -X POST -H "Authorization: Bearer $SHARE_TOKEN" \
-      https://share.notambourine.com/<space>/<hash>/admin
+    https://share.notambourine.com/admin/<space>/<hash>/
 
-Returns {url, exp}: the artifact's working page, live for 5 minutes. Upload
-mints one too (adminUrl in its JSON answer); this route re-opens it. The url
-carries ?c=<token>, a credential scoped to exactly this artifact's write routes
-- it is not a view credential and never belongs in a link you hand over. It
-authorizes three writes:
+Behind Access, so it opens for any signed-in teammate and for nobody else. It
+holds the source checkboxes and generation buttons, format links to hand over,
+the expiry chips, and delete. Its writes, each needing the Access session:
 
-    POST /<space>/<hash>/generate?c=<token>  {"name":"deck","sources":["notes.md"]}
-    POST /<space>/<hash>/config?c=<token>    {"ttl":"30d"} or {"ttl":"forever"}
-    DELETE /<space>/<hash>/?c=<token>        same soft delete as Revoke below
+    POST /admin/<space>/<hash>/generate  {"name":"deck","sources":["notes.md"]}
+    POST /admin/<space>/<hash>/config    {"ttl":"30d"} or {"ttl":"forever"}
+    DELETE /admin/<space>/<hash>/        soft delete, see Revoke
 
 The generate write composes the named sources, in the order given, into one
 document through a server-side prompt. `name` is one of deck, agenda, renewal,
@@ -63,17 +62,12 @@ the index page and the bare alias both find it by listing. The request holds for
 the length of the model call - a few seconds - which is how the working page's
 form gets away with submitting into a new tab and no polling anywhere. A form
 POST (`application/x-www-form-urlencoded`, repeated `sources` fields) answers 303
-to the version instead of the JSON above, so ask with
+to the version's public URL instead of the JSON above, so ask with
 `Accept: application/json` to get data.
 
-The config write answers {c, exp, expiresAt, expiry}: a fresh 5-minute token
-with the epoch it dies (each edit restarts the clock; adopt the new c) plus the
-expiry it committed, rendered. The ttl counts from upload; a ttl the artifact
-has already outlived counts from the write instead.
-
-Opened in a browser, the url serves the working page: the source checkboxes and
-generation buttons, format links to hand over (they carry no c=), the expiry
-chips, and delete. An invalid or expired c= serves the public index, never a 401.
+The config write answers {expiresAt, expiry}: the expiry it committed, plus that
+expiry rendered. The ttl counts from upload; a ttl the artifact has already
+outlived counts from the write instead.
 
 ## Index page
 
@@ -84,18 +78,16 @@ The share's own root, with no credential. JSON: space, hash, createdAt,
 expiresAt, uploads (path, size, stamp, exports), generations (name, versions
 newest first), and renders (source, path, key, check). `stamp` is the epoch a
 generated version landed under and null on an upload; `key` is which mode
-rendered - slides.pdf, doc.pdf, page.pdf, page.png; `check` carries
+rendered - slides.pdf or doc.pdf; `check` carries
 {slides, overflow} for a deck render that was measured, where overflow lists the
 1-indexed slides whose content clips the page.
 
-In a browser the same URL is a page listing the same thing. A share whose upload
-carries an `index.html` serves that page here instead: the folder is the
-artifact.
+In a browser the same URL is a page listing the same thing.
 
 ## Revoke
 
-    curl -sS -X DELETE -H "Authorization: Bearer $SHARE_TOKEN" \
-      https://share.notambourine.com/<space>/<hash>/
+    curl -sS -X DELETE -H "cf-access-token: $TOKEN" \
+      https://share.notambourine.com/admin/<space>/<hash>/
 
 Soft delete: the upload moves to trash and purges 90 days later. The live
 link dies within 10 minutes (cache lifetime).
@@ -104,8 +96,7 @@ link dies within 10 minutes (cache lifetime).
 
 The same URL renders for browsers and serves raw bytes to everything else
 (curl, <img src>, Slack unfurls). Overrides: ?raw forces bytes, ?view forces
-the branded shell, ?view=source shows
-uploaded HTML highlighted instead of executed.
+the branded shell, ?view=source shows a csv as highlighted text.
 
 Fenced code blocks come out highlighted, and a ```mermaid fence comes out
 drawn: flowchart, sequence, state, class, ER, and xychart, as inline SVG in
@@ -129,19 +120,11 @@ Both read the content to choose: `marp: true` front matter or `---` slide
 separators mean deck, anything else means document. When one upload holds both
 deck.md and deck.markdown, the .md spelling wins the base name.
 
-An uploaded HTML page exports too: uploaded `page.html`, ask for
-
-    page.pdf             PDF of the page, plain A4
-    page.png             screenshot, the whole page at 1280 wide
-
-PNG is HTML-only; markdown keeps its own family above. When one upload holds
-both deck.md and deck.html, markdown wins the base and deck.png is a 404.
-
 A generated document lands stamped (`deck.<epoch>.md`) and the bare name follows
 the newest stamp, so `deck.md` and `deck.pdf` serve the latest version while
 every older stamp keeps its own URL. The index page lists all of them.
 
-Nothing renders at upload. A .pdf or .png is rendered by the first request that
+Nothing renders at upload. A .pdf is rendered by the first request that
 asks for it and then cached, so that request can take a few seconds; one that is
 not rendered yet answers 202 with Retry-After: 5 - wait that long and
 re-request. It never answers HTML at 200, so `curl -o` cannot write a page into

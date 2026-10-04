@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { AiRunner } from '../src/lib/types';
 import { readMeta } from '../src/lib/r2';
-import { ADMIN_SECS, mintAdminToken } from '../src/lib/admin';
 import { now } from '../src/lib/clock';
 import { GENERATIONS, MAX_TRANSFORM_BYTES, promptFor } from '../src/transforms';
 import { MODEL, SYSTEM, buildInput, cleanOutput, decodeAiText } from '../src/transforms/prompt';
 import type { TestEnv } from './bindings';
 import { fetchWorker, memoryAi, testEnv } from './bindings';
 import { MAX_VERSIONS } from '../src/routes/generate';
+import { signedIn } from './access';
 
-const KEYS = { v1: 'unit-test-signing-secret' };
 const SPACE = 'acme';
 const HASH = 'Ab3dEf6hIj9k';
 const NOW = now();
@@ -25,7 +24,6 @@ const FILES = [
 
 function seededEnv(ai?: AiRunner, files = FILES): TestEnv {
   return testEnv({
-    signingKeys: JSON.stringify(KEYS),
     ai,
     objects: {
       [`${SPACE}/${HASH}/meta.json`]: JSON.stringify({
@@ -44,12 +42,12 @@ interface GenerateBody {
   sources: string[];
 }
 
-async function gen(env: TestEnv, body: GenerateBody, c?: string) {
-  const token = c ?? await mintAdminToken(KEYS, SPACE, HASH, NOW + ADMIN_SECS);
-  return fetchWorker(env, new Request(
-    `https://share.test/${SPACE}/${HASH}/generate?c=${token}`,
-    { method: 'POST', body: JSON.stringify(body) },
-  ));
+const GENERATE = `https://share.test/admin/${SPACE}/${HASH}/generate`;
+
+async function gen(env: TestEnv, body: GenerateBody, signed = true) {
+  return fetchWorker(env, new Request(GENERATE, {
+    method: 'POST', body: JSON.stringify(body), headers: signed ? await signedIn() : {},
+  }));
 }
 
 describe('POST /<space>/<hash>/generate', () => {
@@ -101,35 +99,27 @@ describe('POST /<space>/<hash>/generate', () => {
      the model call has to land on the version rather than on a JSON blob. */
   it('answers a form POST with a 303 to the version it wrote', async () => {
     const env = seededEnv(memoryAi([{ response: FORMATTED }]));
-    const token = await mintAdminToken(KEYS, SPACE, HASH, NOW + ADMIN_SECS);
     const form = new URLSearchParams({ name: 'deck' });
     form.append('sources', 'log.md');
-    const res = await fetchWorker(env, new Request(
-      `https://share.test/${SPACE}/${HASH}/generate?c=${token}`,
-      {
-        method: 'POST',
-        body: form,
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      },
-    ));
+    const res = await fetchWorker(env, new Request(GENERATE, {
+      method: 'POST',
+      body: form,
+      headers: { 'content-type': 'application/x-www-form-urlencoded', ...await signedIn() },
+    }));
     expect(res.status).toBe(303);
-    // Relative, so it resolves beside `generate` and drops the token.
-    expect(res.headers.get('location')).toMatch(/^deck\.\d+\.md$/);
+    // The public URL, out from under /admin/.
+    expect(res.headers.get('location')).toMatch(new RegExp(`^/${SPACE}/${HASH}/deck\\.\\d+\\.md$`));
   });
 
   it('answers a form POST it refuses with a page, not JSON', async () => {
     const env = seededEnv(memoryAi([new Error('boom')]));
-    const token = await mintAdminToken(KEYS, SPACE, HASH, NOW + ADMIN_SECS);
     const form = new URLSearchParams({ name: 'deck' });
     form.append('sources', 'log.md');
-    const res = await fetchWorker(env, new Request(
-      `https://share.test/${SPACE}/${HASH}/generate?c=${token}`,
-      {
-        method: 'POST',
-        body: form,
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      },
-    ));
+    const res = await fetchWorker(env, new Request(GENERATE, {
+      method: 'POST',
+      body: form,
+      headers: { 'content-type': 'application/x-www-form-urlencoded', ...await signedIn() },
+    }));
     expect(res.status).toBe(502);
     expect(res.headers.get('content-type')).toContain('text/html');
     expect(await res.text()).toContain('the model call failed');
@@ -226,12 +216,15 @@ describe('POST /<space>/<hash>/generate', () => {
     expect((await gen(undecodable, { name: 'deck', sources: ['log.md'] })).status).toBe(502);
   });
 
-  it('refuses a missing, foreign, or expired credential', async () => {
-    const env = seededEnv(memoryAi([{ response: FORMATTED }]));
-    const stale = await mintAdminToken(KEYS, SPACE, HASH, NOW - 1);
-    expect((await gen(env, { name: 'deck', sources: ['log.md'] }, stale)).status).toBe(401);
-    const other = await mintAdminToken(KEYS, SPACE, 'Zz9dEf6hIj9k', NOW + ADMIN_SECS); // gitleaks:allow
-    expect((await gen(env, { name: 'deck', sources: ['log.md'] }, other)).status).toBe(401);
+  it('refuses an anonymous caller, and the public path takes no POST', async () => {
+    const ai = memoryAi([{ response: FORMATTED }]);
+    const env = seededEnv(ai);
+    expect((await gen(env, { name: 'deck', sources: ['log.md'] }, false)).status).toBe(401);
+    const pub = await fetchWorker(env, new Request(`https://share.test/${SPACE}/${HASH}/generate`, {
+      method: 'POST', body: JSON.stringify({ name: 'deck', sources: ['log.md'] }), headers: await signedIn(),
+    }));
+    expect(pub.status).toBe(405);
+    expect(ai.calls).toHaveLength(0);
   });
 });
 

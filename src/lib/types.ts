@@ -91,10 +91,9 @@ export interface Env {
       whole binding. Optional: a deploy that predates it, or an account past its
       daily browser minutes, degrades to the live shell. */
   BROWSER?: Fetcher;
-  /** Secret. JSON map of uploader name -> sha256 hex of their Bearer token. */
-  TOKENS: string;
-  /** Secret. JSON map of key id ("v1") -> base64url signing secret. Highest id mints. */
-  SIGNING_KEYS: string;
+  /** The Access app guarding `/up/*` and `/admin/*`: team domain and AUD tag. */
+  ACCESS_TEAM_DOMAIN: string;
+  ACCESS_AUD: string;
 }
 
 type Fits<From extends To, To> = From;

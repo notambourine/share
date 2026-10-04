@@ -7,9 +7,9 @@ import {
 } from '../src/lib/exportPath';
 
 describe('parseExportPath', () => {
-  it('reads the two spellings and nothing else', () => {
+  it('reads the one spelling and nothing else', () => {
     expect(parseExportPath('deck.pdf')).toEqual({ base: 'deck', format: 'pdf' });
-    expect(parseExportPath('page.png')).toEqual({ base: 'page', format: 'png' });
+    expect(parseExportPath('page.png')).toBeNull();
     expect(parseExportPath('deck.slides.pdf')).toEqual({ base: 'deck.slides', format: 'pdf' });
   });
 
@@ -61,19 +61,13 @@ describe('resolveExport', () => {
     expect(resolveExport(files, 'shot.png')).toBeNull();
   });
 
-  it('falls back to an .html source, which takes both spellings', () => {
-    const page = ['page.html', 'shot.png'];
-    expect(resolveExport(page, 'page.pdf')).toEqual({ source: 'page.html', format: 'pdf' });
-    expect(resolveExport(page, 'page.png')).toEqual({ source: 'page.html', format: 'png' });
-    // `.html` beats `.htm` when one upload holds both spellings.
-    expect(resolveExport(['a.htm', 'a.html'], 'a.pdf')?.source).toBe('a.html');
-    expect(resolveExport(['a.htm'], 'a.pdf')?.source).toBe('a.htm');
-  });
-
-  it('markdown wins a contested base, so its .png stays a 404', () => {
-    const both = ['deck.md', 'deck.html'];
-    expect(resolveExport(both, 'deck.pdf')).toEqual({ source: 'deck.md', format: 'pdf' });
-    expect(resolveExport(both, 'deck.png')).toBeNull();
+  /* An older share can still hold an uploaded page; it is a source of nothing. */
+  it('never resolves onto an .html source', () => {
+    const page = ['page.html', 'a.htm'];
+    expect(resolveExport(page, 'page.pdf')).toBeNull();
+    expect(resolveExport(page, 'page.png')).toBeNull();
+    expect(resolveExport(page, 'a.pdf')).toBeNull();
+    expect(resolveExport(['deck.md', 'deck.html'], 'deck.pdf')).toEqual({ source: 'deck.md', format: 'pdf' });
   });
 });
 
@@ -86,11 +80,6 @@ describe('derivedKey', () => {
   it('keys by resolved mode, so a doc render never collides with a deck one', () => {
     const slides = derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'slides', 'pdf');
     expect(derivedKey('acme', 'Xk92mQ7bTp01', 'deck.md', 'doc', 'pdf')).not.toBe(slides);
-  });
-
-  it('keys a page mode by its extension', () => {
-    expect(derivedKey('acme', 'Xk92mQ7bTp01', 'page.html', 'page', 'png'))
-      .toBe(`acme/Xk92mQ7bTp01/d/v${CACHE_VERSION}/page.html.page.png`);
   });
 
   /* A generation's stamp rides in the source name, which is what keeps each
@@ -116,25 +105,14 @@ describe('formatsFor', () => {
     expect(suffixes('deck.1712.md')).toEqual(['.pdf']);
   });
 
-  it('offers an uploaded page the print and the shot', () => {
-    expect(suffixes('page.html')).toEqual(['.pdf', '.png']);
-    expect(suffixes('page.htm')).toEqual(suffixes('page.html'));
-  });
-
-  it('offers an upload that is neither markdown nor a page nothing at all', () => {
+  it('offers an upload that is not markdown nothing at all', () => {
     expect(formatsFor('hero.png')).toEqual([]);
     expect(formatsFor('notes.pdf')).toEqual([]);
-  });
-
-  /* A markdown render sniffs, so its mode is not known until the bytes are
-     read; an uploaded page is always navigated. */
-  it('pins a mode only where the source kind decides it', () => {
-    expect(formatsFor('deck.md').map((s) => s.mode)).toEqual([null]);
-    expect(formatsFor('page.html').map((s) => s.mode)).toEqual(['page', 'page']);
+    expect(formatsFor('page.html')).toEqual([]);
   });
 
   it('answers the same set resolveExport enforces', () => {
-    const files = ['deck.md', 'page.html'];
+    const files = ['deck.md', 'notes.markdown'];
     for (const source of files) {
       for (const spec of formatsFor(source)) {
         const requested = `${stemOf(source)}${spec.suffix}`;
@@ -147,7 +125,7 @@ describe('formatsFor', () => {
     expect(stemOf('deck.md')).toBe('deck');
     expect(stemOf('notes.markdown')).toBe('notes');
     expect(stemOf('deck.1712.md')).toBe('deck.1712');
-    expect(stemOf('a/b.page.html')).toBe('a/b.page');
+    expect(stemOf('a/b.page.html')).toBe('a/b.page.html');
     expect(stemOf('hero.png')).toBe('hero.png');
   });
 });
@@ -163,7 +141,6 @@ describe('parseDerivedKey', () => {
     const cases = [
       ['deck.md', 'slides', 'pdf'], ['deck.md', 'doc', 'pdf'],
       ['a/b.name.1712.md', 'slides', 'pdf'],
-      ['page.html', 'page', 'pdf'], ['page.html', 'page', 'png'],
     ] as const;
     for (const [source, mode, ext] of cases) {
       const key = derivedKey(SPACE, HASH, source, mode, ext);
@@ -172,14 +149,15 @@ describe('parseDerivedKey', () => {
   });
 
   it('reads a source whose own name ends in a tail it could have written', () => {
-    const key = derivedKey(SPACE, HASH, 'a.page.pdf.html', 'page', 'pdf');
-    expect(parseDerivedKey(strip(key))).toEqual({ source: 'a.page.pdf.html', mode: 'page', ext: 'pdf' });
+    const key = derivedKey(SPACE, HASH, 'a.doc.pdf.md', 'slides', 'pdf');
+    expect(parseDerivedKey(strip(key))).toEqual({ source: 'a.doc.pdf.md', mode: 'slides', ext: 'pdf' });
   });
 
   it('rejects the check verdict, a bare tail, and anything else under the prefix', () => {
     expect(parseDerivedKey('deck.md.check.json')).toBeNull();
     expect(parseDerivedKey('slides.pdf')).toBeNull();
     expect(parseDerivedKey('deck.md.doc.png')).toBeNull();
+    expect(parseDerivedKey('page.html.page.pdf')).toBeNull();
   });
 
   it('reads the check verdict back to its source, and only that', () => {
@@ -202,11 +180,10 @@ describe('the published docs list the catalog', () => {
     expect(new Set(listed)).toEqual(new Set(['.md', ...offered('deck.md')]));
   });
 
-  it('llms.txt holds both columns', () => {
+  it('llms.txt holds every markdown spelling and no other', () => {
     const doc = readFileSync('public/llms.txt', 'utf8');
-    const listed = (re: RegExp) => new Set([...doc.matchAll(re)].map((m) => `.${m[1]}`));
-    expect(listed(/^ {4}deck\.(\S+) /gm)).toEqual(new Set(['.md', ...offered('deck.md')]));
-    expect(listed(/^ {4}page\.(\S+) /gm)).toEqual(new Set(offered('page.html')));
+    const listed = [...doc.matchAll(/^ {4}(?:deck|page)\.(\S+) /gm)].map((m) => `.${m[1]}`);
+    expect(new Set(listed)).toEqual(new Set(['.md', ...offered('deck.md')]));
   });
 });
 

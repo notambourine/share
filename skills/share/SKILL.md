@@ -1,7 +1,7 @@
 ---
 name: share
-version: 0.18.0
-description: Share a generated artifact (report, code sample, deck, screenshot, folder, HTML prototype) as a branded unguessable link on share.notambourine.com. Use when the user asks to "share", "send", or "get a link for" a file or directory.
+version: 0.20.0
+description: Share a generated artifact (report, code sample, deck, screenshot, video, folder) as a branded unguessable link on share.notambourine.com. Use when the user asks to "share", "send", or "get a link for" a file or directory.
 ---
 
 # share.notambourine.com
@@ -14,30 +14,29 @@ the frame the CLI cut at upload.
 ## Verbs
 
     nt-share put <space> <file|dir ...> [--ttl <dur>|forever]
-    nt-share admin <space>/<hash>            # re-open the 5-minute working page
 
 A `<dur>` is a number plus `m`, `h`, `d`, or `w`: `7d`, `12h`, `4w`. Default
 `--ttl 90d`. A share expires on a fixed date; the working page's chips move it.
 
 `put` prints the URL to hand over on stdout. On stderr it adds
-`working page (5 min): <url>`, the sender's own link: it carries a write
-credential (`?c=`) and never goes to the recipient. `nt-share admin` re-opens it
-after the window.
+`working page: <url>`, the sender's own page under `/admin/`. It sits behind
+company SSO, so it never goes to the recipient.
 
-A folder keeps its relative paths, and one with an `index.html` serves as a real
-page. A folder holding exactly one file and no `index.html` links straight at
-that file rather than at a one-row index; anything else links the folder root.
-An empty folder is a 400.
+Only inert files upload: markdown, text, csv, json, code, pdf, images, video,
+audio, archives. HTML is refused; render a prototype to a screenshot or video
+instead. A folder keeps its relative paths. A folder holding exactly one file
+links straight at that file rather than at a one-row index; anything else links
+the folder root. An empty folder is a 400.
 
-Run the verb you need and nothing else. The CLI raises the 1Password prompt
-itself, once per run. Never wrap a call in `op run`, never pass a token, and
-never probe with `op read`, `op whoami`, `op item get`, or `which op` - each
-costs an extra unlock and proves nothing the verb does not.
+Run the verb you need and nothing else. The first run opens a browser for
+company Google sign-in through `cloudflared`; later runs reuse the session.
+Never fetch or pass an Access token yourself.
 
 ## Setup
 
 `nt-share` ships with this plugin. When `command -v nt-share` finds nothing,
-ask before installing - it writes to `~/.local/bin` - then run:
+ask before installing - it writes to `~/.local/bin` - then run (and
+`brew install cloudflared` if that is missing too):
 
     node "$(ls ~/.claude/plugins/cache/*/nt-share/*/cli/share.* 2>/dev/null | head -1)" install
 
@@ -47,23 +46,21 @@ the HTTP API at https://share.notambourine.com/llms.txt instead.
 
 ## Failures
 
-The CLI's message is the diagnosis; do not go probing, and never accept a raw
-vault token into the conversation.
+The CLI's message is the diagnosis; do not go probing.
 
-- **1Password cannot read the item** -> that person has no token yet. Whoever
-  runs the share repo mints one with `scripts/add-employee.sh` and delivers it
-  as a view-once link; it is saved at `op://Employee/share-token/credential`.
-- **401, server rejects the token** -> the Worker's `TOKENS` secret has drifted
-  from the vault (a rotation nobody pasted). The share-repo admin re-runs
-  `scripts/add-employee.sh --map --vault <admin-vault>` and re-pastes the map.
-  If that does not clear it, the stale copy is the holder's own vault item:
-  rotate that name and redeliver.
+- **Sign-in did not finish / Access refused the session** -> the user runs the
+  `cloudflared access login` command the CLI printed, signs in with their
+  company Google account, and re-runs the verb. A non-company account is refused
+  by design.
+- **not an allowed file type** -> the file is HTML or another active type; share
+  a screenshot, PDF, or the source as text instead.
 - **anything else** -> stop and report it; do not retry the upload.
 
 ## The working page
 
-The `?c=` link `put` prints on stderr opens the sender's page for five minutes.
-It is where the work happens, and it is the only place that writes:
+The `/admin/` link `put` prints on stderr opens the sender's page for anyone
+signed in to company SSO. It is where the work happens, and it is the only place
+that writes:
 
 - **Generate.** Tick which uploaded text files feed a generation, then pick
   `deck`, `agenda`, `renewal summary`, or `ship summary`. Several files compose
@@ -74,7 +71,7 @@ It is where the work happens, and it is the only place that writes:
 - **Delete.** Soft, into trash; the live link dies within 10 minutes.
 
 Cmd+click a format card and the tab holds until the render lands, then it is
-the artifact. Re-open the page later with `nt-share admin <space>/<hash>`.
+the artifact. The page URL is `/admin/<space>/<hash>/`, so it re-opens anytime.
 
 ## The index page
 
@@ -116,8 +113,7 @@ spellings, and a file uploaded under the suffixed name wins over the export.
 | `deck.pdf` | PDF, deck or document from the content |
 
 `marp: true` front matter or `---` slide separators mean deck, anything else
-means document. An uploaded HTML page adds `page.png`, a screenshot of the whole
-page at 1280 wide.
+means document.
 
 A generation's bare name follows its newest version: with `deck.1000.md` and
 `deck.2000.md` in a share, `deck.md` and `deck.pdf` serve the 2000 one, and

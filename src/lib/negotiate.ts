@@ -3,7 +3,6 @@ import { kindOf, type Kind } from './keys';
 export type ViewMode =
   | 'raw'          // the bytes, correct content type
   | 'attachment'   // the bytes, Content-Disposition: attachment
-  | 'page'         // uploaded HTML served as itself
   | 'shell-image' | 'shell-video' | 'shell-svg'
   | 'shell-code' | 'shell-md' | 'shell-table'
   | 'shell-download';
@@ -41,21 +40,18 @@ export function viewModeFor(
     // ?raw always means bytes. SVG executes on a navigation, so it downloads
     // instead; the shell renders it inside an <img>. Unknown types download too.
     if (kind === 'svg' || kind === 'other') return 'attachment';
-    if (kind === 'html') return 'page';
     return 'raw';
   }
 
   const wantsView = params.has('view');
   /* A crawler counts as a browser so it gets the shell and its tags. Never for
      an image: Slack renders image bytes into the message on its own, and a card
-     linking the same picture would be a downgrade. `html` is exempt because it
-     serves as itself either way and may carry tags of its own. */
-  const bot = isUnfurlBot(ua) && kind !== 'image' && kind !== 'html';
+     linking the same picture would be a downgrade. */
+  const bot = isUnfurlBot(ua) && kind !== 'image';
   const browser = wantsView || acceptsHtml(accept) || bot;
 
   if (!browser) {
     if (kind === 'svg' || kind === 'other') return 'attachment';
-    if (kind === 'html') return 'page';
     return 'raw';
   }
 
@@ -66,7 +62,6 @@ export function viewModeFor(
     case 'md': return 'shell-md';
     case 'table': return params.get('view') === 'source' ? 'shell-code' : 'shell-table';
     case 'code': return 'shell-code';
-    case 'html': return params.get('view') === 'source' ? 'shell-code' : 'page';
     default: return 'shell-download';
   }
 }

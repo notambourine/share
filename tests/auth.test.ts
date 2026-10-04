@@ -1,106 +1,62 @@
 import { describe, expect, it } from 'vitest';
-import { authenticate, authorize, requireKeys, sha256hex } from '../src/lib/auth';
+import { authorize, verifyAccessJwt } from '../src/lib/auth';
+import { ACCESS, accessJwt } from './access';
 
-function req(auth?: string): Request {
-  return new Request('https://share.example/up/acme', {
-    method: 'POST',
-    headers: auth ? { authorization: auth } : {},
-  });
+const T = () => Math.floor(Date.now() / 1000);
+
+function req(headers: Record<string, string> = {}): Request {
+  return new Request('https://share.example/up/acme', { method: 'POST', headers });
 }
 
-const KEYS = { v1: 'unit-test-signing-secret' };
-
-async function env(tokens: Record<string, string>) {
-  const hashed: Record<string, string> = {};
-  for (const [name, tok] of Object.entries(tokens)) hashed[name] = await sha256hex(tok);
-  return { TOKENS: JSON.stringify(hashed), SIGNING_KEYS: JSON.stringify(KEYS) };
-}
-
-describe('authenticate', () => {
-  it('maps a valid raw token to its uploader name', async () => {
-    const e = await env({ tom: 'secret-token' });
-    expect(await authenticate(req('Bearer secret-token'), e)).toBe('tom');
+describe('verifyAccessJwt', () => {
+  it('answers the email a good token names', async () => {
+    expect(await verifyAccessJwt(await accessJwt(), ACCESS, T())).toBe('tom@notambourine.com');
   });
 
-  it('rejects wrong, missing, and malformed credentials', async () => {
-    const e = await env({ tom: 'secret-token' });
-    expect(await authenticate(req('Bearer wrong'), e)).toBeNull();
-    expect(await authenticate(req(), e)).toBeNull();
-    expect(await authenticate(req('Basic secret-token'), e)).toBeNull();
-    expect(await authenticate(req('Bearer secret-token'), { TOKENS: 'not json', SIGNING_KEYS: '{}' })).toBeNull();
+  it('takes aud as a bare string too', async () => {
+    expect(await verifyAccessJwt(await accessJwt({ aud: ACCESS.ACCESS_AUD }), ACCESS, T())).toBe('tom@notambourine.com');
   });
 
-  it('revoking one person is a map edit', async () => {
-    const both = await env({ tom: 'tok-a', sam: 'tok-b' });
-    const onlyTom = await env({ tom: 'tok-a' });
-    expect(await authenticate(req('Bearer tok-b'), both)).toBe('sam');
-    expect(await authenticate(req('Bearer tok-b'), onlyTom)).toBeNull();
+  it('refuses another app, another team, an expired token, and an unknown key', async () => {
+    expect(await verifyAccessJwt(await accessJwt({ aud: ['other-app'] }), ACCESS, T())).toBeNull();
+    expect(await verifyAccessJwt(await accessJwt({ iss: 'https://evil.cloudflareaccess.com' }), ACCESS, T())).toBeNull();
+    expect(await verifyAccessJwt(await accessJwt({ exp: T() - 1 }), ACCESS, T())).toBeNull();
+    expect(await verifyAccessJwt(await accessJwt({}, 'rotated-away'), ACCESS, T())).toBeNull();
+  });
+
+  it('refuses a tampered payload and garbage', async () => {
+    const [h, , s] = (await accessJwt()).split('.');
+    const forged = (await accessJwt({ email: 'mallory@example.com' })).split('.')[1];
+    expect(await verifyAccessJwt(`${h}.${forged}.${s}`, ACCESS, T())).toBeNull();
+    expect(await verifyAccessJwt('not.a.jwt', ACCESS, T())).toBeNull();
+    expect(await verifyAccessJwt('', ACCESS, T())).toBeNull();
   });
 });
 
-/* One credential kind reaches the gate now, so what is left to hold is the
-   spelling of each refusal and the misconfigured-keys 500. */
 describe('authorize', () => {
-  const vaultEnv = () => env({ tom: 'secret-token' });
-
-  function granted(result: { name: string; keys: unknown } | Response) {
-    if (result instanceof Response) throw new Error(`refused with ${result.status}`);
-    return result;
-  }
-
-  async function refusal(result: { name: string } | Response) {
-    if (!(result instanceof Response)) throw new Error(`granted to ${result.name}`);
-    return { status: result.status, type: result.headers.get('content-type'), body: await result.text() };
-  }
-
-  it('admits a vault token and hands back the keys it signs with', async () => {
-    const g = granted(await authorize(req('Bearer secret-token'), await vaultEnv(), { flavor: 'json' }));
-    expect(g.name).toBe('tom');
-    expect(g.keys).toEqual(KEYS);
+  it('grants the Access identity', async () => {
+    const g = await authorize(req({ 'cf-access-jwt-assertion': await accessJwt() }), ACCESS, 'json');
+    expect(g).toEqual({ email: 'tom@notambourine.com' });
   });
 
-  it('refuses garbage and a missing header with a blank unauthorized', async () => {
-    for (const r of [req('Bearer wrong'), req(), req('Basic secret-token')]) {
-      const out = await refusal(await authorize(r, await vaultEnv(), { flavor: 'json' }));
-      expect(out.status).toBe(401);
-      expect(out.body).toBe(`${JSON.stringify({ error: 'unauthorized' }, null, 2)}\n`);
-    }
+  it('refuses a missing assertion in the route flavor', async () => {
+    const text = await authorize(req(), ACCESS, 'text');
+    if (!(text instanceof Response)) throw new Error('granted');
+    expect(text.status).toBe(401);
+    expect(await text.text()).toBe('unauthorized\n');
+    const json = await authorize(req(), ACCESS, 'json');
+    if (!(json instanceof Response)) throw new Error('granted');
+    expect(await json.text()).toBe(`${JSON.stringify({ error: 'unauthorized' }, null, 2)}\n`);
   });
 
-  it('spells the refusal as text for the text callers', async () => {
-    const r = await refusal(await authorize(req(), await vaultEnv(), { flavor: 'text' }));
-    expect(r.type).toBe('text/plain; charset=utf-8');
-    expect(r.body).toBe('unauthorized\n');
-  });
-
-  it('lets a route answer a stranger its own way', async () => {
-    const hidden = () => new Response('nothing here', { status: 404 });
-    const anon = await refusal(await authorize(req(), await vaultEnv(), { flavor: 'json', anonymous: hidden }));
-    expect(anon.status).toBe(404);
-  });
-
-  describe('signing keys', () => {
-    const broken = async () => ({ ...await vaultEnv(), SIGNING_KEYS: '{}' });
-
-    it('500s a verb that must sign', async () => {
-      const r = await refusal(await authorize(
-        req('Bearer secret-token'), await broken(), { flavor: 'json', keys: 'required' },
-      ));
-      expect(r.status).toBe(500);
-      expect(r.body).toBe(`${JSON.stringify({ error: 'signing keys misconfigured' }, null, 2)}\n`);
-    });
-
-    it('hands a verb that only signs when it can a null key set', async () => {
-      const g = granted(await authorize(req('Bearer secret-token'), await broken(), { flavor: 'text' }));
-      expect(g.keys).toBeNull();
-    });
-
-    it('answers the `?c=` routes with the same 500', async () => {
-      expect(requireKeys({ SIGNING_KEYS: JSON.stringify(KEYS) }, 'json')).toEqual(KEYS);
-      const r = requireKeys({ SIGNING_KEYS: '{}' }, 'json');
-      if (!(r instanceof Response)) throw new Error('expected a refusal');
-      expect(r.status).toBe(500);
-      expect(await r.text()).toContain('signing keys misconfigured');
-    });
+  /* The Access cookie rides on any same-site request, so a write from another
+     origin is refused before the identity is even read. */
+  it('refuses a cross-origin write even when signed in', async () => {
+    const r = req({ 'cf-access-jwt-assertion': await accessJwt(), origin: 'https://evil.notambourine.com' });
+    const out = await authorize(r, ACCESS, 'json');
+    if (!(out instanceof Response)) throw new Error('granted');
+    expect(out.status).toBe(403);
+    const same = req({ 'cf-access-jwt-assertion': await accessJwt(), origin: 'https://share.example' });
+    expect(await authorize(same, ACCESS, 'json')).toEqual({ email: 'tom@notambourine.com' });
   });
 });

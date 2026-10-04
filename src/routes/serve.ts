@@ -1,17 +1,15 @@
 import type { Env } from '../lib/types';
 import type { ParsedRoute } from '../lib/route';
 import { payloadKey, readPayload, readMeta, isExpired, listGenerated } from '../lib/r2';
-import { parseSigningKeys } from '../lib/sign';
-import { verifyAdminToken } from '../lib/admin';
 import { viewModeFor } from '../lib/negotiate';
 import { latestStamped, resolveExport, stemOf } from '../lib/exportPath';
 import { buildIndex } from '../lib/artifact';
 import { exportArtifact } from './export';
 import { rawBytes } from '../lib/bytes';
-import { fileShell, indexShell, errorShell, adminShell, type ShellCommon } from '../render/shell';
+import { fileShell, indexShell, errorShell, type ShellCommon } from '../render/shell';
 import { renderCode, renderSource } from '../render/markdown';
 import { parseTable, dataBlock } from '../render/csv';
-import { ADMIN_CSP, htmlResponse, jsonResponse, wantsJson } from '../lib/http';
+import { htmlResponse, jsonResponse, wantsJson } from '../lib/http';
 import { now } from '../lib/clock';
 
 /** Past this a shell would carry more bytes than a download costs, and
@@ -73,36 +71,16 @@ export async function serve(
 
   const url = new URL(request.url);
 
-  /* A live `?c=` wins the artifact root: it is the working page, and admin
-     implies view. Invalid, absent, or expired falls through to the public index,
-     never a 401 of its own. Root only - a file path ignores c=. */
+  /* The public index: one URL, two representations. The JSON is what an
+     external agent reads, which is why no route answers status any more. */
   if (rest === '') {
-    const c = url.searchParams.get('c');
-    const keys = c ? parseSigningKeys(env) : null;
-    const v = c && keys ? await verifyAdminToken(keys, space, hash, c, t) : null;
-    if (v?.ok) {
-      /* The one shell with a form, so the one shell that may submit anywhere. */
-      return htmlResponse(
-        adminShell({ meta, origin: route.origin, now: t, adminExp: v.exp }),
-        200,
-        { 'content-security-policy': ADMIN_CSP },
-      );
-    }
+    const index = await buildIndex(env, meta);
+    return wantsJson(request)
+      ? jsonResponse({ ...index })
+      : htmlResponse(indexShell(index, meta, t));
   }
 
   let filePath = rest;
-  if (filePath === '') {
-    if (meta.files.some((f) => f.path === 'index.html')) {
-      filePath = 'index.html';
-    } else {
-      /* The public index: one URL, two representations. The JSON is what an
-         external agent reads, which is why no route answers status any more. */
-      const index = await buildIndex(env, meta);
-      return wantsJson(request)
-        ? jsonResponse({ ...index })
-        : htmlResponse(indexShell(index, meta, t));
-    }
-  }
 
   /* Uploads are named in meta; a generation is only ever found by listing, so a
      name meta already holds costs no listing at all - which is every plain
@@ -148,7 +126,7 @@ export async function serve(
   const poster = file.poster ? { posterHref: `${route.root}${encodeURI(file.poster)}?raw` } : {};
   const opts = {
     path: filePath,
-    rawHref: `${route.page}${route.page.endsWith('/') ? 'index.html' : ''}?raw`,
+    rawHref: `${route.page}?raw`,
     size: file.size,
     pageHref: route.page,
   };

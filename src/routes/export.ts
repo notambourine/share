@@ -1,13 +1,10 @@
 /**
  * Binary exports: cache lookup, render, serve.
  *
- * Only PDF and PNG live here. HTML used to as well - a stored snapshot that a
- * headless Chrome produced from the same markdown the shell was parsing in the
- * reader's browser - and deleting that is what this module is now. A page's
- * markup comes from src/render/markdown.ts on the request that asks for it, so
- * there is nothing to warm, nothing to invalidate when the brand moves, and the
- * browser binding is spent only on the two formats that genuinely need a print
- * engine.
+ * Only PDF lives here. A page's markup comes from src/render/markdown.ts on the
+ * request that asks for it, so there is nothing to warm, nothing to invalidate
+ * when the brand moves, and the browser binding is spent only on the one format
+ * that genuinely needs a print engine.
  *
  * Derived artifacts cache under `<space>/<hash>/d/v<N>/`, keyed by the source's
  * full name - a generation's stamp included - so each version's render is its
@@ -18,10 +15,10 @@
 import type { Env } from '../lib/types';
 import {
   type ExportFormat, type RenderMode,
-  derivedKey, checkKey, attemptKey, sniffDeck, isPageSource,
+  derivedKey, checkKey, attemptKey, sniffDeck,
 } from '../lib/exportPath';
 import { now } from '../lib/clock';
-import { render, renderPage, type Artifacts, type PageArtifacts } from '../lib/pdf';
+import { render, type Artifacts } from '../lib/pdf';
 import { printHtml, pdfOptionsFor } from '../render/export';
 import { rawBytes } from '../lib/bytes';
 import { readPayload } from '../lib/r2';
@@ -41,7 +38,7 @@ export interface ExportTarget {
 
 function baseName(source: string): string {
   const name = source.slice(source.lastIndexOf('/') + 1);
-  return name.replace(/\.(md|markdown|html?)$/i, '') || name;
+  return name.replace(/\.(md|markdown)$/i, '') || name;
 }
 
 function downloadName(source: string, ext: ExportFormat): string {
@@ -102,7 +99,7 @@ async function claimRender(env: Env, space: string, hash: string, source: string
   return true;
 }
 
-/** A `.pdf` or `.png` URL must never answer HTML at 200 - a curl -o would
+/** A `.pdf` URL must never answer HTML at 200 - a curl -o would
     write HTML into the file - so a missed render is a 202 and a retry. */
 function rendering202(): Response {
   return new Response('Rendering. Retry in a few seconds.\n', {
@@ -116,46 +113,10 @@ function rendering202(): Response {
   });
 }
 
-/** The first GET pays the render. One load stores both outputs, so the other
-    spelling is ready on the same click. */
-async function exportPage(request: Request, env: Env, target: ExportTarget): Promise<Response> {
-  const { space, hash, source, format, url } = target;
-  const key = derivedKey(space, hash, source, 'page', format);
-  const name = downloadName(source, format);
-  if (await env.BUCKET.head(key)) return rawBytes(request, env, key, name, false);
-
-  if (!env.BROWSER) {
-    console.log('export: no BROWSER binding');
-    return rendering202();
-  }
-  if (!await claimRender(env, space, hash, source, 'page')) return rendering202();
-  const dir = url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1);
-  const out = await renderPage(env.BROWSER, `${url.origin}${dir}${encodeURI(source)}`, pdfOptionsFor('page', baseName(source)));
-  if (!out) {
-    console.log(`export: render unavailable for ${url.pathname}`);
-    return rendering202();
-  }
-  await storePage(env, space, hash, source, out);
-  return rawBytes(request, env, key, name, false);
-}
-
-async function storePage(env: Env, space: string, hash: string, source: string, out: PageArtifacts): Promise<void> {
-  await Promise.all([
-    env.BUCKET.put(derivedKey(space, hash, source, 'page', 'pdf'), out.pdf, {
-      httpMetadata: { contentType: 'application/pdf' },
-    }),
-    env.BUCKET.put(derivedKey(space, hash, source, 'page', 'png'), out.fullPng, {
-      httpMetadata: { contentType: 'image/png' },
-    }),
-  ]);
-}
-
 export async function exportArtifact(
   request: Request, env: Env, target: ExportTarget,
 ): Promise<Response> {
   const { space, hash, source, url } = target;
-
-  if (isPageSource(source)) return exportPage(request, env, target);
 
   /* Deck or document from the content, every time. The bytes have to be read
      before the cache can be checked, because the sniff is what says which key

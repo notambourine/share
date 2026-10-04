@@ -77,7 +77,6 @@ describe('every shell escapes a hostile filename', () => {
       meta: meta([HOSTILE_PATH, 'deck.md']),
       origin: 'https://share.test',
       now: 1_700_000_000,
-      adminExp: 1_700_000_300,
     });
     expect(out).not.toContain('<script>alert(1)</script>');
     expect(out).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
@@ -90,10 +89,9 @@ describe('the shells still render what the client scripts select on', () => {
       meta: meta(['deck.md']),
       origin: 'https://share.test',
       now: 1_700_000_000,
-      adminExp: 1_700_000_300,
     });
     for (const attr of [
-      'data-copylink', 'data-arm', 'data-fire', 'data-disarm', 'data-countdown',
+      'data-copylink', 'data-arm', 'data-fire', 'data-disarm',
       'data-exp', 'data-ttl', 'data-copy-href', 'data-genform', 'data-genstate',
     ]) {
       expect(admin).toContain(attr);
@@ -103,19 +101,19 @@ describe('the shells still render what the client scripts select on', () => {
   /* The generate control is a form, not a click handler: the POST is a
      navigation, which is what lets the new tab hold through the model call
      instead of the page polling for a result. */
-  it('generates through a form that posts into a new tab, with no action in the markup', () => {
+  it('generates through a form that posts into a new tab, relative to the working page', () => {
     const admin = adminShell({
       meta: meta(['deck.md']),
       origin: 'https://share.test',
       now: 1_700_000_000,
-      adminExp: 1_700_000_300,
     });
     expect(admin).toContain('method="post"');
     expect(admin).toContain('target="_blank"');
     expect(admin).toContain('name="sources"');
     expect(admin).toContain('type="submit"');
-    // The action carries the ?c= token, so admin.js fills it in at runtime.
-    expect(admin).not.toContain('action=');
+    // Relative, so it lands on /admin/<space>/<hash>/generate behind the same sign-in.
+    expect(admin).toContain('action="generate"');
+    expect(admin).not.toContain('?c=');
   });
 
   it('keeps data-kind on the body, and no data-raw, because nothing fetches', () => {
@@ -154,7 +152,6 @@ describe('the shells keep their doctype and their chrome', () => {
       meta: meta(['a.txt']),
       origin: 'https://share.test',
       now: 1_700_000_000,
-      adminExp: 1_700_000_300,
     });
     expect(forever).toContain('data-ttl="forever" aria-pressed="true"');
     expect(forever).toContain('data-ttl="7d" aria-pressed="false"');

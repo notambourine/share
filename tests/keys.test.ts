@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   genSlug, isValidSpace, isValidHash, normalizeUploadPath,
-  extOf, kindOf, contentTypeFor, parseDuration,
+  extOf, kindOf, contentTypeFor, isUploadable, parseDuration,
 } from '../src/lib/keys';
 
 describe('genSlug', () => {
@@ -87,7 +87,7 @@ describe('kind and content type', () => {
     expect(kindOf('demo.mp4')).toBe('video');
     expect(kindOf('logo.svg')).toBe('svg');
     expect(kindOf('notes.md')).toBe('md');
-    expect(kindOf('index.html')).toBe('html');
+    expect(kindOf('index.html')).toBe('other');
     expect(kindOf('main.ts')).toBe('code');
     expect(kindOf('Dockerfile')).toBe('code');
     expect(kindOf('report.pdf')).toBe('other');
@@ -98,6 +98,18 @@ describe('kind and content type', () => {
     expect(contentTypeFor('a.md')).toBe('text/markdown; charset=utf-8');
     expect(contentTypeFor('a.rs')).toBe('text/plain; charset=utf-8');
     expect(contentTypeFor('a.blob')).toBe('application/octet-stream');
+  });
+  /* Nothing uploaded may run on this origin, so markup is refused and script
+     serves as text. */
+  it('refuses markup and serves script as text', () => {
+    expect(isUploadable('page.html')).toBe(false);
+    expect(isUploadable('page.htm')).toBe(false);
+    expect(isUploadable('a.blob')).toBe(false);
+    expect(isUploadable('notes.md')).toBe(true);
+    expect(isUploadable('report.pdf')).toBe(true);
+    expect(contentTypeFor('app.js')).toBe('text/plain; charset=utf-8');
+    expect(contentTypeFor('a.css')).toBe('text/plain; charset=utf-8');
+    expect(contentTypeFor('font.woff2')).toBe('application/octet-stream');
   });
   it('extOf handles dotfiles and nesting', () => {
     expect(extOf('a/b/c.TS')).toBe('ts');

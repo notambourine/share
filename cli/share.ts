@@ -1,16 +1,13 @@
 #!/usr/bin/env node
 /* nt-share: CLI for share.notambourine.com. Two jobs, no plumbing.
 
-   Every verb reads the vault token straight into this process, once per run, so
-   the secret never crosses a shell and there is nothing to echo.
+   Uploads sit behind Cloudflare Access. `cloudflared` holds the SSO session, so
+   the first run opens a browser sign-in and later runs reuse it.
 
    nt-share install                                     (put nt-share on PATH)
    nt-share put <space> <file|dir ...> [--ttl <dur>|forever]
-   nt-share admin <space>/<hash>                        (re-open the 5-minute working page)
 
-   $SHARE_TOKEN takes a raw token or an op:// reference and skips the vault
-   lookup. $SHARE_TOKEN_REF moves the vault item. $SHARE_URL points at a dev
-   Worker.
+   $SHARE_URL points at a dev Worker.
 
    Node runs this .ts directly (type stripping, 22.18+), so keep the syntax
    erasable: no enum, no namespace, no parameter properties.
@@ -30,8 +27,8 @@ import type { JsonObject } from '../src/lib/json.ts';
 import { parseObject, textAt } from '../src/lib/json.ts';
 
 const BASE = (process.env.SHARE_URL ?? 'https://share.notambourine.com').replace(/\/$/, '');
-// guarddog env-read: an op:// locator for the token, never the token itself.
-const REF = process.env.SHARE_TOKEN_REF ?? 'op://Employee/share-token/credential';
+/** Any path the Access app covers names it; cloudflared keys its session by app. */
+const APP = `${BASE}/up/`;
 
 function die(msg: string): never {
   console.error(msg);
@@ -75,27 +72,34 @@ function isErrno(err: Error): err is ErrnoError {
   return 'code' in err;
 }
 
+function cloudflared(args: string[], interactive: boolean) {
+  const r = spawnSync('cloudflared', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', interactive ? 'inherit' : 'pipe'],
+  });
+  if (r.error && isErrno(r.error) && r.error.code === 'ENOENT') {
+    die('cloudflared not found. Install it (brew install cloudflared) and re-run.');
+  }
+  return r;
+}
+
+/* A JWT is three base64url runs; login prints chatter around it, so the token
+   is whatever line has that shape. */
+const JWT = /^[\w-]+\.[\w-]+\.[\w-]+$/;
+
+function tokenFrom(stdout: string | null): string | null {
+  return (stdout ?? '').split('\n').map((l) => l.trim()).find((l) => JWT.test(l)) ?? null;
+}
+
+/* The SSO session, memoized so a run asks cloudflared once. A miss runs the
+   browser login in the foreground; its prompts go to this terminal's stderr. */
 let cachedToken: string | null = null;
 
-/* The one 1Password unlock, memoized, so a run that calls two routes still
-   prompts once. Stdout is a pipe, so the secret stays in this process and never
-   reaches a terminal, a transcript, or a shell history. */
-function vaultToken(): string {
+function accessToken(): string {
   if (cachedToken !== null) return cachedToken;
-  const env = process.env.SHARE_TOKEN; // guarddog env-read: the documented override, read into this process only.
-  if (env && !env.startsWith('op://')) {
-    cachedToken = env;
-    return env;
-  }
-  const ref = env || REF;
-  const r = spawnSync('op', ['read', '--no-newline', ref], { encoding: 'utf8' });
-  if (r.error && isErrno(r.error) && r.error.code === 'ENOENT') {
-    die('1Password CLI not found. Install it (brew install 1password-cli) and sign in, or set SHARE_TOKEN.');
-  }
-  const token = r.stdout?.trim();
-  if (r.status !== 0 || !token) {
-    die(`1Password could not read ${ref}:\n${(r.stderr ?? '').trim()}\n\nNo such item means you need a token: ask whoever runs the share repo to mint one (scripts/add-employee.sh) and save it at that path.`);
-  }
+  const token = tokenFrom(cloudflared(['access', 'token', `-app=${APP}`], false).stdout)
+    ?? tokenFrom(cloudflared(['access', 'login', APP], true).stdout)
+    ?? die(`Sign-in did not finish. Run: cloudflared access login ${APP}`);
   cachedToken = token;
   return token;
 }
@@ -160,15 +164,17 @@ async function posterFrame(abs: string): Promise<Buffer<ArrayBuffer> | null> {
 async function api(path: string, init: RequestInit, token: string): Promise<string> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
+    // Access answers a missing session with a redirect to its login page.
+    redirect: 'manual',
     headers: {
-      authorization: `Bearer ${token}`,
+      'cf-access-token': token,
       accept: 'application/json',
       ...init.headers,
     },
   });
   const text = await res.text();
-  if (res.status === 401) {
-    die(`401 ${text.trim()}\nThe server rejects this token. The Worker TOKENS map has drifted from the vault: re-run scripts/add-employee.sh --map and re-paste it (rotate first if the token ever leaked).`);
+  if (res.status === 401 || (res.status >= 300 && res.status < 400)) {
+    die(`Access refused the session. Sign in again: cloudflared access login ${APP}`);
   }
   // An error shell is an HTML page; printing it whole buries the status.
   if (!res.ok) die(`${res.status} ${text.startsWith('<') ? res.statusText : text.trim()}`);
@@ -296,22 +302,15 @@ switch (cmd) {
     const q = new URLSearchParams();
     if (flags.ttl) q.set('ttl', flags.ttl);
     const made = fields(await api(
-      `/up/${space}${q.size ? `?${q}` : ''}`, { method: 'POST', body: form }, vaultToken(),
+      `/up/${space}${q.size ? `?${q}` : ''}`, { method: 'POST', body: form }, accessToken(),
     ));
     console.log(required(made, 'url'));
     // stderr, labeled: stdout is the link you hand over, so a pipe never grabs
-    // the write credential. `nt-share admin` re-opens it after 5 min.
+    // the sender's own page.
     const adminUrl = textAt(made, 'adminUrl');
-    if (adminUrl) console.error(`working page (5 min): ${adminUrl}`);
-    break;
-  }
-  case 'admin': {
-    const [path] = rest;
-    if (!path?.includes('/')) die('usage: nt-share admin <space>/<hash>');
-    const made = fields(await api(`/${path.replace(/\/$/, '')}/admin`, { method: 'POST' }, vaultToken()));
-    console.log(required(made, 'url'));
+    if (adminUrl) console.error(`working page: ${adminUrl}`);
     break;
   }
   default:
-    die('commands: install, put, admin; see https://share.notambourine.com/llms.txt');
+    die('commands: install, put; see https://share.notambourine.com/llms.txt');
 }

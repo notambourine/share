@@ -35,6 +35,8 @@ export async function rawBytes(
     'cache-control': CACHE,
     'vary': VARY,
     'cross-origin-resource-policy': 'cross-origin',
+    // An uploaded .js served as text/plain must never run from a <script src>.
+    'x-content-type-options': 'nosniff',
     'accept-ranges': 'bytes',
   });
   if (attachment) {

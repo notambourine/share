@@ -23,9 +23,8 @@ describe('a document', () => {
     expect(out).toContain('<del>gone</del>');
   });
 
-  /* Raw HTML passes through: an upload is Bearer-gated and already runs on this
-     origin, which holds no ambient credential. Same contract the old innerHTML
-     render had, moved server-side. */
+  /* Raw HTML passes through: the shell CSP (script-src 'self', no inline) and nosniff
+     on uploaded bytes keep any script inert, and uploads are SSO-gated. */
   it('passes raw HTML through', () => {
     expect(renderMarkdown('an <em>inline</em> tag\n')).toContain('<em>inline</em>');
   });
@@ -125,7 +124,6 @@ describe('renderSource', () => {
 
   it('carries a scoped theme for a deck and none for a document', () => {
     expect(renderSource(DOC, null).css).toBeNull();
-    expect(renderSource('# Page\n', 'page').css).toBeNull();
     expect(renderSource(DECK, null).css).toContain('svg[data-marpit-svg]');
   });
 });
