@@ -18,7 +18,7 @@
 	// empty AUD matches no token, so writes fail closed until it is set.
 	"vars": {
 		"ACCESS_TEAM_DOMAIN": "notambourine.cloudflareaccess.com",
-		"ACCESS_AUD": ""
+		"ACCESS_AUD": "252be5cde15d1af7518104505aa6b4ce15d22182fb2892a1a25002b7db72d505"
 	},
 	// src/skill.ts imports the plugin's SKILL.md and serves those exact bytes.
 	// src/brand.ts does the same for the golden set in @notambourine/brand-kit,
