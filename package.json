@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "nt-share": "bin/share.ts"
+    "nt-share": "cli/share.ts"
   },
   "engines": {
     "node": ">=22.18"
@@ -14,7 +14,7 @@
     "brand": "node scripts/brand-audit.mjs",
     "oxlint": "oxlint --deny-warnings",
     "evals": "CLOUDFLARE_ACCOUNT_ID=0975955c3b00ac19dddccd720ff2f18f CLOUDFLARE_API_TOKEN=op://Employee/TOM_NTB_WORKERS_API_TOKEN/credential op run -- node evals/transforms/run.mjs",
-    "types": "tsc --noEmit && tsc -p tsconfig.bin.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "types": "tsc --noEmit && tsc -p tsconfig.cli.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "build:client": "npm run vendor && node scripts/client.mjs"
   },
   "devDependencies": {
