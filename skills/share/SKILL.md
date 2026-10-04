@@ -39,7 +39,7 @@ costs an extra unlock and proves nothing the verb does not.
 `nt-share` ships with this plugin. When `command -v nt-share` finds nothing,
 ask before installing - it writes to `~/.local/bin` - then run:
 
-    node "$(ls ~/.claude/plugins/cache/*/nt-share/*/bin/share.* 2>/dev/null | head -1)" install
+    node "$(ls ~/.claude/plugins/cache/*/nt-share/*/cli/share.* 2>/dev/null | head -1)" install
 
 The install is a no-op to re-run and prints its target on stderr; stdout stays
 empty. If the glob finds nothing, this doc was fetched without the plugin: use

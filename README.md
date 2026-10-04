@@ -41,7 +41,7 @@ HTML, or JSON on `Accept: application/json`.
 
 `GET /llms.txt` documents everything in plain text. `GET /SKILL.md` is a drop-in
 Claude skill, served from the bundle so it cannot drift from the installed copy.
-`bin/share.ts` is the CLI (`install`, `put`, `admin`); the terminal only uploads
+`cli/share.ts` is the CLI (`install`, `put`, `admin`); the terminal only uploads
 and re-opens a working page, because everything else is on the page itself.
 
 Consumers carry only a stub, so the hosted skill stays the single source of
@@ -90,7 +90,7 @@ URLs serve the shell.
 npm ci
 npm test        # vitest: signing, path safety, negotiation, auth, versioning
 npm run oxlint  # oxlint plus the vendored anti-slop rules in tools/oxlint/
-npm run types   # tsc --noEmit, Worker and CLI (bin/ runs as .ts, node 22.18+ strips the types)
+npm run types   # tsc --noEmit, Worker and CLI (cli/ runs as .ts, node 22.18+ strips the types)
 npm run build:client  # writes public/: the page bundles, plus fonts/ and logo/ from the brand dep
 npm run brand   # gate: public/ holds what @notambourine/brand-kit ships, colors and tokens too
 ```

@@ -220,9 +220,9 @@ let best = null;
 for (const market of await names(root)) {
   const versions = join(root, market, 'nt-share');
   for (const version of await names(versions)) {
-    for (const file of await names(join(versions, version, 'bin'))) {
+    for (const file of await names(join(versions, version, 'cli'))) {
       if (!file.startsWith('share.')) continue;
-      const path = join(versions, version, 'bin', file);
+      const path = join(versions, version, 'cli', file);
       if (!best || newer(version, best.version)) best = { version, path };
     }
   }

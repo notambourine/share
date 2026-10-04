@@ -32,7 +32,7 @@ fi
 
 # Installed surface only; src/ and tests/ ride the always-fresh Worker deploy.
 # Tree against tip, not the merge-base a squash-merged parent leaves behind.
-changed=$(git diff --name-only "origin/$base" HEAD -- skills bin .claude-plugin)
+changed=$(git diff --name-only "origin/$base" HEAD -- skills cli .claude-plugin)
 if [ -z "$changed" ]; then
 	echo "no change to the installed surface; no bump needed"
 	exit 0

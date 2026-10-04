@@ -8,5 +8,5 @@
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true
   },
-  "include": ["bin/**/*.ts"]
+  "include": ["cli/**/*.ts"]
 }
