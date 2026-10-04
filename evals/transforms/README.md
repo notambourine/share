@@ -38,6 +38,7 @@ Run it by hand:
 
     npm run evals
     npm run evals -- ship-summary:      # filter, substring of <transform>:<case>
+    EVAL_MODEL=@cf/qwen/qwen3.8-27b npm run evals   # any id in MODELS; the first is the default
 
 The `evals` script wraps `op run` around the account id and a
 `op://Employee/TOM_NTB_WORKERS_API_TOKEN/credential` reference, so it resolves
@@ -46,8 +47,8 @@ template token minted for someone else's account needs their own account id
 and vault path substituted. Nine cases, well under a cent.
 
 Outputs land in `out/` as `<transform>--<case>.md`, and every request and answer
-in `out/calls.jsonl` (both gitignored). The console prints verdicts only; read
-the files for the documents. This never joins CI - it spends inference and
+in `out/calls.jsonl` (both gitignored). Cases run one at a time and stream the model live to
+the console, reasoning dimmed, then a verdict per case. This never joins CI - it spends inference and
 carries a token, and the deterministic half of the feature is already
 `tests/generate.test.ts`.
 

@@ -1,4 +1,4 @@
-import type { Env, MetaFile } from '../lib/types';
+import type { AiRunner, Env, MetaFile } from '../lib/types';
 import { authorize } from '../lib/auth';
 import { readMeta, readPayload, isExpired, listAll, payloadKey } from '../lib/r2';
 import { contentTypeFor } from '../lib/keys';
@@ -6,18 +6,19 @@ import { now } from '../lib/clock';
 import { parseObject, textAt, textsAt } from '../lib/json';
 import { htmlResponse, jsonResponse, seeOther, wantsJson } from '../lib/http';
 import { noticeShell } from '../render/shell';
-import type { TransformSource } from '../transforms/prompt';
+import { type Model, type TransformSource, MODELS, modelFor } from '../transforms/prompt';
 import { GENERATIONS, MAX_TRANSFORM_BYTES, promptFor, runTransform, transformable } from '../transforms';
 
 interface GenerateBody {
   name: string | null;
   sources: string[];
+  model: string | null;
 }
 
 function decodeJsonBody(text: string): GenerateBody | null {
   const record = parseObject(text);
   if (!record) return null;
-  return { name: textAt(record, 'name'), sources: textsAt(record, 'sources') };
+  return { name: textAt(record, 'name'), sources: textsAt(record, 'sources'), model: textAt(record, 'model') };
 }
 
 /** A form entry is a string or a File; only the string half can name a source. */
@@ -29,9 +30,11 @@ function isText(value: File | string): value is string {
     one `sources` entry per ticked box, in the order the boxes are rendered. */
 function decodeFormBody(form: FormData): GenerateBody {
   const name = form.get('name');
+  const model = form.get('model');
   return {
     name: name !== null && isText(name) ? name : null,
     sources: form.getAll('sources').filter(isText),
+    model: model !== null && isText(model) ? model : null,
   };
 }
 
@@ -62,6 +65,31 @@ async function freeStamp(
   let stamp = t;
   while (await env.BUCKET.head(payloadKey(space, hash, `${name}.${stamp}.md`))) stamp += 1;
   return `${name}.${stamp}.md`;
+}
+
+export interface GenerationRun {
+  ai: AiRunner;
+  env: Env;
+  space: string;
+  hash: string;
+  name: string;
+  sources: TransformSource[];
+  t: number;
+  instructions?: string[];
+  model?: Model;
+}
+
+/** One model call, one stamped file beside the sources; null when the model failed. */
+export async function writeGeneration(run: GenerationRun): Promise<{ path: string; size: number } | null> {
+  const { ai, env, space, hash, name, sources, t, instructions, model } = run;
+  const out = await runTransform(ai, name, sources, instructions, model);
+  if (out === null) return null;
+  const path = await freeStamp(env, space, hash, name, t);
+  const blob = `${out}\n`;
+  await env.BUCKET.put(payloadKey(space, hash, path), blob, {
+    httpMetadata: { contentType: contentTypeFor(path) },
+  });
+  return { path, size: new TextEncoder().encode(blob).byteLength };
 }
 
 /** Versions one generation name may hold under one hash. The bound on what one
@@ -106,6 +134,8 @@ export async function generate(request: Request, env: Env, space: string, hash: 
     return refuse(request, 400, `unknown generation (${GENERATIONS.map((g) => g.name).join(', ')})`);
   }
   if (sources.length === 0) return refuse(request, 400, 'tick at least one file');
+  const model = modelFor(body.model);
+  if (!model) return refuse(request, 400, `unknown model (${MODELS.map((m) => m.id).join(', ')})`);
 
   const meta = await readMeta(env, space, hash);
   if (!meta || isExpired(meta, t)) return refuse(request, 404, 'no such artifact');
@@ -144,17 +174,11 @@ export async function generate(request: Request, env: Env, space: string, hash: 
     texts.push({ path: file.path, text });
   }
 
-  const out = await runTransform(ai, name, texts);
-  if (out === null) return refuse(request, 502, 'the model call failed; try again');
-
-  const path = await freeStamp(env, space, hash, name, t);
-  const blob = `${out}\n`;
-  await env.BUCKET.put(payloadKey(space, hash, path), blob, {
-    httpMetadata: { contentType: contentTypeFor(path) },
-  });
+  const written = await writeGeneration({ ai, env, space, hash, name, sources: texts, t, model });
+  if (written === null) return refuse(request, 502, 'the model call failed; try again');
+  const { path, size } = written;
 
   if (!isFormPost(request) || wantsJson(request)) {
-    const size = new TextEncoder().encode(blob).byteLength;
     return jsonResponse({ path, size, bare: `${name}.md` }, 201);
   }
   return seeOther(`/${space}/${hash}/${encodeURI(path)}`);

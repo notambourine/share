@@ -14,6 +14,22 @@ const actions = document.getElementById('actions');
 const found = document.querySelector('[data-genform]');
 const genform = found instanceof HTMLFormElement ? found : null;
 
+/* The model pick follows the person across both generate forms. Storage can throw
+   or come back empty; the server-rendered default stands either way. */
+const MODEL_KEY = 'nt-share:model';
+const modelSelect = document.querySelector('[data-model]');
+if (modelSelect instanceof HTMLSelectElement) {
+  try {
+    const saved = localStorage.getItem(MODEL_KEY);
+    if (saved && [...modelSelect.options].some((o) => o.value === saved)) modelSelect.value = saved;
+  } catch { /* no storage: keep the default */ }
+  modelSelect.addEventListener('change', () => {
+    try {
+      localStorage.setItem(MODEL_KEY, modelSelect.value);
+    } catch { /* no storage: the pick lasts this page only */ }
+  });
+}
+
 async function send(url: string, init?: RequestInit): Promise<JsonObject | null> {
   const r = await fetch(url, init);
   if (r.status === 401) { location.reload(); return null; }

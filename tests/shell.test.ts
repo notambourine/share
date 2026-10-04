@@ -113,6 +113,7 @@ describe('the shells still render what the client scripts select on', () => {
     expect(admin).toContain('type="submit"');
     // Relative, so it lands on /admin/<space>/<hash>/generate behind the same sign-in.
     expect(admin).toContain('action="generate"');
+    expect(admin).toContain('name="model"');
     expect(admin).not.toContain('?c=');
   });
 

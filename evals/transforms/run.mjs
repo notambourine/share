@@ -9,7 +9,7 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
-import { MODEL, runPrompt } from '../../src/transforms/prompt.ts';
+import { MODELS, modelFor, runPrompt } from '../../src/transforms/prompt.ts';
 import { checksFor, verbatimShare } from './checks.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -22,41 +22,80 @@ if (!ACCOUNT || !TOKEN) {
 }
 
 const LOG = join(HERE, 'out', 'calls.jsonl');
+const DIM = process.stderr.isTTY ? '\x1b[2m' : '';
+const RESET = process.stderr.isTTY ? '\x1b[0m' : '';
+const model = modelFor(process.env.EVAL_MODEL ?? null);
+if (!model) {
+  console.error(`EVAL_MODEL is one of ${MODELS.map((m) => m.id).join(', ')}`);
+  process.exit(2);
+}
 
 /* The binding's shape over the REST endpoint, so runPrompt cannot tell the
-   difference between this and env.AI. One shim per case (via caseId) so
-   concurrent calls in a batch log against the right id. Every request and
-   answer lands in calls.jsonl; nothing but the verdict reaches the console,
-   because the documents themselves are what out/ is for. */
+   difference between this and env.AI. It asks for a stream and echoes it live -
+   reasoning dimmed, then the document - and hands runPrompt the assembled
+   answer. Every request and answer also lands in calls.jsonl. */
 function makeAi(caseId) {
   return {
     async run(model, input) {
       const startedAt = Date.now();
-      let res;
-      let body;
+      let status = null;
       let error = null;
+      let content = '';
+      let reasoning = '';
+      let usage = null;
       try {
-        res = await fetch(
+        const res = await fetch(
           `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/${model}`,
           {
             method: 'POST',
             headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
-            body: JSON.stringify(input),
+            body: JSON.stringify({ ...input, stream: true }),
           },
         );
-        body = await res.json();
-        if (!res.ok || body.success === false) {
-          error = `ai/run ${res.status}: ${JSON.stringify(body.errors ?? body).slice(0, 300)}`;
+        status = res.status;
+        if (!res.ok || !res.body) {
+          error = `ai/run ${res.status}: ${(await res.text()).slice(0, 300)}`;
+        } else {
+          let buf = '';
+          let thinking = false;
+          for await (const chunk of res.body.pipeThrough(new TextDecoderStream())) {
+            buf += chunk;
+            let nl;
+            while ((nl = buf.indexOf('\n')) >= 0) {
+              const line = buf.slice(0, nl).trim();
+              buf = buf.slice(nl + 1);
+              if (!line.startsWith('data:')) continue;
+              const data = line.slice(5).trim();
+              if (data === '[DONE]') continue;
+              const ev = JSON.parse(data);
+              if (ev.usage) usage = ev.usage;
+              const delta = ev.choices?.[0]?.delta ?? {};
+              const think = delta.reasoning_content ?? delta.reasoning ?? '';
+              const say = delta.content ?? ev.response ?? '';
+              if (think) {
+                if (!thinking) { process.stderr.write(DIM); thinking = true; }
+                reasoning += think;
+                process.stderr.write(think);
+              }
+              if (say) {
+                if (thinking) { process.stderr.write(`${RESET}\n`); thinking = false; }
+                content += say;
+                process.stderr.write(say);
+              }
+            }
+          }
+          if (thinking) process.stderr.write(RESET);
+          process.stderr.write('\n');
         }
       } catch (e) {
         error = e instanceof Error ? e.message : String(e);
       }
+      const response = { choices: [{ message: { content, reasoning_content: reasoning } }], usage };
       await appendFile(LOG, `${JSON.stringify({
-        id: caseId, model, ms: Date.now() - startedAt,
-        status: res?.status ?? null, request: input, response: body ?? null, error,
+        id: caseId, model, ms: Date.now() - startedAt, status, request: input, response, error,
       })}\n`);
       if (error) throw new Error(error);
-      return body.result ?? body;
+      return response;
     },
   };
 }
@@ -94,7 +133,8 @@ function why(failed) {
 
 let done = 0;
 async function grade(c) {
-  const output = await runPrompt(makeAi(c.id), c.prompt, c.sources);
+  console.error(`\n=== ${c.id} [${done + 1}/${cases.length}]`);
+  const output = await runPrompt(makeAi(c.id), c.prompt, c.sources, [], model);
   done++;
   if (output === null) {
     console.error(`  ${c.id} FAIL (null) [${done}/${cases.length}]`);
@@ -110,12 +150,10 @@ async function grade(c) {
   return { id: c.id, failed, voice };
 }
 
-console.error(`${cases.length} cases against ${MODEL}`);
+console.error(`${cases.length} cases against ${model.id}`);
+// One at a time, so the stream on screen belongs to one case.
 const results = [];
-// 4 at a time: fast enough, and low enough to stay clear of rate limits.
-for (let i = 0; i < cases.length; i += 4) {
-  results.push(...await Promise.all(cases.slice(i, i + 4).map(grade)));
-}
+for (const c of cases) results.push(await grade(c));
 
 let bad = 0;
 for (const r of results) {

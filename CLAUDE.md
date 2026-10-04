@@ -50,6 +50,8 @@
   overwrite a version and never add a pointer object; an older stamp keeping its own
   URL is what makes re-generating safe on a link already sent.
 - Retention is per artifact, so no config file or secret holds a space name.
+- Clients, repos, and prompts live in R2 under `_config/` (`src/shipped/`),
+  never in this repo; the sweep skips that prefix like `_trash/`.
 
 ## Working page and generation
 
@@ -59,7 +61,8 @@
 - It is the one shell served `form-action 'self'` (`ADMIN_CSP`); every other shell
   keeps `'none'`.
 - `src/transforms/` holds the format server-side; never publish a formatting skill
-  for uploaders. `MAX_TRANSFORM_BYTES` refuses rather than truncates.
+  for uploaders. Saved prompts join the system message after `SYSTEM`, which
+  still outranks them. `MAX_TRANSFORM_BYTES` refuses rather than truncates.
 - A prompt or model edit runs `npm run evals` by hand before shipping. CI never
   runs it.
 
@@ -67,7 +70,7 @@
 
 - The unguessable hash is the only credential a reader needs; Cloudflare Access
   (Google SSO) is the only credential a writer needs. No token, key, or secret
-  of ours exists, and none may be added for auth.
+  of ours exists for auth, and none may be added; the GitHub App key only reads.
 - Access covers `/up/*` and `/admin/*` only, never the whole hostname: readers
   are clients without SSO. `authorize()` (`src/lib/auth.ts`) re-verifies the
   Access JWT on every write and refuses a cross-origin `Origin`.

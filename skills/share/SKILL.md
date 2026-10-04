@@ -1,6 +1,6 @@
 ---
 name: share
-version: 0.20.0
+version: 0.21.0
 description: Share a generated artifact (report, code sample, deck, screenshot, video, folder) as a branded unguessable link on share.notambourine.com. Use when the user asks to "share", "send", or "get a link for" a file or directory.
 ---
 
@@ -14,6 +14,7 @@ the frame the CLI cut at upload.
 ## Verbs
 
     nt-share put <space> <file|dir ...> [--ttl <dur>|forever]
+    nt-share shipped <client> [--window 24h|7d|30d|month] [--as agenda|slides]
 
 A `<dur>` is a number plus `m`, `h`, `d`, or `w`: `7d`, `12h`, `4w`. Default
 `--ttl 90d`. A share expires on a fixed date; the working page's chips move it.
@@ -31,6 +32,13 @@ the folder root. An empty folder is a 400.
 Run the verb you need and nothing else. The first run opens a browser for
 company Google sign-in through `cloudflared`; later runs reuse the session.
 Never fetch or pass an Access token yourself.
+
+`shipped` answers "what shipped for <client>": it reads that client's merged
+PRs and releases for the window (default `7d`; `month` is the last calendar
+month) and generates an agenda (default) or slides. Stdout is the document URL;
+stderr adds its `pdf` and the working page. Clients and their repos are set up
+by a teammate at https://share.notambourine.com/admin/config; an unknown client
+is a 404 that says so.
 
 ## Setup
 

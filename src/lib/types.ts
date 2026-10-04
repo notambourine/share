@@ -70,7 +70,7 @@ export interface AiChatInput {
   messages: AiMessage[];
   max_completion_tokens: number;
   temperature: number;
-  reasoning_effort: 'low' | 'medium' | 'high';
+  reasoning_effort: 'none' | 'low';
 }
 
 /** No BindingsFit row: workers-types keys `Ai["run"]` to a closed model union
@@ -94,6 +94,11 @@ export interface Env {
   /** The Access app guarding `/up/*` and `/admin/*`: team domain and AUD tag. */
   ACCESS_TEAM_DOMAIN: string;
   ACCESS_AUD: string;
+  /** The `notambourine-velocity` GitHub App, for /admin/shipped. Optional: a
+      deploy without them still shares; only a shipped run 503s. */
+  GITHUB_APP_ID?: string;
+  /** Secret. PKCS#8 PEM. */
+  GITHUB_APP_PRIVATE_KEY?: string;
 }
 
 type Fits<From extends To, To> = From;
